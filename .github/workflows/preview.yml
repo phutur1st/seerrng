@@ -49,6 +49,7 @@ jobs:
 
   publish:
     name: Publish multi-arch image
+    if: github.repository == 'snapetech/seerrng'
     needs: validate-main-tag
     runs-on: [self-hosted, Linux, X64, seerrng]
     permissions:

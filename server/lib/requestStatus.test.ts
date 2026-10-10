@@ -561,6 +561,8 @@ test('movie, series, music, ebook, audiobook, and mixed book requests share the 
   assert.equal(getRequestStatus(music).stage, RequestStatusStage.AVAILABLE);
 
   const bookBase = {
+    ebookAvailable: true,
+    audiobookAvailable: true,
     ...request().media,
     mediaType: MediaType.BOOK,
     status: MediaStatus.AVAILABLE,
@@ -593,6 +595,7 @@ test('movie, series, music, ebook, audiobook, and mixed book requests share the 
           ...bookBase,
           audiobookServiceId: null,
           audiobookExternalServiceId: null,
+          audiobookAvailable: false,
         },
         bookFormat: 'both',
       })

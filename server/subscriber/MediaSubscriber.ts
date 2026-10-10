@@ -276,6 +276,13 @@ export class MediaSubscriber implements EntitySubscriberInterface<Media> {
     try {
       if (
         (event.entity.status !== event.databaseEntity?.status ||
+          (event.entity.mediaType === MediaType.BOOK &&
+            (event.entity.ebookAvailable !==
+              event.databaseEntity.ebookAvailable ||
+              event.entity.audiobookAvailable !==
+                event.databaseEntity.audiobookAvailable ||
+              event.entity.audiobookLibraryItemId !==
+                event.databaseEntity.audiobookLibraryItemId)) ||
           (event.entity.mediaType === MediaType.TV &&
             seasonStatusCheck(false))) &&
         validStatuses.includes(event.entity.status)

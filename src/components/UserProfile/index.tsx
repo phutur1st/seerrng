@@ -24,6 +24,7 @@ import type { ComicDetails } from '@server/models/Comic';
 import type { MagazineDetails } from '@server/models/Magazine';
 import type { MovieDetails } from '@server/models/Movie';
 import type { MusicDetails } from '@server/models/Music';
+import type { SportarrDetails } from '@server/models/Sportarr';
 import type { TvDetails } from '@server/models/Tv';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -56,7 +57,8 @@ type MediaTitle =
   | MusicDetails
   | BookDetails
   | ComicDetails
-  | MagazineDetails;
+  | MagazineDetails
+  | SportarrDetails;
 
 const hasBackdropPath = (
   media: MediaTitle

@@ -12,6 +12,7 @@ import {
 import { trimTrailingSlashes } from '@server/utils/serviceUrl';
 import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 import axios from 'axios';
+import { posix } from 'node:path';
 import ServarrBase, {
   isServarrServiceUrl,
   MAX_SERVARR_CONFIGURATION_RESULTS,
@@ -44,6 +45,7 @@ interface ChaptarrIntegrationCapabilities {
   providerIdDialect?: ChaptarrDialect;
   features?: {
     formatScopedFacade?: boolean;
+    formatSpecificPaths?: boolean;
     pagedLibrary?: boolean;
     providerScopedEditionIdentity?: boolean;
     pendingAuthorImports?: boolean;
@@ -98,6 +100,12 @@ export interface ReadarrBookLookupResult {
       searchForMissingBooks?: boolean;
       booksToMonitor?: string[];
     };
+    ebookQualityProfileId?: number;
+    audiobookQualityProfileId?: number;
+    ebookMetadataProfileId?: number;
+    audiobookMetadataProfileId?: number;
+    ebookPath?: string;
+    audiobookPath?: string;
     manualAdd?: boolean;
   };
   editions?: {
@@ -125,6 +133,14 @@ export interface ReadarrAuthorLookupResult {
   id?: number;
   foreignAuthorId: string;
   authorName: string;
+  path?: string;
+  monitored?: boolean;
+  ebookQualityProfileId?: number;
+  audiobookQualityProfileId?: number;
+  ebookMetadataProfileId?: number;
+  audiobookMetadataProfileId?: number;
+  ebookPath?: string;
+  audiobookPath?: string;
   titleSlug?: string;
   remotePoster?: string;
   images?: ReadarrBookImage[];
@@ -1951,12 +1967,100 @@ class ReadarrAPI extends ServarrBase<ReadarrQueueItem> {
     }
   }
 
+  private async configureBookshelfAuthorFormat(
+    options: ReadarrBookOptions,
+    existingBook?: ReadarrBookLookupResult
+  ): Promise<ReadarrBookOptions> {
+    if (
+      this.chaptarrCapabilities?.contract !== 'seerrng-bookshelf' ||
+      this.chaptarrCapabilities.features?.formatSpecificPaths !== true ||
+      !this.mediaType
+    )
+      return options;
+
+    const prefix = this.mediaType;
+    const authorId = existingBook?.authorId ?? existingBook?.author?.id;
+    const author = authorId
+      ? (
+          await this.request<ReadarrAuthorLookupResult>(
+            'GET',
+            `/author/${authorId}`,
+            undefined,
+            this.getRequestConfig()
+          )
+        ).data
+      : options.author?.foreignAuthorId
+        ? sanitizeServarrRecordArray<ReadarrAuthorLookupResult>(
+            (
+              await this.request<ReadarrAuthorLookupResult[]>(
+                'GET',
+                '/author',
+                undefined,
+                this.getRequestConfig()
+              )
+            ).data,
+            MAX_SERVARR_LIBRARY_RESULTS
+          ).find(
+            (candidate) =>
+              candidate.foreignAuthorId === options.author?.foreignAuthorId
+          )
+        : undefined;
+    const profileFields = {
+      [`${prefix}QualityProfileId`]: options.qualityProfileId,
+      [`${prefix}MetadataProfileId`]: options.metadataProfileId,
+    };
+    if (!author) {
+      return options.author
+        ? {
+            ...options,
+            author: { ...options.author, ...profileFields },
+          }
+        : options;
+    }
+    if (!Number.isSafeInteger(author.id) || !author.id || author.id <= 0) {
+      throw new Error('Bookshelf returned an invalid author ID.');
+    }
+    const path = options.rootFolderPath
+      ? posix.join(
+          options.rootFolderPath,
+          posix.basename(author.path || author.authorName)
+        )
+      : undefined;
+    const fields = Object.fromEntries(
+      Object.entries({
+        ...profileFields,
+        [`${prefix}Path`]: path,
+      }).filter(([, value]) => value !== undefined)
+    );
+    const authorFields = author as unknown as Record<string, unknown>;
+    if (
+      !author.monitored ||
+      Object.entries(fields).some(([key, value]) => authorFields[key] !== value)
+    ) {
+      await this.request(
+        'PUT',
+        `/author/${author.id}`,
+        {
+          ...author,
+          ...fields,
+          monitored: true,
+        },
+        this.getRequestConfig()
+      );
+    }
+    return options;
+  }
+
   public async addBook(
     options: ReadarrBookOptions
   ): Promise<ReadarrAddBookResult> {
     try {
       await this.ensureProvider();
       const existingBook = await this.findExistingBookForAdd(options);
+      options = await this.configureBookshelfAuthorFormat(
+        options,
+        existingBook
+      );
       const editionUpdate = existingBook
         ? this.getRequestedEditionUpdate(existingBook, options)
         : undefined;

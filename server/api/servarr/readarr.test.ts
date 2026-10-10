@@ -2226,3 +2226,154 @@ describe('ReadarrAPI Bookshelf media moves', () => {
     );
   });
 });
+
+describe('Bookshelf format-specific author configuration', () => {
+  afterEach(() => mock.restoreAll());
+
+  const options: ReadarrBookOptions = {
+    title: "Salem's Lot",
+    foreignBookId: '384057',
+    monitored: true,
+    qualityProfileId: 2,
+    metadataProfileId: 2,
+    rootFolderPath: '/audiobooks',
+    author: { foreignAuthorId: 'king', authorName: 'Stephen King' },
+  };
+  const existingBook = { ...options, id: 303, authorId: 30 };
+  const makeApi = (formatSpecificPaths: boolean) => {
+    const api = new ReadarrAPI({
+      url: 'http://localhost:8787/api/v1',
+      apiKey: 'test-key',
+      mediaType: 'audiobook',
+    });
+    Object.assign(api, {
+      chaptarrCapabilities: {
+        contract: 'seerrng-bookshelf',
+        features: { formatSpecificPaths },
+      },
+    });
+    mock.method(
+      api as unknown as { ensureProvider: () => Promise<void> },
+      'ensureProvider',
+      async () => undefined
+    );
+    mock.method(
+      api as unknown as { findExistingBookForAdd: () => Promise<unknown> },
+      'findExistingBookForAdd',
+      async () => existingBook
+    );
+    return api;
+  };
+
+  it('configures the audiobook author before returning an already-monitored book', async () => {
+    const api = makeApi(true);
+    const author = {
+      id: 30,
+      foreignAuthorId: 'king',
+      authorName: 'Stephen King',
+      monitored: true,
+      path: '/books/Stephen King',
+      qualityProfileId: 1,
+      ebookQualityProfileId: 1,
+      ebookPath: '/books/Stephen King',
+    };
+    const writes: unknown[] = [];
+    mock.method(
+      api as unknown as MockableReadarr,
+      'request',
+      async (method: string, endpoint: string, body?: unknown) => {
+        assert.equal(endpoint, '/author/30');
+        if (method === 'GET') return { data: author };
+        assert.equal(method, 'PUT');
+        writes.push(body);
+        return { data: body };
+      }
+    );
+    const result = await api.addBook(options);
+    assert.equal(result.id, 303);
+    assert.deepEqual(writes, [
+      {
+        ...author,
+        audiobookQualityProfileId: 2,
+        audiobookMetadataProfileId: 2,
+        audiobookPath: '/audiobooks/Stephen King',
+      },
+    ]);
+  });
+
+  it('avoids changing already-correct format settings', async () => {
+    const api = makeApi(true);
+    const request = mock.method(
+      api as unknown as MockableReadarr,
+      'request',
+      async () => ({
+        data: {
+          id: 30,
+          authorName: 'Stephen King',
+          foreignAuthorId: 'king',
+          monitored: true,
+          path: '/books/Stephen King',
+          audiobookQualityProfileId: 2,
+          audiobookMetadataProfileId: 2,
+          audiobookPath: '/audiobooks/Stephen King',
+        },
+      })
+    );
+    await api.addBook(options);
+    assert.equal(request.mock.calls.length, 1);
+    assert.equal(request.mock.calls[0].arguments[0], 'GET');
+  });
+
+  it('passes format-specific profiles when creating a new author', async () => {
+    const api = makeApi(true);
+    mock.method(
+      api as unknown as { findExistingBookForAdd: () => Promise<unknown> },
+      'findExistingBookForAdd',
+      async () => undefined
+    );
+    mock.method(api as unknown as MockableReadarr, 'request', async () => ({
+      data: [],
+    }));
+    mock.method(api as unknown as MockableReadarr, 'get', async () => []);
+    let author: unknown;
+    mock.method(
+      api as unknown as MockableReadarr,
+      'post',
+      async (_endpoint: string, body: ReadarrBookOptions) => {
+        author = body.author;
+        return { ...body, id: 303 };
+      }
+    );
+    mock.method(
+      api as unknown as {
+        ensureRequestedBookState: (book: unknown) => Promise<unknown>;
+      },
+      'ensureRequestedBookState',
+      async (book: unknown) => book
+    );
+    mock.method(
+      api as unknown as { getFreshBook: () => Promise<unknown> },
+      'getFreshBook',
+      async () => ({ ...options, id: 303 })
+    );
+    await api.addBook(options);
+    assert.deepEqual(author, {
+      ...options.author,
+      audiobookQualityProfileId: 2,
+      audiobookMetadataProfileId: 2,
+    });
+  });
+
+  it('leaves legacy providers without format-path capability unchanged', async () => {
+    const api = makeApi(false);
+    const request = mock.method(
+      api as unknown as MockableReadarr,
+      'request',
+      async () => {
+        throw new Error('unexpected author mutation');
+      }
+    );
+    await api.addBook(options);
+    assert.equal(request.mock.calls.length, 0);
+  });
+});

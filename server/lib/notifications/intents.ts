@@ -17,8 +17,12 @@ import {
   normalizeMusicBrainzId,
   normalizeOpenLibraryWorkId,
 } from '@server/lib/externalIds';
+import { getExternalRuntimeConfig } from '@server/lib/externalRuntimeConfig';
 import { Permission } from '@server/lib/permissions';
-import { parseBookshelfBookId } from '@server/utils/bookshelfCatalog';
+import {
+  getBookshelfBookDetails,
+  parseBookshelfBookId,
+} from '@server/utils/bookshelfCatalog';
 import { sortBy, truncate } from 'lodash';
 import { Notification } from '.';
 import type { NotificationPayload } from './agents/agent';
@@ -256,8 +260,18 @@ export const buildMediaRequestNotificationPayload = async (
       const bookshelfBook = bookshelfId
         ? parseBookshelfBookId(bookshelfId)
         : undefined;
-      const title = metadata?.title?.trim() || bookshelfBook?.foreignBookId;
-      const author = metadata?.author?.trim();
+      const details =
+        !metadata?.title?.trim() && bookshelfId
+          ? await getBookshelfBookDetails(
+              getExternalRuntimeConfig().readarr,
+              bookshelfId
+            ).catch(() => undefined)
+          : undefined;
+      const title =
+        metadata?.title?.trim() ||
+        details?.title ||
+        bookshelfBook?.foreignBookId;
+      const author = metadata?.author?.trim() || details?.author;
 
       if (!bookshelfId || !bookshelfBook) {
         throw new Error('Book request has no supported metadata identifier.');

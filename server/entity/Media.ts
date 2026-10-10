@@ -311,6 +311,13 @@ class Media {
   @Column({ nullable: true, type: 'varchar' })
   public externalServiceSlug4k?: string | null;
 
+  // Populated by format-specific library scans, never by request admission.
+  @Column({ nullable: true, type: 'boolean' })
+  public ebookAvailable?: boolean | null;
+
+  @Column({ nullable: true, type: 'boolean' })
+  public audiobookAvailable?: boolean | null;
+
   @Column({ nullable: true, type: 'int' })
   public audiobookServiceId?: number | null;
 
@@ -398,6 +405,7 @@ class Media {
 
     this.serviceId = null;
     this.availableMusicServiceIds = null;
+    this.ebookAvailable = null;
     this.externalServiceId = null;
     this.externalServiceSlug = null;
     this.comicServiceType = null;
@@ -414,6 +422,7 @@ class Media {
   public resetServiceData(): void {
     this.resetServiceDataForResolution(false);
     this.resetServiceDataForResolution(true);
+    this.audiobookAvailable = null;
     this.audiobookServiceId = null;
     this.audiobookExternalServiceId = null;
     this.audiobookExternalServiceSlug = null;

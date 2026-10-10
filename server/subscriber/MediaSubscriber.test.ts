@@ -254,3 +254,21 @@ describe('MediaSubscriber', () => {
     );
   });
 });
+
+it('reconciles book requests when the second format arrives without aggregate status changing', async () => {
+  const subscriber = new MediaSubscriber();
+  const internals = subscriber as unknown as SubscriberInternals;
+  let relatedCalls = 0;
+  internals.updateRelatedMediaRequest = async () => {
+    relatedCalls += 1;
+  };
+  const previous = makeMedia({
+    mediaType: MediaType.BOOK,
+    status: MediaStatus.AVAILABLE,
+    ebookAvailable: true,
+    audiobookAvailable: false,
+  });
+  const current = makeMedia({ ...previous, audiobookAvailable: true });
+  await subscriber.afterUpdate(makeUpdateEvent(current, previous));
+  assert.equal(relatedCalls, 1);
+});

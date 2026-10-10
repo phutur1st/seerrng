@@ -57,7 +57,7 @@ export const hasSameServarrServiceAuthority = (
   current.hostname === snapshot.hostname &&
   current.port === snapshot.port &&
   current.useSsl === snapshot.useSsl &&
-  current.baseUrl === snapshot.baseUrl &&
+  (current.baseUrl ?? '') === (snapshot.baseUrl ?? '') &&
   current.apiKey === snapshot.apiKey &&
   current.syncEnabled === snapshot.syncEnabled &&
   Boolean(current.is4k) === Boolean(snapshot.is4k) &&

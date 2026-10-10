@@ -888,7 +888,7 @@ jobs:
   preflight-deploy:
     name: Preflight deployment host
     timeout-minutes: 10
-    if: github.ref == 'refs/heads/main'
+    if: github.repository == 'snapetech/seerrng' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, seerrng, linux-build, kspls0]
     outputs:
       ready: ${{ steps.verify-storage.outputs.ready }}
@@ -943,7 +943,7 @@ jobs:
   publish:
     name: Publish multi-arch image
     timeout-minutes: 90
-    if: github.ref == 'refs/heads/main'
+    if: github.repository == 'snapetech/seerrng' && github.ref == 'refs/heads/main'
     concurrency:
       group: seerrng-main-image-publish
       cancel-in-progress: true
@@ -1119,7 +1119,7 @@ jobs:
 
   scan-main-image:
     name: Scan main image (${{ matrix.platform }})
-    if: github.ref == 'refs/heads/main'
+    if: github.repository == 'snapetech/seerrng' && github.ref == 'refs/heads/main'
     needs: publish
     runs-on: ubuntu-latest
     strategy:
@@ -1187,6 +1187,7 @@ jobs:
     name: Deploy main to seerr.home
     timeout-minutes: 30
     if: >-
+      github.repository == 'snapetech/seerrng' &&
       github.ref == 'refs/heads/main' &&
       needs.preflight-deploy.outputs.ready == 'true' &&
       (github.event_name != 'workflow_dispatch' || inputs.deploy_main)

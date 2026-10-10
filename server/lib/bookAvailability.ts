@@ -1,10 +1,19 @@
 import { MediaStatus } from '@server/constants/media';
 import type Media from '@server/entity/Media';
 
+type BookAvailabilityMedia = Pick<
+  Media,
+  | 'status'
+  | 'ebookAvailable'
+  | 'audiobookAvailable'
+  | 'audiobookLibraryServiceId'
+  | 'audiobookLibraryItemId'
+>;
+
 export type BookFormat = 'ebook' | 'audiobook' | 'both';
 
 export const hasAvailableBookFormat = (
-  media: Media,
+  media: BookAvailabilityMedia,
   format: Exclude<BookFormat, 'both'>
 ): boolean => {
   if (media.status !== MediaStatus.AVAILABLE) {
@@ -13,8 +22,7 @@ export const hasAvailableBookFormat = (
 
   if (format === 'audiobook') {
     return (
-      (media.audiobookExternalServiceId !== null &&
-        media.audiobookExternalServiceId !== undefined) ||
+      media.audiobookAvailable === true ||
       (media.audiobookLibraryServiceId !== null &&
         media.audiobookLibraryServiceId !== undefined &&
         media.audiobookLibraryItemId !== null &&
@@ -22,13 +30,11 @@ export const hasAvailableBookFormat = (
     );
   }
 
-  return (
-    media.externalServiceId !== null && media.externalServiceId !== undefined
-  );
+  return media.ebookAvailable === true;
 };
 
 export const isRequestedBookFormatAvailable = (
-  media: Media,
+  media: BookAvailabilityMedia,
   format: BookFormat
 ): boolean => {
   const ebookAvailable = hasAvailableBookFormat(media, 'ebook');

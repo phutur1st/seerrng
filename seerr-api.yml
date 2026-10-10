@@ -5189,6 +5189,14 @@ components:
         externalServiceSlug:
           type: string
           nullable: true
+        ebookAvailable:
+          type: boolean
+          nullable: true
+          description: Whether an ebook library scan has confirmed files for this book.
+        audiobookAvailable:
+          type: boolean
+          nullable: true
+          description: Whether an audiobook backend scan has confirmed audio files for this book.
         audiobookServiceId:
           type: number
           nullable: true

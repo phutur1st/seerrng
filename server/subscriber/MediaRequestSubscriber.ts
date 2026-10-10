@@ -43,7 +43,10 @@ import { MediaSearchMetadata } from '@server/entity/MediaSearchMetadata';
 import { RequestDispatchOutbox } from '@server/entity/RequestDispatchOutbox';
 import Season from '@server/entity/Season';
 import SeasonRequest from '@server/entity/SeasonRequest';
-import { hasAvailableBookFormat } from '@server/lib/bookAvailability';
+import {
+  hasAvailableBookFormat,
+  isRequestedBookFormatAvailable,
+} from '@server/lib/bookAvailability';
 import {
   normalizeMusicBrainzId,
   normalizeOpenLibraryWorkId,
@@ -758,6 +761,28 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
       if (retryAfterMs !== undefined) {
         return { delivered: false, retryAfterMs };
       }
+      const updatedBookRequest = await getRepository(MediaRequest).findOne({
+        where: { id: request.id },
+        relations: { media: true },
+      });
+      const formats: ('ebook' | 'audiobook')[] =
+        request.bookFormat === 'both'
+          ? ['ebook', 'audiobook']
+          : [request.bookFormat ?? 'ebook'];
+      return {
+        delivered:
+          !!updatedBookRequest &&
+          updatedBookRequest.status !== MediaRequestStatus.FAILED &&
+          (updatedBookRequest.status === MediaRequestStatus.COMPLETED ||
+            formats.every(
+              (format) =>
+                hasAvailableBookFormat(updatedBookRequest.media, format) ||
+                updatedBookRequest.serviceTargets?.some(
+                  (target) =>
+                    target.serviceType === 'readarr' && target.format === format
+                )
+            )),
+      };
     } else if (request.type === MediaType.COMIC) {
       const retryAfterMs = await this.sendToComicBackend(request);
       if (retryAfterMs !== undefined) {
@@ -1685,11 +1710,12 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
       }
 
       const requestedBookFormat = entity.bookFormat ?? 'ebook';
-      const bookFormatAlreadyAvailable =
-        requestedBookFormat !== 'both' &&
-        hasAvailableBookFormat(media, requestedBookFormat);
+      const bookFormatAlreadyAvailable = isRequestedBookFormatAvailable(
+        media,
+        requestedBookFormat
+      );
 
-      if (requestedBookFormat !== 'both' && bookFormatAlreadyAvailable) {
+      if (bookFormatAlreadyAvailable) {
         logger.warn('Book already exists, marking request as COMPLETED', {
           label: 'Media Request',
           requestId: entity.id,
@@ -1733,6 +1759,9 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
         ? await openLibrary.getWork(normalizedOpenLibraryId)
         : undefined;
       const lookupTerms = [
+        bookshelfLookupId && /^\d+$/.test(bookshelfLookupId)
+          ? `work:${bookshelfLookupId}`
+          : undefined,
         bookshelfLookupId,
         preferredIsbn,
         preferredIsbn ? `isbn:${preferredIsbn}` : undefined,
@@ -2265,22 +2294,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
       let lookupTerm: string | undefined;
 
       for (const serviceType of targetFormats) {
-        if (
-          serviceType === 'ebook' &&
-          media.serviceId !== null &&
-          media.externalServiceId !== null
-        ) {
-          continue;
-        }
-
-        if (
-          serviceType === 'audiobook' &&
-          media.audiobookServiceId !== null &&
-          media.audiobookExternalServiceId !== null
-        ) {
-          continue;
-        }
-
+        if (hasAvailableBookFormat(media, serviceType)) continue;
         lookupTerm = await dispatchFormat(
           serviceType,
           requestedBookFormat !== 'both' || serviceType === 'ebook'
@@ -2288,8 +2302,11 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
       }
 
       const requestRepository = getRepository(MediaRequest);
-      entity.status = MediaRequestStatus.COMPLETED;
-      await requestRepository.save(entity);
+      entity.status = MediaRequestStatus.APPROVED;
+      // Admission is not availability. Avoid enqueueing another dispatch on save.
+      await requestRepository.update(entity.id, {
+        status: MediaRequestStatus.APPROVED,
+      });
 
       logger.info('Sent request to Bookshelf', {
         label: 'Media Request',

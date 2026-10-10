@@ -11,6 +11,7 @@ import {
 } from '@server/entity/MediaRequest';
 import MediaRequestStatusEvent from '@server/entity/MediaRequestStatusEvent';
 import { RequestDispatchOutbox } from '@server/entity/RequestDispatchOutbox';
+import { isRequestedBookFormatAvailable } from '@server/lib/bookAvailability';
 import type {
   DownloadingItem,
   ServarrHistoryEvidence,
@@ -148,6 +149,8 @@ type RequestMediaLike = {
   serviceId4k?: number | null;
   externalServiceId?: number | null;
   externalServiceId4k?: number | null;
+  ebookAvailable?: boolean | null;
+  audiobookAvailable?: boolean | null;
   audiobookServiceId?: number | null;
   audiobookExternalServiceId?: number | null;
   audiobookLibraryServiceId?: number | null;
@@ -334,19 +337,10 @@ const isRequestSatisfied = (request: RequestLike): boolean => {
   }
 
   if (request.type === MediaType.BOOK) {
-    if (!isAvailableStatus(mediaStatus)) {
-      return false;
-    }
-    if (request.bookFormat === 'audiobook') {
-      return hasRequestedBookFormat(request.media, 'audiobook');
-    }
-    if (request.bookFormat === 'both') {
-      return (
-        hasRequestedBookFormat(request.media, 'ebook') &&
-        hasRequestedBookFormat(request.media, 'audiobook')
-      );
-    }
-    return hasRequestedBookFormat(request.media, 'ebook');
+    return isRequestedBookFormatAvailable(
+      request.media,
+      request.bookFormat ?? 'ebook'
+    );
   }
 
   if (request.type === MediaType.TV && request.seasons?.length) {

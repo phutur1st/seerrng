@@ -48,7 +48,7 @@ env:
 jobs:
   validate-main-tag:
     name: Validate main release tag
-    if: github.event_name != 'workflow_dispatch' || (github.ref == 'refs/heads/main' && inputs.announce_security_correction != true)
+    if: github.repository == 'snapetech/seerrng' && (github.event_name != 'workflow_dispatch' || (github.ref == 'refs/heads/main' && inputs.announce_security_correction != true))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1068,7 +1068,7 @@ jobs:
 
   announce-security-correction:
     name: Correct published Discord security notes
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.announce_security_correction == true
+    if: github.repository == 'snapetech/seerrng' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.announce_security_correction == true
     timeout-minutes: 10
     runs-on: [self-hosted, Linux, X64, seerrng]
     permissions:

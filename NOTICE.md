@@ -35,3 +35,10 @@ revision `3fc9bdf47f99db32c2e777a4bbd6d8d6262a4ae3`.
 Copyright (c) 2026 Selman Trabzon. The original MIT license is retained in
 [`licenses/foreseerr-MIT.txt`](licenses/foreseerr-MIT.txt). SeerrNG changes are
 attributed to snapetech and SeerrNG contributors.
+
+## Hom3lab fork
+
+The hom3lab interoperability fixes and fork-specific image workflow are maintained
+by phutur1st with AI-assisted implementation and review. All inherited Seerr,
+Jellyseerr, Overseerr, snapetech, and SeerrNG attribution and licenses remain in
+place.

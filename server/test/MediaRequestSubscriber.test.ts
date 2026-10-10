@@ -239,6 +239,12 @@ describe('MediaRequestSubscriber service dispatch', () => {
       async () => [monitoredLeague]
     );
 
+    await getRepository(MediaRequest).update(request.id, {
+      status: MediaRequestStatus.APPROVED,
+      serverId: request.serverId,
+      profileId: request.profileId,
+      metadataProfileId: request.metadataProfileId,
+    });
     const outcome = await new MediaRequestSubscriber().dispatchRequestById(
       request.id
     );
@@ -337,6 +343,12 @@ describe('MediaRequestSubscriber service dispatch', () => {
       async () => unmonitoredLeague
     );
 
+    await getRepository(MediaRequest).update(request.id, {
+      status: MediaRequestStatus.APPROVED,
+      serverId: request.serverId,
+      profileId: request.profileId,
+      metadataProfileId: request.metadataProfileId,
+    });
     const outcome = await new MediaRequestSubscriber().dispatchRequestById(
       request.id
     );
@@ -1093,7 +1105,16 @@ describe('MediaRequestSubscriber service dispatch', () => {
     );
     mock.method(notificationManager, 'sendNotification', () => undefined);
 
-    await new MediaRequestSubscriber().sendToReadarr(request);
+    await getRepository(MediaRequest).update(request.id, {
+      status: MediaRequestStatus.APPROVED,
+      serverId: request.serverId,
+      profileId: request.profileId,
+      metadataProfileId: request.metadataProfileId,
+    });
+    const outcome = await new MediaRequestSubscriber().dispatchRequestById(
+      request.id
+    );
+    assert.equal(outcome.delivered, true);
 
     assert.deepStrictEqual(lookupTerms, [
       '9780441478125',
@@ -1132,7 +1153,79 @@ describe('MediaRequestSubscriber service dispatch', () => {
     const savedRequest = await getRepository(MediaRequest).findOneByOrFail({
       id: request.id,
     });
-    assert.equal(savedRequest.status, MediaRequestStatus.COMPLETED);
+    assert.equal(savedRequest.status, MediaRequestStatus.APPROVED);
+  });
+
+  it('looks up a numeric Bookshelf catalog identity as a work before generic search', async () => {
+    getSettings().readarr = [
+      {
+        id: 0,
+        name: 'Bookshelf',
+        hostname: 'bookshelf.local',
+        port: 8787,
+        apiKey: 'test-key',
+        useSsl: false,
+        activeProfileId: 1,
+        activeProfileName: 'Books',
+        activeMetadataProfileId: 2,
+        activeMetadataProfileName: 'Standard',
+        activeDirectory: '/books',
+        tags: [],
+        is4k: false,
+        isDefault: true,
+        syncEnabled: true,
+        preventSearch: false,
+        tagRequests: false,
+        overrideRule: [],
+        serviceType: 'ebook',
+      },
+    ];
+    const media = await getRepository(Media).save(
+      new Media({
+        mediaType: MediaType.BOOK,
+        tmdbId: 0,
+        status: MediaStatus.PENDING,
+        status4k: MediaStatus.UNKNOWN,
+        identifiers: [
+          new MediaIdentifier({
+            provider: MediaIdentifierProvider.BOOKSHELF,
+            value: `bookshelf:0:${Buffer.from('384057').toString('base64url')}`,
+            canonical: true,
+          }),
+        ],
+      })
+    );
+    const request = await createApprovedRequest(media, await getRequester());
+    const terms: string[] = [];
+    mock.method(ReadarrAPI.prototype, 'lookupBook', async (term: string) => {
+      terms.push(term);
+      return [
+        {
+          title: "Salem's Lot",
+          foreignBookId: '384057',
+          author: { foreignAuthorId: 'king', authorName: 'Stephen King' },
+          editions: [
+            {
+              foreignEditionId: 'edition',
+              title: "Salem's Lot",
+              monitored: true,
+            },
+          ],
+        },
+      ];
+    });
+    mock.method(
+      ReadarrAPI.prototype,
+      'addBook',
+      async (options: ReadarrBookOptions) => ({ ...options, id: 303 })
+    );
+    await new MediaRequestSubscriber().sendToReadarr(request);
+    assert.deepEqual(terms, ['work:384057']);
+    const saved = await getRepository(MediaRequest).findOneByOrFail({
+      id: request.id,
+    });
+    assert.equal(saved.status, MediaRequestStatus.APPROVED);
+    assert.equal(saved.serviceTargets?.[0]?.externalServiceId, 303);
   });
 
   it('expands Bookshelf lookup to OpenLibrary edition ISBNs when canonical lookup misses', async () => {
@@ -1262,7 +1355,7 @@ describe('MediaRequestSubscriber service dispatch', () => {
     const savedRequest = await getRepository(MediaRequest).findOneByOrFail({
       id: request.id,
     });
-    assert.equal(savedRequest.status, MediaRequestStatus.COMPLETED);
+    assert.equal(savedRequest.status, MediaRequestStatus.APPROVED);
   });
 
   it('does not save Bookshelf identifiers already linked to another book media row', async () => {
@@ -1586,7 +1679,7 @@ describe('MediaRequestSubscriber service dispatch', () => {
     const savedRequest = await getRepository(MediaRequest).findOneByOrFail({
       id: request.id,
     });
-    assert.equal(savedRequest.status, MediaRequestStatus.COMPLETED);
+    assert.equal(savedRequest.status, MediaRequestStatus.APPROVED);
   });
 
   it('hydrates Bookshelf softcover lookup records through author lookup before adding', async () => {
@@ -1682,7 +1775,7 @@ describe('MediaRequestSubscriber service dispatch', () => {
     const savedRequest = await getRepository(MediaRequest).findOneByOrFail({
       id: request.id,
     });
-    assert.equal(savedRequest.status, MediaRequestStatus.COMPLETED);
+    assert.equal(savedRequest.status, MediaRequestStatus.APPROVED);
   });
 
   it('retries transient Bookshelf lookup failures before dispatching a book request', async () => {
@@ -1788,7 +1881,7 @@ describe('MediaRequestSubscriber service dispatch', () => {
     const savedRequest = await getRepository(MediaRequest).findOneByOrFail({
       id: request.id,
     });
-    assert.equal(savedRequest.status, MediaRequestStatus.COMPLETED);
+    assert.equal(savedRequest.status, MediaRequestStatus.APPROVED);
   });
 
   it('retries Hardcover-backed Bookshelf rate-limit failures surfaced as internal server errors', async () => {
@@ -1888,7 +1981,7 @@ describe('MediaRequestSubscriber service dispatch', () => {
     const savedRequest = await getRepository(MediaRequest).findOneByOrFail({
       id: request.id,
     });
-    assert.equal(savedRequest.status, MediaRequestStatus.COMPLETED);
+    assert.equal(savedRequest.status, MediaRequestStatus.APPROVED);
   });
 
   it('keeps Hardcover rate-limited book requests approved instead of failing hard', async () => {
@@ -2423,6 +2516,7 @@ describe('MediaRequestSubscriber service dispatch', () => {
         mediaType: MediaType.BOOK,
         tmdbId: 0,
         status: MediaStatus.AVAILABLE,
+        ebookAvailable: true,
         status4k: MediaStatus.UNKNOWN,
         serviceId: 20,
         externalServiceId: 40,
@@ -2757,7 +2851,7 @@ describe('MediaRequestSubscriber service dispatch', () => {
     assert.equal(savedRequest.status, MediaRequestStatus.FAILED);
   });
 
-  it('skips an existing ebook link when retrying a partial both-format book request', async () => {
+  it('configures both formats when retrying with only an unverified ebook link', async () => {
     const settings = getSettings();
     settings.readarr = [
       {
@@ -2856,8 +2950,11 @@ describe('MediaRequestSubscriber service dispatch', () => {
         addPayloads.push(payload);
         return {
           ...payload,
-          id: 41,
-          titleSlug: 'left-hand-darkness-audio',
+          id: payload.mediaType === 'audiobook' ? 41 : 40,
+          titleSlug:
+            payload.mediaType === 'audiobook'
+              ? 'left-hand-darkness-audio'
+              : 'left-hand-darkness-ebook',
         } as Awaited<ReturnType<ReadarrAPI['addBook']>>;
       }
     );
@@ -2866,7 +2963,7 @@ describe('MediaRequestSubscriber service dispatch', () => {
 
     assert.deepEqual(
       addPayloads.map((payload) => payload.rootFolderPath),
-      ['/audiobooks']
+      ['/ebooks', '/audiobooks']
     );
 
     const savedMedia = await getRepository(Media).findOneByOrFail({
@@ -2881,7 +2978,7 @@ describe('MediaRequestSubscriber service dispatch', () => {
     const savedRequest = await getRepository(MediaRequest).findOneByOrFail({
       id: request.id,
     });
-    assert.equal(savedRequest.status, MediaRequestStatus.COMPLETED);
+    assert.equal(savedRequest.status, MediaRequestStatus.APPROVED);
   });
 
   it('resets stale music processing status when the last request is declined', async () => {

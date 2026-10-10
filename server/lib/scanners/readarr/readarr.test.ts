@@ -366,6 +366,7 @@ describe('Readarr Scanner', () => {
 
   it('keeps an available ebook available while audiobook is still processing', async () => {
     const media = await seedBook('9780000000007', MediaStatus.AVAILABLE);
+    media.ebookAvailable = true;
     media.serviceId = 10;
     media.externalServiceId = 100;
     media.externalServiceSlug = 'ebook-slug';
@@ -406,6 +407,8 @@ describe('Readarr Scanner', () => {
     assert.strictEqual(updated.externalServiceId, 100);
     assert.strictEqual(updated.audiobookServiceId, 21);
     assert.strictEqual(updated.audiobookExternalServiceId, 210);
+    assert.equal(updated.ebookAvailable, true);
+    assert.equal(updated.audiobookAvailable, false);
     assert.strictEqual(updated.status, MediaStatus.AVAILABLE);
   });
 
@@ -449,6 +452,8 @@ describe('Readarr Scanner', () => {
     assert.strictEqual(updated.externalServiceId, 210);
     assert.strictEqual(updated.audiobookServiceId, 21);
     assert.strictEqual(updated.audiobookExternalServiceId, 210);
+    assert.equal(updated.ebookAvailable, true);
+    assert.equal(updated.audiobookAvailable, true);
     assert.strictEqual(updated.status, MediaStatus.AVAILABLE);
   });
 
