@@ -421,3 +421,40 @@ it('uses the shared version 2 DAT catalog and failure contract fixture', async (
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
+
+it(
+  'allows a slow DAT page to finish beyond the standard ten-second timeout',
+  { timeout: 20000 },
+  async () => {
+    const server = createServer((request, response) => {
+      const send = (payload: unknown) => {
+        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify(payload));
+      };
+      if (request.url?.endsWith('/ping')) {
+        send({ service: 'ROMarrNG', apiVersion: 1, requestContractVersion: 2 });
+      } else {
+        setTimeout(() => send({ results: [], nextOffset: null }), 10500);
+      }
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve)
+    );
+    try {
+      const api = new ROMarrNGAPI({
+        hostname: '127.0.0.1',
+        port: (server.address() as AddressInfo).port,
+        useSsl: false,
+        baseUrl: '',
+        apiKey: 'slow-dat-fixture',
+      });
+      assert.deepEqual(await api.browseDatCatalogPage(), {
+        results: [],
+        nextOffset: null,
+      });
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }
+);

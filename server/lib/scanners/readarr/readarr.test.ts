@@ -13,6 +13,7 @@ import MediaIdentifier, {
 import type { ReadarrSettings } from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
 import { setupTestDb } from '@server/test/db';
+import { makeBookshelfBookId } from '@server/utils/bookshelfCatalog';
 
 let getBooksImpl: () => Promise<ReadarrBook[]> = async () => [];
 let getBooksCallCount = 0;
@@ -127,6 +128,97 @@ describe('Readarr Scanner', () => {
     getBooksCallCount = 0;
     getEditionsImpl = async () => [];
     getEditionsCallCount = 0;
+  });
+
+  it('updates service-scoped catalog requests and ISBN rows without merging them or crossing endpoints', async () => {
+    configureReadarr([
+      { id: 0, serviceType: 'ebook' },
+      { id: 1, serviceType: 'audiobook' },
+      { id: 99, hostname: 'other-bookshelf', syncEnabled: false },
+    ]);
+    const isbnMedia = await seedBook('9780743536967');
+    const seedCatalog = (serviceId: number) =>
+      getRepository(Media).save(
+        new Media({
+          tmdbId: 0,
+          mediaType: MediaType.BOOK,
+          status: MediaStatus.PROCESSING,
+          identifiers: [
+            new MediaIdentifier({
+              provider: MediaIdentifierProvider.BOOKSHELF,
+              value: makeBookshelfBookId(serviceId, 'hc-123'),
+              canonical: true,
+            }),
+          ],
+        })
+      );
+    const catalogMedia = await seedCatalog(1);
+    const otherMedia = await seedCatalog(99);
+    getBooksImpl = async () => [
+      fakeReadarrBook({
+        foreignBookId: 'hc-123',
+        monitored: true,
+        editions: [
+          {
+            foreignEditionId: 'edition',
+            title: 'Test Book',
+            isbn13: '9780743536967',
+            monitored: true,
+          },
+        ],
+        statistics: {
+          bookFileCount: 2,
+          ebookFileCount: 1,
+          audiobookFileCount: 1,
+          totalBookCount: 1,
+        },
+      }),
+    ];
+    await readarrScanner.run();
+    for (const id of [isbnMedia.id, catalogMedia.id]) {
+      const media = await getRepository(Media).findOneByOrFail({ id });
+      assert.equal(media.status, MediaStatus.AVAILABLE);
+      assert.equal(media.ebookAvailable, true);
+      assert.equal(media.audiobookAvailable, true);
+      assert.equal(media.serviceId, 0);
+      assert.equal(media.audiobookServiceId, 1);
+    }
+    assert.equal(
+      (await getRepository(Media).findOneByOrFail({ id: otherMedia.id }))
+        .status,
+      MediaStatus.PROCESSING
+    );
+    assert.equal(await getRepository(Media).count(), 3);
+  });
+
+  it('recognizes imported files even when the book is unmonitored', async () => {
+    configureReadarr();
+    const media = await seedBook('9780743536967');
+    getBooksImpl = async () => [
+      fakeReadarrBook({
+        monitored: false,
+        editions: [
+          {
+            foreignEditionId: 'edition',
+            title: 'Test Book',
+            isbn13: '9780743536967',
+            monitored: false,
+          },
+        ],
+        statistics: {
+          bookFileCount: 1,
+          ebookFileCount: 1,
+          audiobookFileCount: 0,
+          totalBookCount: 1,
+        },
+      }),
+    ];
+    await readarrScanner.run();
+    const updated = await getRepository(Media).findOneByOrFail({
+      id: media.id,
+    });
+    assert.equal(updated.status, MediaStatus.AVAILABLE);
+    assert.equal(updated.ebookAvailable, true);
   });
 
   it('resets PROCESSING to UNKNOWN when a book is not in any Readarr server', async () => {

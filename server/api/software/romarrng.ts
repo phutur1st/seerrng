@@ -252,7 +252,7 @@ export class ROMarrNGAPI extends ExternalAPI {
 
   public getDatCatalogPlatforms(): Promise<SoftwareDatCatalogPlatformsResponse> {
     return this.getIntegrationBase().then((base) =>
-      this.get(`${base}/catalog/dat/platforms`, {}, 600)
+      this.get(`${base}/catalog/dat/platforms`, { timeout: 45000 }, 600)
     );
   }
 
@@ -266,6 +266,7 @@ export class ROMarrNGAPI extends ExternalAPI {
       this.get(
         `${base}/catalog/dat/search-page`,
         {
+          timeout: 45000,
           params: {
             q: query,
             limit,
@@ -289,6 +290,7 @@ export class ROMarrNGAPI extends ExternalAPI {
       this.get(
         `${base}/catalog/dat/browse-page`,
         {
+          timeout: 45000,
           params: {
             limit,
             offset,
@@ -306,7 +308,7 @@ export class ROMarrNGAPI extends ExternalAPI {
     return this.getIntegrationBase().then((base) =>
       this.get(
         `${base}/catalog/dat/games/${encodeURIComponent(catalogKey)}`,
-        {},
+        { timeout: 45000 },
         600
       )
     );

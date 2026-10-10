@@ -3,7 +3,9 @@ import ReadarrAPI from '@server/api/servarr/readarr';
 import { MediaStatus, MediaType } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
-import { MediaIdentifierProvider } from '@server/entity/MediaIdentifier';
+import MediaIdentifier, {
+  MediaIdentifierProvider,
+} from '@server/entity/MediaIdentifier';
 import { resolveOpenLibraryIdentifiersForReadarrBook } from '@server/lib/bookIdentifierResolver';
 import { normalizeExternalBookId } from '@server/lib/externalIds';
 import { getExternalRuntimeConfig } from '@server/lib/externalRuntimeConfig';
@@ -22,6 +24,7 @@ import {
   runWithServarrServiceSnapshots,
 } from '@server/lib/serviceAdmission';
 import type { ReadarrSettings } from '@server/lib/settings';
+import { makeBookshelfBookId } from '@server/utils/bookshelfCatalog';
 import { getHttpErrorDetails } from '@server/utils/httpError';
 import { uniqWith } from 'lodash';
 
@@ -172,7 +175,21 @@ class ReadarrScanner
       const resolvedOpenLibraryIdentifiers =
         await resolveOpenLibraryIdentifiersForReadarrBook(readarrBook);
 
+      const bookshelfIdentifiers = readarrBook.foreignBookId
+        ? this.servers
+            .filter(
+              (server) =>
+                ReadarrAPI.buildUrl(server, '/api/v1') ===
+                  ReadarrAPI.buildUrl(this.currentServer, '/api/v1') &&
+                server.apiKey === this.currentServer.apiKey
+            )
+            .map((server) => ({
+              provider: MediaIdentifierProvider.BOOKSHELF,
+              value: makeBookshelfBookId(server.id, readarrBook.foreignBookId),
+            }))
+        : [];
       const secondaryIdentifiers = [
+        ...bookshelfIdentifiers,
         readarrBook.foreignBookId
           ? {
               provider: MediaIdentifierProvider.READARR,
@@ -222,30 +239,6 @@ class ReadarrScanner
       const hasFile = bookFileCount > 0;
       const totalBooks = readarrBook.statistics?.totalBookCount ?? 1;
 
-      if (!readarrBook.monitored) {
-        await this.processBookWithRetry(provider, identifier, {
-          serviceId: this.currentServer.id,
-          externalServiceId: readarrBook.id,
-          externalServiceSlug:
-            readarrBook.titleSlug ?? readarrBook.foreignBookId,
-          title: readarrBook.title,
-          mediaAddedAt: readarrBook.added
-            ? new Date(readarrBook.added)
-            : undefined,
-          hasFile: false,
-          secondaryIdentifiers,
-          processing: false,
-          bookServiceType: serviceType,
-          mutationGuard: (callback) =>
-            runWithServarrServiceSnapshot(
-              'readarr',
-              this.currentServer,
-              callback
-            ),
-        });
-        return;
-      }
-
       await this.processBookWithRetry(provider, identifier, {
         serviceId: this.currentServer.id,
         externalServiceId: readarrBook.id,
@@ -281,16 +274,42 @@ class ReadarrScanner
     identifier: string,
     options: ProcessOptions
   ): Promise<void> {
-    for (let attempt = 1; attempt <= SQLITE_BUSY_RETRY_ATTEMPTS; attempt += 1) {
-      try {
-        await this.processBook(provider, identifier, options);
-        return;
-      } catch (e) {
-        if (!isSqliteBusyError(e) || attempt === SQLITE_BUSY_RETRY_ATTEMPTS) {
-          throw e;
-        }
+    // Existing catalog requests can live on a separate row from an ISBN scan.
+    // Update each exact service-scoped match; preserve rows and request history.
+    const bookshelfCandidates = (options.secondaryIdentifiers ?? []).filter(
+      (candidate) => candidate.provider === MediaIdentifierProvider.BOOKSHELF
+    );
+    const existingBookshelfIds = bookshelfCandidates.length
+      ? await getRepository(MediaIdentifier).find({
+          where: bookshelfCandidates.map(({ provider, value }) => ({
+            provider,
+            value,
+          })),
+        })
+      : [];
+    const candidates = [
+      ...existingBookshelfIds.map(({ provider, value }) => ({
+        provider,
+        value,
+      })),
+      { provider, value: identifier },
+    ];
+    for (const candidate of candidates) {
+      for (
+        let attempt = 1;
+        attempt <= SQLITE_BUSY_RETRY_ATTEMPTS;
+        attempt += 1
+      ) {
+        try {
+          await this.processBook(candidate.provider, candidate.value, options);
+          break;
+        } catch (e) {
+          if (!isSqliteBusyError(e) || attempt === SQLITE_BUSY_RETRY_ATTEMPTS) {
+            throw e;
+          }
 
-        await sleep(SQLITE_BUSY_RETRY_DELAY_MS * attempt);
+          await sleep(SQLITE_BUSY_RETRY_DELAY_MS * attempt);
+        }
       }
     }
   }
