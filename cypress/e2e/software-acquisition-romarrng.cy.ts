@@ -406,8 +406,12 @@ describe('ROMarrNG software acquisition integration', () => {
     cy.viewport(1280, 720);
     cy.visit('/software');
     cy.wait('@standalonePublicSettings')
-      .its('response.body.softwareEnabled')
-      .should('eq', false);
+      .its('response.body')
+      .should('include', {
+        softwareEnabled: false,
+        romarrEnabled: true,
+        emulationCatalogEnabled: true,
+      });
     cy.contains('button', 'PC Games').should('not.exist');
     cy.contains('DAT catalog').should('be.visible');
     cy.contains('Metroid').should('be.visible');
