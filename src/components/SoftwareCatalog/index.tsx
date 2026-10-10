@@ -10,10 +10,7 @@ import useSettings from '@app/hooks/useSettings';
 import { Permission, useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
-import {
-  isAnySoftwareCategoryEnabled,
-  isConfiguredMediaCategoryEnabled,
-} from '@app/utils/serviceAvailability';
+import { isSoftwareCategoryEnabled } from '@app/utils/serviceAvailability';
 import { Transition } from '@headlessui/react';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import type {
@@ -270,16 +267,9 @@ const SoftwareCatalog = ({
     }
   }, [linkedGame?.game, linkedCatalogProvider, linkedGameId, router.isReady]);
 
-  const visibleCategories = categories.filter((value) => {
-    if (!isAnySoftwareCategoryEnabled(currentSettings)) return false;
-    if (value === 'game') {
-      return isConfiguredMediaCategoryEnabled('game', currentSettings);
-    }
-    return (
-      currentSettings.romarrEnabled &&
-      isConfiguredMediaCategoryEnabled(value, currentSettings)
-    );
-  });
+  const visibleCategories = categories.filter((value) =>
+    isSoftwareCategoryEnabled(value, currentSettings)
+  );
   const selectedCategory = visibleCategories.includes(category)
     ? category
     : (visibleCategories[0] ?? category);

@@ -11,6 +11,7 @@ export interface OptionalServiceAvailability {
   sportsEnabled?: boolean;
   softwareEnabled?: boolean;
   romarrEnabled?: boolean;
+  emulationCatalogEnabled?: boolean;
   enabledMediaCategories?: Partial<Record<MediaCategoryKey, boolean>>;
 }
 
@@ -99,15 +100,23 @@ export const isDiscoverWatchlistTypeEnabled = (
   }
 };
 
-export const isAnySoftwareCategoryEnabled = (
+export const isSoftwareCategoryEnabled = (
+  category: 'retro' | 'modern' | 'game',
   availability: OptionalServiceAvailability
 ): boolean =>
   Boolean(
-    availability.softwareEnabled &&
-    (isConfiguredMediaCategoryEnabled('game', availability) ||
-      (availability.romarrEnabled !== false &&
-        (isConfiguredMediaCategoryEnabled('retro', availability) ||
-          isConfiguredMediaCategoryEnabled('modern', availability))))
+    isConfiguredMediaCategoryEnabled(category, availability) &&
+    (category === 'game'
+      ? availability.softwareEnabled
+      : availability.romarrEnabled !== false &&
+        (availability.emulationCatalogEnabled ?? availability.softwareEnabled))
+  );
+
+export const isAnySoftwareCategoryEnabled = (
+  availability: OptionalServiceAvailability
+): boolean =>
+  (['retro', 'modern', 'game'] as const).some((category) =>
+    isSoftwareCategoryEnabled(category, availability)
   );
 
 export const isOptionalCatalogPathEnabled = (

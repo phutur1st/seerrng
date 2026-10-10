@@ -1,7 +1,7 @@
 import CachedImage from '@app/components/Common/CachedImage';
 import useSettings from '@app/hooks/useSettings';
 import defineMessages from '@app/utils/defineMessages';
-import { isConfiguredMediaCategoryEnabled } from '@app/utils/serviceAvailability';
+import { isSoftwareCategoryEnabled } from '@app/utils/serviceAvailability';
 import axios from 'axios';
 import Link from 'next/link';
 import { useIntl } from 'react-intl';
@@ -9,7 +9,9 @@ import useSWR from 'swr';
 
 type Category = 'retro' | 'modern' | 'game';
 type PreviewGame = {
-  igdbId: number;
+  catalogProvider: 'igdb' | 'dat';
+  catalogId: string;
+  igdbId?: number;
   title: string;
   coverUrl: string;
   releaseDate: string;
@@ -27,11 +29,8 @@ const messages = defineMessages('components.Search.SoftwarePreview', {
 const SoftwareSearchPreview = ({ query }: { query: string }) => {
   const intl = useIntl();
   const { currentSettings } = useSettings();
-  const categories = (['retro', 'modern', 'game'] as const).filter(
-    (category) =>
-      currentSettings.softwareEnabled &&
-      (category === 'game' || currentSettings.romarrEnabled) &&
-      isConfiguredMediaCategoryEnabled(category, currentSettings)
+  const categories = (['retro', 'modern', 'game'] as const).filter((category) =>
+    isSoftwareCategoryEnabled(category, currentSettings)
   );
   const categoryKey = categories.join(',');
   const { data } = useSWR<PreviewItem[]>(
@@ -47,7 +46,7 @@ const SoftwareSearchPreview = ({ query }: { query: string }) => {
             limit: '4',
           });
           const response = await axios.get<{ results: PreviewGame[] }>(
-            `/api/v1/request/software/catalog/search?${params.toString()}`
+            `/api/v1/request/software/catalog/search?${params.toString().replace(/\+/g, '%20')}`
           );
           return response.data.results.map((game) => ({ ...game, category }));
         })
@@ -58,10 +57,11 @@ const SoftwareSearchPreview = ({ query }: { query: string }) => {
       if (responses.every((response) => response.status === 'rejected')) {
         throw new Error('Software catalog search failed.');
       }
-      const seen = new Set<number>();
+      const seen = new Set<string>();
       return successful.filter((game) => {
-        if (seen.has(game.igdbId)) return false;
-        seen.add(game.igdbId);
+        const identity = `${game.catalogProvider}:${game.catalogId}`;
+        if (seen.has(identity)) return false;
+        seen.add(identity);
         return true;
       });
     },
@@ -85,11 +85,17 @@ const SoftwareSearchPreview = ({ query }: { query: string }) => {
       </div>
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
         {data.slice(0, 6).map((game) => (
-          <li key={`${game.category}-${game.igdbId}`}>
+          <li
+            key={`${game.category}-${game.catalogProvider}-${game.catalogId}`}
+          >
             <Link
               href={{
                 pathname: '/software',
-                query: { category: game.category, game: game.igdbId },
+                query: {
+                  category: game.category,
+                  game: game.catalogId,
+                  catalogProvider: game.catalogProvider,
+                },
               }}
               className="block h-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800 hover:border-indigo-400"
             >

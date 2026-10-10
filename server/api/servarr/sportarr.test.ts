@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it, mock } from 'node:test';
 
 import { MAX_SERVARR_CONFIGURATION_RESULTS } from '@server/api/servarr/base';
-import type { AxiosInstance } from 'axios';
+import axios, { type AxiosInstance } from 'axios';
 
 import SportarrAPI from './sportarr';
 
@@ -14,6 +14,56 @@ const getAxios = (api: SportarrAPI): AxiosInstance =>
 
 describe('Sportarr native API adapter', () => {
   afterEach(() => mock.restoreAll());
+
+  it('retrieves absolute poster URLs through the bounded remote image transport', async () => {
+    const api = buildSportarr();
+    mock.method(getAxios(api), 'get', async () => ({
+      data: [
+        {
+          id: 1,
+          externalId: 'lg-000079',
+          name: 'UFC',
+          posterUrl: 'https://8.8.8.8/poster.jpg',
+        },
+      ],
+    }));
+    const get = mock.method(axios, 'get', async () => ({
+      data: Buffer.from('poster'),
+      headers: { 'content-type': 'image/jpeg' },
+    }));
+    const cover = await api.getLeagueCover('lg-000079');
+    assert.equal(get.mock.calls[0].arguments[0], 'https://8.8.8.8/poster.jpg');
+    const options = get.mock.calls[0].arguments[1] as Record<string, unknown>;
+    assert.equal(options.proxy, false);
+    assert.equal(options.responseType, 'arraybuffer');
+    assert.equal(typeof options.lookup, 'function');
+    assert.deepEqual(cover, {
+      imageBuffer: Buffer.from('poster'),
+      contentType: 'image/jpeg',
+    });
+  });
+
+  it('rejects private absolute artwork without sending a remote request', async () => {
+    const api = buildSportarr();
+    mock.method(getAxios(api), 'get', async () => ({
+      data: [
+        {
+          id: 1,
+          externalId: 'lg-000079',
+          name: 'UFC',
+          posterUrl: 'http://127.0.0.2/private.jpg',
+        },
+      ],
+    }));
+    const get = mock.method(axios, 'get', async () => {
+      throw new Error('must not fetch');
+    });
+    await assert.rejects(
+      api.getLeagueCover('lg-000079'),
+      /not safe to request/
+    );
+    assert.equal(get.mock.calls.length, 0);
+  });
 
   it('uses authenticated native endpoints to search and list league data', async () => {
     const api = buildSportarr();

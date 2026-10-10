@@ -65,6 +65,60 @@ describe('Settings reset', () => {
 });
 
 describe('Public settings', () => {
+  for (const provider of ['romarr', 'romarr-dat'] as const) {
+    it(`enables ${provider} emulation browsing without QuestarrNG`, () => {
+      const settings = new Settings();
+      settings.softwareAcquisition = {
+        ...settings.softwareAcquisition,
+        emulationCatalogProvider: provider,
+        romarr: {
+          ...settings.softwareAcquisition.romarr,
+          hostname: 'romarr.example',
+          apiKey: 'test-romarr-key',
+        },
+      };
+      assert.equal(settings.fullPublicSettings.emulationCatalogEnabled, true);
+      assert.equal(settings.fullPublicSettings.softwareEnabled, false);
+      assert.equal(settings.fullPublicSettings.romarrEnabled, true);
+
+      settings.softwareAcquisition = {
+        ...settings.softwareAcquisition,
+        romarr: { ...settings.softwareAcquisition.romarr, apiKey: '' },
+      };
+      assert.equal(settings.fullPublicSettings.emulationCatalogEnabled, false);
+    });
+  }
+
+  it('requires both providers when QuestarrNG supplies the emulation catalog', () => {
+    const settings = new Settings();
+    settings.softwareAcquisition = {
+      ...settings.softwareAcquisition,
+      emulationCatalogProvider: 'questarr',
+      romarr: {
+        ...settings.softwareAcquisition.romarr,
+        hostname: 'romarr.example',
+        apiKey: 'test-romarr-key',
+      },
+    };
+    assert.equal(settings.fullPublicSettings.emulationCatalogEnabled, false);
+    settings.softwareAcquisition = {
+      ...settings.softwareAcquisition,
+      questarr: {
+        ...settings.softwareAcquisition.questarr,
+        hostname: 'questarr.example',
+        apiKey: 'test-questarr-key',
+      },
+    };
+    assert.equal(settings.fullPublicSettings.emulationCatalogEnabled, true);
+    assert.equal(settings.fullPublicSettings.softwareEnabled, true);
+    settings.softwareAcquisition = {
+      ...settings.softwareAcquisition,
+      romarr: { ...settings.softwareAcquisition.romarr, hostname: '' },
+    };
+    assert.equal(settings.fullPublicSettings.emulationCatalogEnabled, false);
+    assert.equal(settings.fullPublicSettings.softwareEnabled, true);
+  });
+
   it('reports ebook and audiobook service availability separately', () => {
     const settings = new Settings();
     settings.readarr = [{ serviceType: 'audiobook' } as ReadarrSettings];

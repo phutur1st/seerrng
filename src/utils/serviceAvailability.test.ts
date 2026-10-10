@@ -4,6 +4,7 @@ import {
   isDiscoverMediaTypeEnabled,
   isDiscoverWatchlistTypeEnabled,
   isOptionalCatalogPathEnabled,
+  isSoftwareCategoryEnabled,
 } from './serviceAvailability';
 
 describe('isOptionalCatalogPathEnabled', () => {
@@ -194,6 +195,52 @@ describe('isOptionalCatalogPathEnabled', () => {
       }),
       false
     );
+  });
+
+  it('shows only enabled emulation categories with a standalone ROMarrNG catalog', () => {
+    const availability = {
+      musicEnabled: false,
+      booksEnabled: false,
+      comicsEnabled: false,
+      softwareEnabled: false,
+      romarrEnabled: true,
+      emulationCatalogEnabled: true,
+      enabledMediaCategories: { retro: true, modern: false, game: true },
+    };
+    strictEqual(isOptionalCatalogPathEnabled('/software', availability), true);
+    strictEqual(isSoftwareCategoryEnabled('retro', availability), true);
+    strictEqual(isSoftwareCategoryEnabled('modern', availability), false);
+    strictEqual(isSoftwareCategoryEnabled('game', availability), false);
+    strictEqual(
+      isOptionalCatalogPathEnabled('/software', {
+        ...availability,
+        emulationCatalogEnabled: false,
+      }),
+      false
+    );
+    strictEqual(
+      isOptionalCatalogPathEnabled('/software', {
+        ...availability,
+        enabledMediaCategories: { retro: false, modern: false, game: true },
+      }),
+      false
+    );
+  });
+
+  it('does not let an unavailable emulation catalog hide configured PC games', () => {
+    const availability = {
+      musicEnabled: false,
+      booksEnabled: false,
+      comicsEnabled: false,
+      softwareEnabled: true,
+      romarrEnabled: true,
+      emulationCatalogEnabled: false,
+      enabledMediaCategories: { retro: true, modern: true, game: true },
+    };
+    strictEqual(isSoftwareCategoryEnabled('retro', availability), false);
+    strictEqual(isSoftwareCategoryEnabled('modern', availability), false);
+    strictEqual(isSoftwareCategoryEnabled('game', availability), true);
+    strictEqual(isOptionalCatalogPathEnabled('/software', availability), true);
   });
 
   it('keeps a software catalog visible when only one configured provider category is enabled', () => {

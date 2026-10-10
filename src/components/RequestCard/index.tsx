@@ -1093,6 +1093,7 @@ const RequestCard = ({
                   ? 'music'
                   : 'tmdb'
             }
+            fallbackSrc="/images/seerr_poster_not_found.png"
             src={
               (isMusic(title) || isBook(title) || isSports(title)) &&
               title.posterPath

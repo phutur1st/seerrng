@@ -561,6 +561,7 @@ interface FullPublicSettings extends PublicSettings {
   sportsEnabled: boolean;
   softwareEnabled: boolean;
   romarrEnabled: boolean;
+  emulationCatalogEnabled: boolean;
   enabledMediaCategories: EnabledMediaCategories;
   discoverRegion: string;
   streamingRegion: string;
@@ -1629,6 +1630,14 @@ class Settings {
       romarrEnabled: Boolean(
         this.data.softwareAcquisition.romarr.hostname &&
         this.data.softwareAcquisition.romarr.apiKey
+      ),
+      emulationCatalogEnabled: Boolean(
+        this.data.softwareAcquisition.romarr.hostname &&
+        this.data.softwareAcquisition.romarr.apiKey &&
+        (this.data.softwareAcquisition.emulationCatalogProvider !==
+          'questarr' ||
+          (this.data.softwareAcquisition.questarr.hostname &&
+            this.data.softwareAcquisition.questarr.apiKey))
       ),
       enabledMediaCategories: {
         ...DEFAULT_ENABLED_MEDIA_CATEGORIES,

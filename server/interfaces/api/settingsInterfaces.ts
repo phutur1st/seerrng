@@ -48,6 +48,7 @@ export interface PublicSettingsResponse {
   sportsEnabled: boolean;
   softwareEnabled: boolean;
   romarrEnabled?: boolean;
+  emulationCatalogEnabled?: boolean;
   enabledMediaCategories?: EnabledMediaCategories;
   discoverRegion: string;
   streamingRegion: string;

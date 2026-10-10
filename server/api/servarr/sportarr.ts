@@ -770,7 +770,7 @@ class SportarrAPI extends ServarrBase<unknown> {
       ...coverImages
         .map((image) => image.url)
         .filter((url): url is string => !!url)
-        .map((url) => this.buildCoverUrl(url)),
+        .map((url) => this.buildCoverUrl(url) ?? this.buildRemoteCoverUrl(url)),
       ...coverImages
         .map((image) => image.remoteUrl)
         .filter((url): url is string => !!url)

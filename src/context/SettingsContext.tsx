@@ -30,6 +30,7 @@ const defaultSettings: PublicSettingsResponse = {
   sportsEnabled: false,
   softwareEnabled: false,
   romarrEnabled: false,
+  emulationCatalogEnabled: false,
   enabledMediaCategories: DEFAULT_ENABLED_MEDIA_CATEGORIES,
   discoverRegion: '',
   streamingRegion: '',

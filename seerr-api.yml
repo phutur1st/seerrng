@@ -3738,6 +3738,10 @@ components:
           type: boolean
           description: Whether a ROMarrNG instance is configured.
           example: true
+        emulationCatalogEnabled:
+          type: boolean
+          description: Whether ROMarrNG and the selected emulation catalog provider are configured.
+          example: true
         enabledMediaCategories:
           type: object
           description: Administrator-controlled visibility and request availability for each media category.
