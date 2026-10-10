@@ -343,7 +343,10 @@ test('multi-architecture publishers perform the real build once and verify the i
   const release = readWorkflow('release.yml');
 
   assert.equal(ci.jobs.build, undefined);
-  assert.equal(ci.jobs.publish.if, "github.ref == 'refs/heads/main'");
+  assert.equal(
+    ci.jobs.publish.if,
+    "github.repository == 'snapetech/seerrng' && github.ref == 'refs/heads/main'"
+  );
   assert.equal(ci.jobs.publish.needs, undefined);
   assert.equal(ci.on.workflow_dispatch.inputs.deploy_main.default, true);
   assert.equal(ci.on.workflow_dispatch.inputs.deploy_main.type, 'boolean');
@@ -375,7 +378,7 @@ test('multi-architecture publishers perform the real build once and verify the i
   );
   assert.equal(
     ci.jobs['deploy-main'].if,
-    "github.ref == 'refs/heads/main' && needs.preflight-deploy.outputs.ready == 'true' && (github.event_name != 'workflow_dispatch' || inputs.deploy_main)"
+    "github.repository == 'snapetech/seerrng' && github.ref == 'refs/heads/main' && needs.preflight-deploy.outputs.ready == 'true' && (github.event_name != 'workflow_dispatch' || inputs.deploy_main)"
   );
   assert.match(
     ci.jobs.publish.steps.find(
@@ -867,7 +870,7 @@ test('a workflow dispatch can correct omitted notes for a published release', ()
   );
   assert.equal(
     correction.if,
-    "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.announce_security_correction == true"
+    "github.repository == 'snapetech/seerrng' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.announce_security_correction == true"
   );
   assert.match(
     correction.steps.find((step) => step.name === 'Post omitted security notes')
@@ -946,4 +949,49 @@ test('git-cliff skips all release-preparation commits', () => {
   );
 
   assert.match(cliff, /message = '\^chore\\\(release\\\):'/u);
+});
+
+test('fork images publish only validated same-repository main pushes to the owner registry', () => {
+  const workflow = readWorkflow('hom3lab-image.yml');
+  assert.deepEqual(workflow.on.workflow_run.workflows, ['SeerrNG CI']);
+  assert.deepEqual(workflow.on.workflow_run.branches, ['main']);
+  assert.deepEqual(workflow.on.workflow_run.types, ['completed']);
+  const publish = workflow.jobs.publish;
+  assert.equal(
+    publish.if,
+    "github.repository == 'phutur1st/seerrng' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository"
+  );
+  const checkout = publish.steps.find(
+    (step) => step.name === 'Checkout validated source'
+  );
+  assert.equal(checkout.with.ref, '${{ github.event.workflow_run.head_sha }}');
+  assert.equal(checkout.with['persist-credentials'], false);
+  const build = publish.steps.find(
+    (step) => step.name === 'Build and publish validated image'
+  );
+  assert.equal(build.with.push, true);
+  const tags = build.with.tags.trim().split('\n');
+  assert.equal(tags.length, 2);
+  for (const tag of tags)
+    assert.ok(tag.startsWith('ghcr.io/phutur1st/seerrng:'));
+  const ci = readWorkflow('ci.yml');
+  for (const id of [
+    'publish',
+    'preflight-deploy',
+    'scan-main-image',
+    'deploy-main',
+  ]) {
+    assert.ok(
+      ci.jobs[id].if.includes("github.repository == 'snapetech/seerrng'")
+    );
+  }
+  assert.equal(
+    readWorkflow('preview.yml').jobs.publish.if,
+    "github.repository == 'snapetech/seerrng'"
+  );
+  assert.ok(
+    readWorkflow('release.yml').jobs['validate-main-tag'].if.startsWith(
+      "github.repository == 'snapetech/seerrng' &&"
+    )
+  );
 });

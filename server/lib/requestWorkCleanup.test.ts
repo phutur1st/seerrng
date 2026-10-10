@@ -149,6 +149,7 @@ describe('RequestWorkCleanupManager', () => {
     });
     await getRepository(Media).update(request.media.id, {
       externalServiceId: null,
+      ebookAvailable: true,
       externalServiceSlug: 'hc:book-17',
     });
     const canceled: number[] = [];
@@ -180,6 +181,7 @@ describe('RequestWorkCleanupManager', () => {
     });
     assert.equal(media.serviceId, null);
     assert.equal(media.externalServiceId, null);
+    assert.equal(media.ebookAvailable, null);
     assert.equal(media.externalServiceSlug, null);
   });
 

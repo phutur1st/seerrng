@@ -14,11 +14,17 @@ history:
 
 ```sh
 git switch hom3lab/bookshelf-fixes
-git fetch upstream
+git fetch upstream --tags
 git merge upstream/main
 # Review conflicts and validate the integrated candidate.
 git push origin hom3lab/bookshelf-fixes:hom3lab/bookshelf-fixes HEAD:main
 ```
+
+Upstream release tags are preserved in this fork for changelog validation.
+Keep the inherited release workflow disabled in GitHub before importing historical
+tags: those commits contain their original upstream publishing workflow. Fetch and
+push only authentic tags, without replacing existing tags. This fork publishes
+images through `Hom3lab image`, not the inherited release workflow.
 
 No pull request is necessary. Preserve inherited attribution, release notes,
 checks, and lockfile/runtime pins when integrating upstream changes.
@@ -31,7 +37,8 @@ checks, and lockfile/runtime pins when integrating upstream changes.
 2. SQLite and PostgreSQL migrations add nullable eBook/audiobook availability.
    Existing backend links are not backfilled as proof of files. Library scans
    refresh those values after upgrading. Audiobookshelf item presence remains a
-   separate source of audiobook availability.
+   separate source of audiobook availability. Removing or replacing backend links
+   invalidates their stored evidence.
 3. When Bookshelf advertises format-specific paths, the selected format's author
    profile, metadata profile, and folder are configured before returning an
    already-monitored book. The other format and default author settings remain

@@ -89,3 +89,16 @@ test('legacy backend links without scanned evidence are not availability', () =>
   assert.equal(isRequestedBookFormatAvailable(media, 'ebook'), false);
   assert.equal(isRequestedBookFormatAvailable(media, 'audiobook'), false);
 });
+
+test('scanned evidence cannot survive removal of its backend link', () => {
+  const media = bookMedia({
+    ebookAvailable: true,
+    audiobookAvailable: true,
+    serviceId: null,
+    externalServiceId: null,
+    audiobookServiceId: null,
+    audiobookExternalServiceId: null,
+  });
+  assert.equal(isRequestedBookFormatAvailable(media, 'ebook'), false);
+  assert.equal(isRequestedBookFormatAvailable(media, 'audiobook'), false);
+});

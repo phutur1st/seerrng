@@ -669,10 +669,22 @@ class BookRequestSearchManager {
     const media = operation.request.media;
     const mediaPatch: Partial<Media> = {};
     if (operation.format === 'audiobook') {
+      if (
+        media.audiobookServiceId !== operation.serviceId ||
+        media.audiobookExternalServiceId !== externalServiceId
+      ) {
+        mediaPatch.audiobookAvailable = null;
+      }
       mediaPatch.audiobookServiceId = operation.serviceId;
       mediaPatch.audiobookExternalServiceId = externalServiceId;
       mediaPatch.audiobookExternalServiceSlug = externalServiceSlug;
     } else {
+      if (
+        media.serviceId !== operation.serviceId ||
+        media.externalServiceId !== externalServiceId
+      ) {
+        mediaPatch.ebookAvailable = null;
+      }
       mediaPatch.serviceId = operation.serviceId;
       mediaPatch.externalServiceId = externalServiceId;
       mediaPatch.externalServiceSlug = externalServiceSlug;
@@ -740,10 +752,12 @@ class BookRequestSearchManager {
     if (operation.format === 'audiobook') {
       mediaPatch.audiobookServiceId = null;
       mediaPatch.audiobookExternalServiceId = null;
+      mediaPatch.audiobookAvailable = null;
       mediaPatch.audiobookExternalServiceSlug = null;
     } else {
       mediaPatch.serviceId = null;
       mediaPatch.externalServiceId = null;
+      mediaPatch.ebookAvailable = null;
       mediaPatch.externalServiceSlug = null;
     }
     await getRepository(Media).update(media.id, mediaPatch);

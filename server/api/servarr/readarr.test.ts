@@ -2324,6 +2324,26 @@ describe('Bookshelf format-specific author configuration', () => {
     assert.equal(request.mock.calls[0].arguments[0], 'GET');
   });
 
+  it('rejects an author directory that would escape the selected format root', async () => {
+    const api = makeApi(true);
+    const request = mock.method(
+      api as unknown as MockableReadarr,
+      'request',
+      async () => ({
+        data: {
+          id: 30,
+          authorName: 'Stephen King',
+          foreignAuthorId: 'king',
+          monitored: true,
+          path: '/books/..',
+        },
+      })
+    );
+    await assert.rejects(api.addBook(options), /invalid author directory/);
+    assert.equal(request.mock.calls.length, 1);
+    assert.equal(request.mock.calls[0].arguments[0], 'GET');
+  });
+
   it('passes format-specific profiles when creating a new author', async () => {
     const api = makeApi(true);
     mock.method(

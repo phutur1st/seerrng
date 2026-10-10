@@ -2020,11 +2020,15 @@ class ReadarrAPI extends ServarrBase<ReadarrQueueItem> {
     if (!Number.isSafeInteger(author.id) || !author.id || author.id <= 0) {
       throw new Error('Bookshelf returned an invalid author ID.');
     }
+    const authorDirectory = posix.basename(author.path || author.authorName);
+    if (
+      options.rootFolderPath &&
+      (!authorDirectory || authorDirectory === '.' || authorDirectory === '..')
+    ) {
+      throw new Error('Bookshelf returned an invalid author directory.');
+    }
     const path = options.rootFolderPath
-      ? posix.join(
-          options.rootFolderPath,
-          posix.basename(author.path || author.authorName)
-        )
+      ? posix.join(options.rootFolderPath, authorDirectory)
       : undefined;
     const fields = Object.fromEntries(
       Object.entries({

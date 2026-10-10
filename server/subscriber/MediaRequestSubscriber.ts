@@ -2192,11 +2192,21 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
         );
 
         if (serviceType === 'audiobook') {
+          if (
+            media.audiobookServiceId !== readarrSettings.id ||
+            media.audiobookExternalServiceId !== localBookId
+          )
+            media.audiobookAvailable = null;
           media.audiobookExternalServiceId = localBookId;
           media.audiobookExternalServiceSlug =
             result.titleSlug ?? providerBookId;
           media.audiobookServiceId = readarrSettings.id;
         } else {
+          if (
+            media.serviceId !== readarrSettings.id ||
+            media.externalServiceId !== localBookId
+          )
+            media.ebookAvailable = null;
           media.externalServiceId = localBookId;
           media.externalServiceSlug = result.titleSlug ?? providerBookId;
           media.serviceId = readarrSettings.id;

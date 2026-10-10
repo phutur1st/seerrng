@@ -81,11 +81,13 @@ class RequestWorkCleanupManager {
           ? {
               audiobookServiceId: null,
               audiobookExternalServiceId: null,
+              audiobookAvailable: null,
               audiobookExternalServiceSlug: null,
             }
           : {
               serviceId: null,
               externalServiceId: null,
+              ebookAvailable: null,
               externalServiceSlug: null,
             }),
       });
@@ -187,11 +189,13 @@ class RequestWorkCleanupManager {
           ? {
               audiobookServiceId: null,
               audiobookExternalServiceId: null,
+              audiobookAvailable: null,
               audiobookExternalServiceSlug: null,
             }
           : {
               serviceId: null,
               externalServiceId: null,
+              ebookAvailable: null,
               externalServiceSlug: null,
             }),
       });
@@ -248,11 +252,13 @@ class RequestWorkCleanupManager {
             ? {
                 audiobookServiceId: null,
                 audiobookExternalServiceId: null,
+                audiobookAvailable: null,
                 audiobookExternalServiceSlug: null,
               }
             : {
                 serviceId: null,
                 externalServiceId: null,
+                ebookAvailable: null,
                 externalServiceSlug: null,
               }),
         });

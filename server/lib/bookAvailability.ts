@@ -4,6 +4,10 @@ import type Media from '@server/entity/Media';
 type BookAvailabilityMedia = Pick<
   Media,
   | 'status'
+  | 'serviceId'
+  | 'externalServiceId'
+  | 'audiobookServiceId'
+  | 'audiobookExternalServiceId'
   | 'ebookAvailable'
   | 'audiobookAvailable'
   | 'audiobookLibraryServiceId'
@@ -22,7 +26,9 @@ export const hasAvailableBookFormat = (
 
   if (format === 'audiobook') {
     return (
-      media.audiobookAvailable === true ||
+      (media.audiobookAvailable === true &&
+        media.audiobookServiceId != null &&
+        media.audiobookExternalServiceId != null) ||
       (media.audiobookLibraryServiceId !== null &&
         media.audiobookLibraryServiceId !== undefined &&
         media.audiobookLibraryItemId !== null &&
@@ -30,7 +36,11 @@ export const hasAvailableBookFormat = (
     );
   }
 
-  return media.ebookAvailable === true;
+  return (
+    media.ebookAvailable === true &&
+    media.serviceId != null &&
+    media.externalServiceId != null
+  );
 };
 
 export const isRequestedBookFormatAvailable = (

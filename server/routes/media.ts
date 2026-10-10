@@ -718,6 +718,7 @@ mediaRoutes.delete(
                         ) {
                           media.audiobookServiceId = null;
                           media.audiobookExternalServiceId = null;
+                          media.audiobookAvailable = null;
                           media.audiobookExternalServiceSlug = null;
                         }
                         media.status = MediaStatus.PARTIALLY_AVAILABLE;
@@ -1129,6 +1130,7 @@ mediaRoutes.delete(
                       removedBookFormat = true;
                       media.audiobookServiceId = null;
                       media.audiobookExternalServiceId = null;
+                      media.audiobookAvailable = null;
                       media.audiobookExternalServiceSlug = null;
                       await updateBookStatus();
                     } catch (error) {
