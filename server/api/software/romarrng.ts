@@ -1,8 +1,10 @@
 import ExternalAPI from '@server/api/externalapi';
 import cacheManager from '@server/lib/cache';
+import { enrichDatCatalogArtwork } from '@server/lib/datCatalogArtwork';
 import type { SoftwareProviderSettings } from '@server/lib/settings';
 import { buildServiceUrl } from '@server/utils/serviceUrl';
 import axios from 'axios';
+import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { SoftwareAssetStream } from './questarrng';
 import type {
@@ -45,6 +47,7 @@ export interface RomarrLibraryLookup {
 
 export class ROMarrNGAPI extends ExternalAPI {
   private handshakePromise?: Promise<RomarrHandshake>;
+  private artworkScope: string;
 
   static buildUrl(
     settings: Pick<
@@ -71,6 +74,57 @@ export class ROMarrNGAPI extends ExternalAPI {
         nodeCache: cacheManager.getCache('romarr').data,
         headers: { 'X-Api-Key': settings.apiKey },
       }
+    );
+    this.artworkScope =
+      'dat-artwork:' +
+      createHash('sha256').update(JSON.stringify(settings)).digest('hex');
+  }
+
+  public enrichDatArtwork<T extends SoftwareCatalogGame>(
+    games: T[],
+    systems: RomarrPlatform[],
+    mappings: Record<string, number> = {}
+  ): Promise<T[]> {
+    return enrichDatCatalogArtwork(
+      games,
+      this,
+      systems,
+      mappings,
+      this.artworkScope +
+        ':' +
+        createHash('sha256')
+          .update(JSON.stringify({ systems, mappings }))
+          .digest('hex')
+    );
+  }
+
+  public getArtworkPlatforms(
+    signal: AbortSignal
+  ): Promise<SoftwareCatalogPlatform[]> {
+    return this.getIntegrationBase().then((base) =>
+      this.get(`${base}/catalog/platforms`, { signal, timeout: 2000 }, 600)
+    );
+  }
+
+  public searchArtwork(
+    title: string,
+    platformIds: number[],
+    signal: AbortSignal
+  ): Promise<RomarrCatalogSearchPage> {
+    return this.getIntegrationBase().then((base) =>
+      this.get(
+        `${base}/catalog/search-page`,
+        {
+          signal,
+          timeout: 2000,
+          params: {
+            q: title.slice(0, 200),
+            limit: 50,
+            platformIds: platformIds.join(','),
+          },
+        },
+        600
+      )
     );
   }
 

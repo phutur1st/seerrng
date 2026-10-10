@@ -1016,13 +1016,17 @@ softwareRoutes.get('/catalog/search', async (req, res) => {
       );
       const mappings =
         getSettings().softwareAcquisition.emulationPlatformMappings ?? {};
-      const results = mapCategoryGames(
-        page.results,
-        parsed.category,
+      const results = await api.enrichDatArtwork(
+        mapCategoryGames(
+          page.results,
+          parsed.category,
+          systems,
+          parsed.filters,
+          mappings
+        ).slice(0, parsed.limit),
         systems,
-        parsed.filters,
         mappings
-      ).slice(0, parsed.limit);
+      );
       enqueueImageCacheWarm(extractImageCacheUrls(results));
       return res.status(200).json({
         results: await catalogResultsWithAvailability(results, parsed.category),
@@ -1163,12 +1167,14 @@ softwareRoutes.get('/catalog/popular', async (req, res) => {
         return res.status(200).json({ results: [], nextOffset: null });
       }
       const page = await api.browseDatCatalogPage(limit, offset, platformSlugs);
-      const results = mapCategoryGames(
-        page.results,
-        category,
+      const results = await api.enrichDatArtwork(
+        mapCategoryGames(page.results, category, systems, filters).slice(
+          0,
+          limit
+        ),
         systems,
-        filters
-      ).slice(0, limit);
+        getSettings().softwareAcquisition.emulationPlatformMappings ?? {}
+      );
       enqueueImageCacheWarm(extractImageCacheUrls(results));
       return res.status(200).json({
         results: await catalogResultsWithAvailability(results, category),
@@ -1318,7 +1324,13 @@ softwareRoutes.get('/catalog/games/:id', async (req, res) => {
       category === 'game' ? Promise.resolve([]) : getEmulationPlatforms(),
     ]);
     const result = mapCategoryGames(
-      [game],
+      isDat
+        ? await getRomarrApi().enrichDatArtwork(
+            [game],
+            systems,
+            getSettings().softwareAcquisition.emulationPlatformMappings ?? {}
+          )
+        : [game],
       category,
       systems.filter((system) => system.group === category),
       {},
@@ -1445,6 +1457,14 @@ softwareRoutes.post('/', async (req, res) => {
         return res
           .status(400)
           .json({ error: 'The selected title is not listed for this system.' });
+      }
+      if (catalogProvider === 'dat') {
+        const [withArtwork] = await getRomarrApi().enrichDatArtwork(
+          [selectedGame],
+          [system],
+          settings.emulationPlatformMappings ?? {}
+        );
+        selectedGame.coverUrl = withArtwork.coverUrl;
       }
       provider = 'romarr';
       platformSlug = system.slug;

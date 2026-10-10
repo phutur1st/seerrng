@@ -202,6 +202,7 @@ const createSoftwareRequest = async (options: {
 
 beforeEach(() => {
   providerSettings();
+  mock.method(ROMarrNGAPI.prototype, 'getArtworkPlatforms', async () => []);
   mock.method(QuestarrNGAPI.prototype, 'lookupLibrary', async () => ({
     games: [],
   }));
@@ -1243,6 +1244,20 @@ describe('software request routes', () => {
       results: [{ slug: 'snes', name: 'SNES', gameCount: 1 }],
       unmatchedDatNames: [],
     }));
+    mock.method(ROMarrNGAPI.prototype, 'getArtworkPlatforms', async () => [
+      { id: 19, name: 'Super Nintendo Entertainment System' },
+    ]);
+    mock.method(ROMarrNGAPI.prototype, 'searchArtwork', async () => ({
+      results: [
+        {
+          ...pcGame,
+          title: 'Chrono Trigger',
+          platformOptions: [
+            { id: 19, name: 'Super Nintendo Entertainment System' },
+          ],
+        },
+      ],
+    }));
     const searchDat = mock.method(
       ROMarrNGAPI.prototype,
       'searchDatCatalogPage',
@@ -1278,6 +1293,7 @@ describe('software request routes', () => {
     assert.strictEqual(search.status, 200);
     assert.strictEqual(search.body.results[0].catalogProvider, 'dat');
     assert.strictEqual(search.body.results[0].catalogId, catalogKey);
+    assert.strictEqual(search.body.results[0].coverUrl, pcGame.coverUrl);
     assert.deepStrictEqual(search.body.results[0].emulationSystems, [
       {
         slug: 'snes',
@@ -1294,6 +1310,7 @@ describe('software request routes', () => {
     ]);
     assert.strictEqual(browse.status, 200);
     assert.strictEqual(browse.body.results[0].catalogId, catalogKey);
+    assert.strictEqual(browse.body.results[0].coverUrl, pcGame.coverUrl);
     assert.strictEqual(browse.body.nextOffset, 24);
     assert.deepStrictEqual(browseDat.mock.calls[0].arguments, [
       24,
@@ -1302,6 +1319,7 @@ describe('software request routes', () => {
     ]);
     assert.strictEqual(detail.status, 200);
     assert.strictEqual(detail.body.game.catalogProvider, 'dat');
+    assert.strictEqual(detail.body.game.coverUrl, pcGame.coverUrl);
     assert.strictEqual(getDatGame.mock.calls.length, 1);
 
     const created = await request(createApp()).post('/request/software').send({
@@ -1317,6 +1335,7 @@ describe('software request routes', () => {
     assert.strictEqual(saved.catalogProvider, 'dat');
     assert.strictEqual(saved.catalogId, null);
     assert.strictEqual(saved.catalogKey, catalogKey);
+    assert.strictEqual(saved.coverUrl, pcGame.coverUrl);
     assert.strictEqual(saved.platformId, null);
 
     mock.method(ROMarrNGAPI.prototype, 'getRequest', async () => {
