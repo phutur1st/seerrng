@@ -111,6 +111,7 @@ const mockIntegrationData = () => {
           ...body,
           softwareEnabled: true,
           romarrEnabled: true,
+          emulationCatalogEnabled: true,
           enabledMediaCategories: {
             ...body.enabledMediaCategories,
             retro: true,
@@ -385,9 +386,29 @@ describe('ROMarrNG software acquisition integration', () => {
     cy.contains('ColecoVision').should('be.visible');
   });
 
-  it('searches the DAT catalog without IGDB-only filters', () => {
+  it('searches the standalone DAT catalog without Questarr or IGDB-only filters', () => {
+    cy.intercept('GET', '**/api/v1/settings/public', (request) => {
+      request.continue((response) => {
+        response.body = {
+          ...response.body,
+          softwareEnabled: false,
+          romarrEnabled: true,
+          emulationCatalogEnabled: true,
+          enabledMediaCategories: {
+            ...response.body.enabledMediaCategories,
+            retro: true,
+            modern: true,
+            game: true,
+          },
+        };
+      });
+    }).as('standalonePublicSettings');
     cy.viewport(1280, 720);
     cy.visit('/software');
+    cy.wait('@standalonePublicSettings')
+      .its('response.body.softwareEnabled')
+      .should('eq', false);
+    cy.contains('button', 'PC Games').should('not.exist');
     cy.contains('DAT catalog').should('be.visible');
     cy.contains('Metroid').should('be.visible');
     cy.contains('Browse DAT titles').should('be.visible');
