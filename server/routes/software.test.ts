@@ -1206,6 +1206,32 @@ describe('software request routes', () => {
     ]);
   });
 
+  it('rejects malformed DAT details and request identities through OpenAPI validation', async () => {
+    const app = createOpenApiValidatedApp();
+    const key = `dat-${'0'.repeat(64)}`;
+    for (const [id, query] of [
+      ['dat-short', { category: 'retro', catalogProvider: 'dat' }],
+      [key, { category: 'retro', catalogProvider: 'unknown' }],
+      [key, { catalogProvider: 'dat' }],
+    ] as const) {
+      const response = await request(app)
+        .get(`/api/v1/request/software/catalog/games/${id}`)
+        .query(query);
+      assert.strictEqual(response.status, 400);
+    }
+    for (const identity of [
+      {},
+      { catalogProvider: 'dat', catalogKey: 'dat-short' },
+      { catalogProvider: 'unknown', catalogKey: key },
+      { catalogProvider: 'dat', catalogKey: key, catalogId: 42 },
+    ]) {
+      const response = await request(app)
+        .post('/api/v1/request/software')
+        .send({ category: 'retro', ...identity });
+      assert.strictEqual(response.status, 400);
+    }
+  });
+
   it('browses DAT titles, keeps DAT keys, and submits the same identity to ROMarrNG', async () => {
     getSettings().softwareAcquisition.emulationCatalogProvider = 'romarr-dat';
     getSettings().softwareAcquisition.emulationSystemGroups = { snes: 'retro' };
@@ -1283,8 +1309,8 @@ describe('software request routes', () => {
     const browse = await request(createApp())
       .get('/request/software/catalog/popular')
       .query({ category: 'retro', limit: 24 });
-    const detail = await request(createApp())
-      .get(`/request/software/catalog/games/${catalogKey}`)
+    const detail = await request(createOpenApiValidatedApp())
+      .get(`/api/v1/request/software/catalog/games/${catalogKey}`)
       .query({ category: 'retro', catalogProvider: 'dat' });
 
     assert.strictEqual(systems.status, 200);
@@ -1322,12 +1348,14 @@ describe('software request routes', () => {
     assert.strictEqual(detail.body.game.coverUrl, pcGame.coverUrl);
     assert.strictEqual(getDatGame.mock.calls.length, 1);
 
-    const created = await request(createApp()).post('/request/software').send({
-      category: 'retro',
-      catalogProvider: 'dat',
-      catalogKey,
-      platformSlug: 'snes',
-    });
+    const created = await request(createOpenApiValidatedApp())
+      .post('/api/v1/request/software')
+      .send({
+        category: 'retro',
+        catalogProvider: 'dat',
+        catalogKey,
+        platformSlug: 'snes',
+      });
     assert.strictEqual(created.status, 201);
     const saved = await getRepository(SoftwareRequest).findOneByOrFail({
       id: created.body.request.id,

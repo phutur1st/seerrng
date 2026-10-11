@@ -17233,7 +17233,7 @@ paths:
   /request/software:
     post:
       summary: Submit a ROM or PC game request
-      description: Creates a SeerrNG software request from the configured IGDB catalog. Emulation uses the selected QuestarrNG or ROMarrNG catalog and is acquired by ROMarrNG; PC game requests use QuestarrNG and require operating system and architecture.
+      description: Creates a SeerrNG software request from the configured IGDB or DAT catalog. Emulation uses the selected QuestarrNG or ROMarrNG catalog and is acquired by ROMarrNG; PC game requests use QuestarrNG and require operating system and architecture.
       tags:
         - request
       requestBody:
@@ -17242,14 +17242,26 @@ paths:
           application/json:
             schema:
               type: object
-              required: [category, catalogId]
+              required: [category]
+              oneOf:
+                - required: [catalogId]
+                - required: [catalogKey]
               properties:
                 category:
                   type: string
                   enum: [retro, modern, game]
+                catalogProvider:
+                  type: string
+                  enum: [igdb, dat]
                 catalogId:
-                  type: integer
-                  minimum: 1
+                  oneOf:
+                    - type: integer
+                      minimum: 1
+                    - type: string
+                      pattern: '^dat-[0-9a-f]{64}$'
+                catalogKey:
+                  type: string
+                  pattern: '^dat-[0-9a-f]{64}$'
                 platformSlug:
                   type: string
                 variant:
@@ -17440,7 +17452,7 @@ paths:
   /request/software/catalog/games/{id}:
     get:
       summary: Get one ROM or PC game catalog title
-      description: Returns metadata from the selected QuestarrNG or ROMarrNG IGDB catalog for emulation, or QuestarrNG for PC games, with supported request targets, screenshots, video IDs, rating normalized to a 0-10 scale, and provider or SeerrNG request availability.
+      description: Returns metadata from the selected QuestarrNG or ROMarrNG IGDB or DAT catalog for emulation, or QuestarrNG for PC games, with supported request targets, screenshots, video IDs, rating normalized to a 0-10 scale, and provider or SeerrNG request availability.
       tags:
         - request
       parameters:
@@ -17448,14 +17460,20 @@ paths:
           name: id
           required: true
           schema:
-            type: integer
-            minimum: 1
+            type: string
+            pattern: '^([1-9][0-9]*|dat-[0-9a-f]{64})$'
         - in: query
           name: category
           required: true
           schema:
             type: string
             enum: [retro, modern, game]
+        - in: query
+          name: catalogProvider
+          schema:
+            type: string
+            enum: [igdb, dat]
+            default: igdb
       responses:
         '200':
           description: Software catalog title returned
