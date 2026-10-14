@@ -84,5 +84,7 @@ Bookshelf-only checkout. It preserves the six subsequent ROMarr, artwork, and
 Bookshelf reconciliation commits alongside the original two fixes. See the
 [integration ledger](hom3lab-upstream-integration-20261013.md) for pinned inputs,
 conflict decisions, focused verification, recovery refs, and incomplete gates.
-The candidate has not been pushed, released, or deployed. Complete hosted
-validation remains pending; focused checks do not certify the candidate.
+The maintainer subsequently authorized publication to this fork and its
+validation-gated image workflow. The initial candidate was pushed to fork main;
+complete hosted validation remains pending while inherited check failures are
+repaired. No upstream publication, release, or deployment is authorized.

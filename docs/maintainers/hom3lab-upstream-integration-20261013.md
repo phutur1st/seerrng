@@ -5,11 +5,11 @@ Inherited snapetech and SeerrNG contributor attribution is preserved.
 
 ## Authority, sources, and recovery
 
-The maintainer authorized trying the planned local integration and explicitly
-excluded publication to upstream. No remote push, pull request, release, image
-publication, deployment, provider mutation, or live database migration is part
-of this work. Only a later explicitly authorized push may publish to
-`phutur1st/seerrng`.
+The maintainer initially authorized the local integration and subsequently
+authorized pushing the candidate to `phutur1st/seerrng`, completing Mode 2, and
+allowing its validation-gated Hom3lab image publication. Upstream publication
+remains explicitly excluded. No pull request, release, deployment, provider
+mutation, or live database migration is authorized.
 
 - Upstream source: `snapetech-org/seerrng` main,
   `b9aea6c55527c919a32191a7b2d49dcff1c8655c`.
@@ -110,8 +110,8 @@ topology and directs complete verification to GitHub-hosted Mode 2. No engine
 boundary was bypassed, no Mode 3 service was activated, and no focused run is
 reported as full validation.
 
-Complete Mode 2 on the exact candidate remains pending because publication is
-not authorized in this work. The candidate is a recoverable local checkpoint,
+Complete Mode 2 on the exact candidate remains pending while the first hosted
+run's inherited check failures are repaired. The candidate is recoverable but
 not a validated release or finalized integration. Any later candidate repair
 requires fresh applicable verification; upstream must be refreshed and repinned
 before finalization if it has advanced.
@@ -119,6 +119,41 @@ before finalization if it has advanced.
 Local iteration logs and discovery JSON are retained outside tracked source
 under `/private/tmp/seerrng-integration-*-20261013.*`. They are temporary local
 receipts, not hosted artifacts or proof of a complete gate.
+
+## Authorized fork publication and first hosted diagnostics
+
+Candidate `d44ae6110f7fd2d2ddf7527a840dd5e921297e43` was pushed atomically to
+fork main and `integration/hom3lab-upstream-20261013`, without force or tag
+publication. The upstream head still matched the pinned target before pushing;
+upstream's push URL remains disabled. The inherited release workflow was
+confirmed manually disabled, and the trusted-runner opt-in variable was absent,
+so fork validation used hosted runners.
+
+[Mode 2 run 38498081403](https://github.com/phutur1st/seerrng/actions/runs/38498081403)
+created an immutable Linux plan for that exact commit and tree. It discovered
+738 test files: 538 Vitest, 87 tooling, 58 native Node, three documentation
+security files, 46 Cypress specs, and six Playwright specs. All 20 planned
+validation cases were applicable; these are discovery and scheduling counts,
+not test execution totals.
+
+The run cannot pass: the build job's formatter found two unformatted upstream
+test files, changing tracked source and causing receipt rejection. The security
+council job also found one stale exact runner assertion in
+`bin/engine-github-binding.test.mjs`. Upstream's workflow now requires
+`TRUSTED_MAIN_RUNNERS_ENABLED` and the restricted `trusted-main` group, while
+that assertion still expected the retired runner label array.
+
+Repair the formatter output in `bin/engine-workflow-triggers.test.mjs` and
+`scripts/check-workflow-boundaries.test.mjs`; update the stale exact assertion
+to the current opt-in/group/fallback expression without changing the workflow
+or weakening the check. The affected native checks passed 17/17 and 12/12
+locally, and the full repository formatter check passed. These repairs and
+maintainer evidence updates are internal-only (`release-note: none`).
+
+The initial run's successful independent jobs are diagnostic evidence only.
+The repaired source must receive a fresh complete run and a new immutable plan;
+no failed-jobs-only rerun or prior result reuse can certify it. Preserve the
+original run artifacts separately from the repaired candidate's evidence.
 
 ## Visual inspection and live integration
 
