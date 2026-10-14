@@ -155,6 +155,16 @@ The repaired source must receive a fresh complete run and a new immutable plan;
 no failed-jobs-only rerun or prior result reuse can certify it. Preserve the
 original run artifacts separately from the repaired candidate's evidence.
 
+The follow-up candidate `bb9129ecf139933ffdbb7a059c195fe0d2424156` started
+[run 38498787209](https://github.com/phutur1st/seerrng/actions/runs/38498787209).
+Its newly updated `.mjs` runner assertion needed one further formatter-only
+correction: the formatter selects the less-escaped quote style. The earlier
+full formatter check had preceded that assertion edit, and commit hooks do not
+include `.mjs`. Correct the quote style and rerun the repository-wide formatter
+check after all source edits. The assertion's value and coverage remain
+unchanged. This superseded run is not passing evidence; publish the correction
+as a new commit and require a new complete Mode 2 run.
+
 ## Visual inspection and live integration
 
 No source-built desktop/narrow render inspection, physical interaction check,
