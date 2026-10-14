@@ -6,7 +6,10 @@ import PageErrorMessage from '@app/components/Common/PageErrorMessage';
 import PageTitle from '@app/components/Common/PageTitle';
 import StarSlashIcon from '@app/components/Common/StarSlashIcon';
 import type { FilterOptions } from '@app/components/Discover/constants';
-import { prepareFilterValues } from '@app/components/Discover/constants';
+import {
+  prepareFilterValues,
+  withDefaultTmdbRatingMinimumVotes,
+} from '@app/components/Discover/constants';
 import MediaDiscoveryControls from '@app/components/Discover/MediaDiscoveryControls';
 import { tvNetworks } from '@app/components/Discover/NetworkSlider';
 import useDiscover from '@app/hooks/useDiscover';
@@ -53,11 +56,11 @@ const DiscoverTv = ({
     router.pathname === '/discover/tv';
   const [watchlistPreviewDisabled, setWatchlistPreviewDisabled] =
     useState(false);
-  const preparedFilters = {
+  const preparedFilters = withDefaultTmdbRatingMinimumVotes({
     ...initialFilters,
     ...prepareFilterValues(router.query),
     ...(network ? { network: network.id.toString() } : {}),
-  };
+  });
   const discover = useDiscover<TvResult, never, FilterOptions>(
     '/api/v1/discover/tv',
     preparedFilters,

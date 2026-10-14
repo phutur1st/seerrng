@@ -135,6 +135,11 @@ test('upstream public commands preserve build-time translation and visual guards
     'the actual source passes all current contracts'
   );
   const cases = [
+    [
+      'validate:development',
+      'node bin/run-local-validation.mjs',
+      'the complete validation command must retain the repository engine entry point',
+    ],
     ['build', 'pnpm build:compile', 'upstream build-all entry point'],
     ['build:all', 'run-p build:next', 'compile both client and server'],
     ['build:next', 'echo skipped', 'upstream Next compiler'],
@@ -184,7 +189,11 @@ test('upstream public commands preserve build-time translation and visual guards
       'echo skipped',
       'translation command must retain its actual validator',
     ],
-    ['dev', 'echo skipped', 'upstream watched server entry point'],
+    [
+      'dev',
+      'echo skipped',
+      'public development must retain the local server watcher',
+    ],
     ['prebuild', undefined, 'translation and current-batch checks'],
     ['current-batch:check', false, 'fail closed on shared visual checks'],
   ];
@@ -908,11 +917,19 @@ test('reports incomplete primary navigation cleanup', () => {
     {},
     {
       has: () => true,
-      get: (_target, key) =>
-        String(key).includes('Layout/Sidebar') ||
-        String(key).includes('Layout/MobileMenu')
-          ? "href: '/discover/audiobooks' href: '/discover/audiobooks' href: '/requests/status'"
-          : '',
+      get: (_target, key) => {
+        const fileName = String(key);
+        if (fileName === 'src/components/Layout/Sidebar/navigation.tsx') {
+          return "href: '/discover/audiobooks' href: '/discover/audiobooks' href: '/requests/status' users: 'Users',";
+        }
+        if (
+          fileName === 'src/components/Layout/Sidebar/index.tsx' ||
+          fileName === 'src/components/Layout/MobileMenu/index.tsx'
+        ) {
+          return "from '@app/components/Layout/Sidebar/navigation'";
+        }
+        return '';
+      },
     }
   );
   const errors = validateCurrentBatchContract(proxy);
@@ -935,6 +952,28 @@ test('reports incomplete primary navigation cleanup', () => {
     errors.some((error) =>
       error.includes(
         'primary navigation must retain exactly one main Requests entry'
+      )
+    )
+  );
+});
+
+test('reports a desktop or mobile menu detached from the shared model', () => {
+  const proxy = new Proxy(
+    {},
+    {
+      has: () => true,
+      get: (_target, key) =>
+        String(key) === 'src/components/Layout/Sidebar/navigation.tsx'
+          ? "href: '/discover/audiobooks' href: '/requests' users: 'User List',"
+          : '',
+    }
+  );
+  const errors = validateCurrentBatchContract(proxy);
+
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        'desktop and mobile menus must render the same shared navigation model'
       )
     )
   );

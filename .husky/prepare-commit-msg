@@ -1,3 +1,7 @@
+if [ -n "$HUSKY_BYPASS" ]; then
+  exit 0
+fi
 if [ -t 1 ] && [ -r /dev/tty ]; then
-  exec < /dev/tty && npx cz --hook || true
+  exec < /dev/tty
+  node scripts/commit-message-prompt.mjs "$1" "$2" || true
 fi

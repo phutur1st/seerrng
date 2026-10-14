@@ -81,6 +81,53 @@ test('the existing CI workflow invokes the engine plan and reconciler around nat
   );
 });
 
+test('image publishing and deployment require reconciled validation and a clean image scan', () => {
+  const jobs = ci.workflow.jobs;
+  assert.deepEqual(needs(jobs.publish), new Set(['engine-reconcile']));
+  assert.match(jobs.publish.if, /needs\.engine-reconcile\.result == 'success'/);
+  assert.deepEqual(
+    needs(jobs['scan-main-image']),
+    new Set(['publish', 'engine-reconcile'])
+  );
+  assert.deepEqual(
+    needs(jobs['deploy-main']),
+    new Set([
+      'publish',
+      'preflight-deploy',
+      'engine-reconcile',
+      'scan-main-image',
+    ])
+  );
+  for (const dependency of ['publish', 'engine-reconcile', 'scan-main-image'])
+    assert.match(
+      jobs['deploy-main'].if,
+      new RegExp(`needs\\.${dependency}\\.result == 'success'`)
+    );
+});
+
+test('manual main runs execute the full validation plan before any privileged job', () => {
+  const jobs = ci.workflow.jobs;
+  for (const id of [
+    'engine-plan',
+    'jellyfin-plugin',
+    'release-notes',
+    'i18n',
+    'test',
+    'unit-test',
+    'engine-reconcile',
+  ])
+    assert.match(jobs[id].if, /workflow_dispatch/);
+  assert.match(jobs['engine-plan'].if, /github\.ref == 'refs\/heads\/main'/);
+  assert.match(jobs.publish.if, /github\.ref == 'refs\/heads\/main'/);
+  const releaseNotes = stepNamed(
+    jobs['release-notes'],
+    'Validate release-note fragment or explicit opt-out'
+  );
+  assert.match(releaseNotes.run, /GITHUB_EVENT_NAME.*workflow_dispatch/);
+  assert.match(releaseNotes.run, /git rev-parse --verify.*HEAD_SHA/);
+  assert.match(releaseNotes.run, /git diff --quiet.*release-notes/);
+});
+
 test('GitHub fans every independent validation job out from the engine plan', () => {
   const jobs = ci.workflow.jobs;
   for (const id of [...nativeJobs, ...Object.keys(reusableJobs)])
@@ -106,6 +153,21 @@ test('GitHub fans every independent validation job out from the engine plan', ()
   assert.equal(jobs.cypress.with.case_id, '${{ matrix.case_id }}');
   assert.equal(jobs.cypress.with.specs, '${{ matrix.specs }}');
   assert.match(jobs.playwright.if, /outputs\.playwright == 'true'/);
+});
+
+test('unit-test shards use the shared org pool only on main pushes and manual runs', () => {
+  const runner = ci.workflow.jobs['unit-test']['runs-on'];
+  const mainRunnerCondition =
+    "((github.event_name == 'push' && github.ref == 'refs/heads/main') || " +
+    "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))";
+  const trustedRunnerJson =
+    '{"group":"trusted-main","labels":["self-hosted","Linux","X64","host"]}';
+  const expectedRunner =
+    '$' + '{{ (' + mainRunnerCondition +
+    " && vars.TRUSTED_MAIN_RUNNERS_ENABLED == 'true') && fromJSON('" +
+    trustedRunnerJson +
+    "') || 'ubuntu-latest' }}";
+  assert.equal(runner, expectedRunner);
 });
 
 test('native workflow bodies are reused without duplicate PR or push launches', () => {
@@ -142,7 +204,7 @@ test('hosted orchestration retains the original pinned native actions and comman
       'snapetech/seerrng-codeql-models@0.0.15',
     ],
     cypress: [
-      'cypress-io/github-action@789d836053c5ca389c2905fc0c9f2909da778c46',
+      'cypress-io/github-action@c541a95ea92d9239347a2355f2e895cd4b3f8060',
       'pnpm cypress:build',
       'start: env E2E_TESTS=true pnpm start',
     ],

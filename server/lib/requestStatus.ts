@@ -11,6 +11,7 @@ import {
 } from '@server/entity/MediaRequest';
 import MediaRequestStatusEvent from '@server/entity/MediaRequestStatusEvent';
 import { RequestDispatchOutbox } from '@server/entity/RequestDispatchOutbox';
+import { isActiveSeasonRequest } from '@server/entity/SeasonRequest';
 import { isRequestedBookFormatAvailable } from '@server/lib/bookAvailability';
 import type {
   DownloadingItem,
@@ -177,6 +178,7 @@ type RequestLike = {
   media: RequestMediaLike;
   seasons?: {
     seasonNumber: number;
+    status?: MediaRequestStatus;
   }[];
 };
 
@@ -346,12 +348,16 @@ const isRequestSatisfied = (request: RequestLike): boolean => {
   if (request.type === MediaType.TV && request.seasons?.length) {
     const seasonStatus = request.is4k ? 'status4k' : 'status';
     const seasons = request.media.seasons ?? [];
-    return request.seasons.every((requestedSeason) => {
-      const season = seasons.find(
-        (candidate) => candidate.seasonNumber === requestedSeason.seasonNumber
-      );
-      return !!season && isAvailableStatus(season[seasonStatus]);
-    });
+    const activeSeasonRequests = request.seasons.filter(isActiveSeasonRequest);
+    return (
+      activeSeasonRequests.length > 0 &&
+      activeSeasonRequests.every((requestedSeason) => {
+        const season = seasons.find(
+          (candidate) => candidate.seasonNumber === requestedSeason.seasonNumber
+        );
+        return !!season && isAvailableStatus(season[seasonStatus]);
+      })
+    );
   }
 
   return isAvailableStatus(mediaStatus);
@@ -509,7 +515,9 @@ const getDownloadItems = (request: RequestLike): DownloadingItem[] => {
     }
 
     const requestedSeasons = new Set(
-      request.seasons.map((season) => season.seasonNumber)
+      request.seasons
+        .filter(isActiveSeasonRequest)
+        .map((season) => season.seasonNumber)
     );
     return downloads.filter(
       (download) =>
@@ -1634,18 +1642,22 @@ const stageMatchesFilter = (
   }
 };
 
-const getRequestStatusCounts = async (options: {
-  ownerId?: number;
-  mediaId?: number;
-  mediaType?: MediaType;
-  bookFormat?: 'ebook' | 'audiobook';
-  since?: Date;
-}): Promise<RequestStatusPage['counts']> => {
-  const requestRepository = getRepository(MediaRequest);
-  const latestEventQuery = getStatusEventRepository()
+export const getRequestStatusCounts = async (
+  options: {
+    ownerId?: number;
+    mediaId?: number;
+    mediaType?: MediaType;
+    bookFormat?: 'ebook' | 'audiobook';
+    since?: Date;
+  },
+  manager?: EntityManager
+): Promise<RequestStatusPage['counts']> => {
+  const requestRepository =
+    manager?.getRepository(MediaRequest) ?? getRepository(MediaRequest);
+  const latestEventQuery = getStatusEventRepository(manager)
     .createQueryBuilder('statusEventCountFilter')
-    .select('statusEventCountFilter.requestId', 'requestId')
-    .addSelect('MAX(statusEventCountFilter.id)', 'eventId')
+    .select('statusEventCountFilter.requestId', 'request_id')
+    .addSelect('MAX(statusEventCountFilter.id)', 'event_id')
     .groupBy('statusEventCountFilter.requestId');
   const query = requestRepository
     .createQueryBuilder('requestCount')
@@ -1653,16 +1665,16 @@ const getRequestStatusCounts = async (options: {
     .leftJoin('requestCount.requestedBy', 'requestedByCount')
     .leftJoin(
       `(${latestEventQuery.getQuery()})`,
-      'latestStatusCountId',
-      'latestStatusCountId.requestId = requestCount.id'
+      'latest_status_count_id',
+      'latest_status_count_id.request_id = requestCount.id'
     )
     .leftJoin(
       MediaRequestStatusEvent,
-      'latestStatusCount',
-      'latestStatusCount.id = latestStatusCountId.eventId'
+      'latest_status_count',
+      'latest_status_count.id = latest_status_count_id.event_id'
     )
     .select('requestCount.status', 'requestStatus')
-    .addSelect('latestStatusCount.stage', 'stage')
+    .addSelect('latest_status_count.stage', 'stage')
     .addSelect('requestCount.type', 'mediaType')
     .addSelect(
       'CASE WHEN requestCount.is4k THEN mediaCount.status4k ELSE mediaCount.status END',

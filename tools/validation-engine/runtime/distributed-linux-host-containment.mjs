@@ -4,6 +4,10 @@ import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
 import { win32 } from 'node:path';
 import path from 'node:path/posix';
+import {
+  assertProofParentExecutionIsolation,
+  isConcreteDistributedLinuxHostAdapters,
+} from './distributed-linux-host-adapters.mjs';
 
 import {
   completeDistributedLinuxHostPreparation,
@@ -20,6 +24,7 @@ export const DISTRIBUTED_LINUX_HOST_RESULT_SCHEMA =
   'seerrng-distributed-linux-host-result/v3';
 export const DISTRIBUTED_LINUX_PROOF_PARENT_SCHEMA =
   'seerrng-distributed-linux-proof-parent/v1';
+const MODE1_LOCAL_CONTAINMENT_SCHEMA = 'seerrng-mode1-local-containment/v1';
 export const DISTRIBUTED_LINUX_HOST_FINAL_MARKER =
   'launch-result-verification.json';
 export const DISTRIBUTED_LINUX_OUTER_EVIDENCE_SCHEMA =
@@ -703,6 +708,7 @@ function normalizeNetwork(value) {
     ['endpoints', 'mode', 'runtimeApplicationKey', 'unitId'],
     'distributed network policy'
   );
+  const distributedDisabled = value.distributed.mode === 'disabled';
   if (
     !Array.isArray(value.dnsServers) ||
     value.dnsServers.length < 1 ||
@@ -711,7 +717,9 @@ function normalizeNetwork(value) {
     !Array.isArray(value.baselineDeniedCidrsV6) ||
     value.baselineDeniedCidrsV6.length < 1 ||
     !Array.isArray(value.distributed.endpoints) ||
-    value.distributed.endpoints.length < 1
+    (distributedDisabled
+      ? value.distributed.endpoints.length !== 0
+      : value.distributed.endpoints.length < 1)
   )
     throw new Error('Complete network policy lists are required');
   const publicProbe = normalizeProbe(
@@ -1262,6 +1270,11 @@ function normalizeManifest(value) {
     evidence: normalizeEvidence(value.evidence),
     proof: normalizeProof(value.proof),
   };
+  if (
+    normalized.network.distributed.mode === 'disabled' ||
+    normalized.network.distributed.endpoints.length === 0
+  )
+    throw new Error('Mode 3 requires configured distributed network leases');
   if (!staysUnder(inputs.config.target, normalized.gitHistory.evidencePath))
     throw new Error(
       'Authenticated Git evidence must stay under read-only config'
@@ -1282,6 +1295,80 @@ function normalizeManifest(value) {
   normalized.proofParentConfig = generated.value;
   normalized.inner = Object.freeze({
     ...inner,
+    configSha256: generated.sha256,
+  });
+  return deepFreeze(normalized);
+}
+
+function normalizeMode1Manifest(value) {
+  exactKeys(
+    value,
+    [
+      'candidate',
+      'dockerFixture',
+      'evidence',
+      'gitHistory',
+      'inner',
+      'network',
+      'outerDaemonId',
+      'paths',
+      'proof',
+      'proofParentConfig',
+      'runId',
+      'schema',
+    ],
+    'Mode 1 local containment manifest'
+  );
+  if (value.schema !== MODE1_LOCAL_CONTAINMENT_SCHEMA)
+    throw new Error('Unsupported Mode 1 local containment schema');
+  const normalized = {
+    schema: value.schema,
+    runId: token(value.runId, 'Mode 1 containment run ID'),
+    outerDaemonId: text(value.outerDaemonId, 'outer Docker daemon ID'),
+    candidate: normalizeCandidate(value.candidate),
+    dockerFixture: normalizeDockerFixture(value.dockerFixture),
+    evidence: normalizeEvidence(value.evidence),
+    gitHistory: normalizeGitHistory(value.gitHistory),
+    inner: normalizeInner(value.inner),
+    network: normalizeNetwork(value.network),
+    paths: normalizePaths(value.paths),
+    proof: normalizeProof(value.proof),
+  };
+  if (
+    normalized.network.distributed.mode !== 'disabled' ||
+    normalized.network.distributed.endpoints.length !== 0
+  )
+    throw new Error('Mode 1 local containment must disable distributed leases');
+  if (
+    !staysUnder(normalized.paths.stateRoot, normalized.dockerFixture.bindSource)
+  )
+    throw new Error('Fixture bind source must stay under writable state');
+  if (
+    !staysUnder(normalized.paths.logRoot, normalized.evidence.callbackLogPath)
+  )
+    throw new Error('Callback ledger must stay under writable logs');
+  for (const artifact of normalized.evidence.artifacts)
+    if (
+      !staysUnder(normalized.paths.stateRoot, artifact.containerPath) &&
+      !staysUnder(normalized.paths.logRoot, artifact.containerPath)
+    )
+      throw new Error('Retained artifacts must stay under writable outputs');
+  const generated = createDistributedLinuxProofParentConfig({
+    candidate: normalized.candidate,
+    dockerFixture: normalized.dockerFixture,
+    evidence: normalized.evidence,
+    inner: normalized.inner,
+    network: normalized.network,
+    outerDaemonId: normalized.outerDaemonId,
+    paths: normalized.paths,
+    proof: normalized.proof,
+    runId: normalized.runId,
+  });
+  if (!sameJson(value.proofParentConfig, generated.value))
+    throw new Error('Mode 1 proof-parent config differs from its manifest');
+  normalized.proofParentConfig = generated.value;
+  normalized.inner = Object.freeze({
+    ...normalized.inner,
     configSha256: generated.sha256,
   });
   return deepFreeze(normalized);
@@ -2133,7 +2220,11 @@ function verifyMountpointPreflightEvidence(value, plan) {
   return value;
 }
 
-function normalizeAdapters(value, callbacks = false) {
+function normalizeAdapters(
+  value,
+  callbacks = false,
+  { requireLocalGitHistory = false } = {}
+) {
   plainObject(value, 'host containment adapters');
   const normalized = {
     fs: plainObject(value.fs, 'host containment filesystem adapter'),
@@ -2141,12 +2232,26 @@ function normalizeAdapters(value, callbacks = false) {
     proof: callbacks
       ? plainObject(value.proof, 'host containment proof adapter')
       : value.proof,
+    ...(value.gitHistory === undefined
+      ? {}
+      : {
+          gitHistory: plainObject(
+            value.gitHistory,
+            'host containment Git history adapter'
+          ),
+        }),
   };
   for (const name of ['readFile', 'appendJsonLine'])
     requiredFunction(normalized.fs[name], `Filesystem adapter ${name}`);
   requiredFunction(normalized.process.probe, 'Process adapter probe');
-  if (callbacks)
+  if (callbacks) {
     requiredFunction(normalized.proof.request, 'Proof adapter request');
+    if (requireLocalGitHistory)
+      requiredFunction(
+        normalized.gitHistory?.verifyEvidence,
+        'Local Git history adapter verifyEvidence'
+      );
+  }
   return normalized;
 }
 
@@ -2495,8 +2600,36 @@ export function createDistributedLinuxHostContainmentCallbacks(
   manifestValue,
   adapterValue
 ) {
-  const manifest = normalizeManifest(manifestValue);
-  const adapters = normalizeAdapters(adapterValue, true);
+  return createContainmentCallbacks(
+    normalizeManifest(manifestValue),
+    adapterValue,
+    { omitDistributed: false }
+  );
+}
+
+/**
+ * Build only the local proof callbacks shared with the dormant Mode 3 host
+ * containment. Mode 1 must never acquire or expose the distributed lease.
+ */
+export function createMode1LinuxHostContainmentCallbacks(
+  manifestValue,
+  adapterValue
+) {
+  return createContainmentCallbacks(
+    normalizeMode1Manifest(manifestValue),
+    adapterValue,
+    { omitDistributed: true }
+  );
+}
+
+function createContainmentCallbacks(
+  manifest,
+  adapterValue,
+  { omitDistributed }
+) {
+  const adapters = normalizeAdapters(adapterValue, true, {
+    requireLocalGitHistory: omitDistributed,
+  });
   const callbacks = {
     async verifyNetworkBoundary({ candidate }) {
       if (!sameCandidate(candidate, manifest.candidate))
@@ -2620,11 +2753,20 @@ export function createDistributedLinuxHostContainmentCallbacks(
     async verifyGitHistory({ candidate, localTagRefsSha256 }) {
       if (!sameCandidate(candidate, manifest.candidate))
         throw new Error('Git proof candidate differs from the manifest');
-      const result = verifyAuthenticatedGitEvidence(
-        await adapters.fs.readFile(manifest.gitHistory.evidencePath),
-        manifest,
-        sha(localTagRefsSha256, 'local tag refs hash')
+      const evidence = await adapters.fs.readFile(
+        manifest.gitHistory.evidencePath
       );
+      const result = omitDistributed
+        ? await adapters.gitHistory.verifyEvidence(
+            evidence,
+            manifest,
+            sha(localTagRefsSha256, 'local tag refs hash')
+          )
+        : verifyAuthenticatedGitEvidence(
+            evidence,
+            manifest,
+            sha(localTagRefsSha256, 'local tag refs hash')
+          );
       await recordCallback(adapters.fs, manifest, {
         event: 'git-history',
         result,
@@ -2635,7 +2777,9 @@ export function createDistributedLinuxHostContainmentCallbacks(
     async withRepositoryIsolation(operation, context) {
       if (
         !sameCandidate(context?.candidate, manifest.candidate) ||
-        context?.unitId !== manifest.network.repository.unitId
+        (omitDistributed
+          ? !['native-repository', 'native-browser'].includes(context?.unitId)
+          : context?.unitId !== manifest.network.repository.unitId)
       )
         throw new Error(
           'Repository isolation context differs from containment'
@@ -2703,6 +2847,7 @@ export function createDistributedLinuxHostContainmentCallbacks(
       });
     },
   };
+  if (omitDistributed) delete callbacks.withDistributedNetwork;
   return Object.freeze(callbacks);
 }
 
@@ -3299,6 +3444,13 @@ function verifyProofParentLedger(bytes, callbackLedger, manifest) {
     if (events.filter((value) => value.event === event).length !== 1)
       throw new Error(`Proof parent event count differs: ${event}`);
   const ready = events.find((value) => value.event === 'ready');
+  if (
+    events.some(
+      (value) =>
+        Object.hasOwn(value, 'token') || Object.hasOwn(value, 'restoredToken')
+    )
+  )
+    throw new Error('Proof parent ledger must not retain bearer tokens');
   const terminal = events.find((value) => value.event === 'terminal-network');
   const fixture = events.find((value) => value.event === 'fixture-created');
   const cleanup = events.find((value) => value.event === 'fixture-cleanup');
@@ -3321,10 +3473,12 @@ function verifyProofParentLedger(bytes, callbackLedger, manifest) {
     if (
       begin.length !== 1 ||
       end.length !== 1 ||
-      typeof begin[0].token !== 'string' ||
-      end[0].restoredToken !== begin[0].token ||
+      !HASH64.test(begin[0].tokenSha256 ?? '') ||
+      Object.hasOwn(begin[0], 'token') ||
+      Object.hasOwn(end[0], 'restoredToken') ||
+      end[0].restoredTokenSha256 !== begin[0].tokenSha256 ||
       end[0].guardFailure !== null ||
-      digest(Buffer.from(begin[0].token)) !== callbackLedger.tokenSha256[kind]
+      begin[0].tokenSha256 !== callbackLedger.tokenSha256[kind]
     )
       throw new Error(`Proof parent ${kind} lease reconciliation differs`);
   }
@@ -3570,6 +3724,10 @@ export async function executeDistributedLinuxHostContainment(
   adapterValue,
   { signal } = {}
 ) {
+  // Pure adapter simulations retain protocol coverage. The concrete outer-host
+  // implementation must stop before creating containers or writable volumes.
+  if (isConcreteDistributedLinuxHostAdapters(adapterValue))
+    assertProofParentExecutionIsolation();
   const plan = plainObject(planValue, 'distributed Linux host plan');
   if (plan.schema !== DISTRIBUTED_LINUX_HOST_PLAN_SCHEMA)
     throw new Error('Unsupported distributed Linux host plan schema');

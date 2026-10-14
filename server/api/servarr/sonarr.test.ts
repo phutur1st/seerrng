@@ -361,6 +361,99 @@ const series = (overrides: Partial<SonarrSeries> = {}): SonarrSeries => ({
 describe('SonarrAPI exact episode requests', () => {
   afterEach(() => mock.restoreAll());
 
+  it('monitors a fully selected season when updating an existing series', async () => {
+    const api = buildSonarr();
+    const existingSeries = series({
+      seasons: [
+        { seasonNumber: 1, monitored: false },
+        { seasonNumber: 2, monitored: false },
+      ],
+    });
+    mock.method(api, 'getSeriesByTvdbId', async () => existingSeries);
+    let updatePayload: SonarrSeries | undefined;
+    mock.method(
+      getAxios(api),
+      'put',
+      async (_endpoint: string, payload: SonarrSeries) => {
+        updatePayload = payload;
+        return { data: series({ ...payload, id: existingSeries.id }) };
+      }
+    );
+    mock.method(api, 'getEpisodes', async () => [
+      {
+        seriesId: 42,
+        episodeFileId: 0,
+        seasonNumber: 1,
+        episodeNumber: 1,
+        title: 'One',
+        airDate: '',
+        airDateUtc: '',
+        overview: '',
+        hasFile: false,
+        monitored: false,
+        absoluteEpisodeNumber: 1,
+        unverifiedSceneNumbering: false,
+        id: 101,
+      },
+      {
+        seriesId: 42,
+        episodeFileId: 0,
+        seasonNumber: 1,
+        episodeNumber: 2,
+        title: 'Two',
+        airDate: '',
+        airDateUtc: '',
+        overview: '',
+        hasFile: false,
+        monitored: false,
+        absoluteEpisodeNumber: 2,
+        unverifiedSceneNumbering: false,
+        id: 102,
+      },
+      {
+        seriesId: 42,
+        episodeFileId: 0,
+        seasonNumber: 2,
+        episodeNumber: 1,
+        title: 'Other Season',
+        airDate: '',
+        airDateUtc: '',
+        overview: '',
+        hasFile: false,
+        monitored: false,
+        absoluteEpisodeNumber: 3,
+        unverifiedSceneNumbering: false,
+        id: 201,
+      },
+    ]);
+    const monitor = mock.method(api, 'monitorEpisodes', async () => undefined);
+    const search = mock.method(api, 'searchSeries', async () => undefined);
+
+    await api.addSeries({
+      tvdbid: 100,
+      title: 'Test Series',
+      profileId: 1,
+      seasons: [1],
+      seasonFolder: true,
+      rootFolderPath: '/tv',
+      seriesType: 'standard',
+      searchNow: true,
+    });
+
+    assert.deepStrictEqual(
+      updatePayload?.seasons?.map(({ seasonNumber, monitored }) => ({
+        seasonNumber,
+        monitored,
+      })),
+      [
+        { seasonNumber: 1, monitored: true },
+        { seasonNumber: 2, monitored: false },
+      ]
+    );
+    assert.deepStrictEqual(monitor.mock.calls[0].arguments[0], [101, 102]);
+    assert.equal(search.mock.calls[0].arguments[0], 42);
+  });
+
   it('monitors and searches only the selected episodes', async () => {
     const api = buildSonarr();
     mock.method(api, 'getSeriesByTvdbId', async () =>

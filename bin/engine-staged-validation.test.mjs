@@ -1,7 +1,15 @@
 // Copyright (c) snapetech and SeerrNG contributors.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 // eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Native Node tests cannot resolve application TS aliases.
@@ -114,6 +122,7 @@ const input = () => ({
     sourceIdentity: { sha256: sha },
     artifacts: [],
     steps: [{ id: 'codeql-probe' }],
+    outputs: [],
   },
   buildBrowserPlan: {
     candidate,
@@ -227,6 +236,7 @@ test('failed or zero-active repository suite retains failure while independent s
         readFile: async () => '',
         writeArtifact: async () => {},
         verifySource: async () => {},
+        verifyStageBoundary: async () => {},
       }
     );
     assert.equal(report.status, 'failed');
@@ -258,6 +268,7 @@ test('independent supplemental checks continue sequentially after primary and su
     ['pr-first']
   );
   const calls = [];
+  let fullBoundaryChecks = 0;
   const report = await executeStagedValidation(binding, {
     executeRepository: async () => ({
       status: 'failed',
@@ -277,6 +288,9 @@ test('independent supplemental checks continue sequentially after primary and su
     readFile: async () => '',
     writeArtifact: async () => {},
     verifySource: async () => {},
+    verifyStageBoundary: async () => {
+      fullBoundaryChecks++;
+    },
   });
   assert.deepEqual(calls, [
     'first',
@@ -294,6 +308,7 @@ test('independent supplemental checks continue sequentially after primary and su
   );
   assert.equal(report.ok, false);
   assert.equal(report.status, 'failed');
+  assert.equal(fullBoundaryChecks, 4);
 });
 
 test('changed source or boundary rejects every later native admission', async () => {
@@ -315,6 +330,9 @@ test('changed source or boundary rejects every later native admission', async ()
       readFile: async () => '',
       writeArtifact: async () => {},
       verifySource: async () => {
+        if (changed) throw new Error('Frozen source/boundary changed');
+      },
+      verifyStageBoundary: async () => {
         if (changed) throw new Error('Frozen source/boundary changed');
       },
     }),
@@ -353,6 +371,7 @@ test('infrastructure failure retains partial repository evidence without claimin
       readFile: async () => '',
       writeArtifact: async () => {},
       verifySource: async () => {},
+      verifyStageBoundary: async () => {},
     }
   );
   assert.equal(restored, true);
@@ -407,16 +426,85 @@ test('repository-only isolation surrounds execution and restores before source g
         assert.equal(isolated, false);
         calls.push('guard');
       },
+      verifyStageBoundary: async () => {
+        assert.equal(isolated, false);
+        calls.push('boundary');
+      },
     }
   );
   assert.equal(report.status, 'failed');
   assert.deepEqual(calls.slice(0, 5), [
-    'guard',
+    'boundary',
     'isolate',
     'repository',
     'restore',
     'guard',
   ]);
+});
+
+test('repository and browser stages both execute inside loopback isolation', async (t) => {
+  const options = input();
+  const root = mkdtempSync(join(tmpdir(), 'seerrng-staged-browser-isolation-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, '.next'));
+  mkdirSync(join(root, 'dist'));
+  writeFileSync(join(root, '.next', 'BUILD_ID'), 'test-build\n');
+  writeFileSync(join(root, 'dist', 'index.js'), 'test server\n');
+  options.buildBrowserPlan.root = root;
+  options.buildBrowserPlan.build = [];
+  options.codeqlPlan.planSha256 = createHash('sha256')
+    .update(JSON.stringify(options.codeqlPlan))
+    .digest('hex');
+
+  const isolatedUnits = [];
+  let isolated = false;
+  const report = await executeStagedValidation(
+    createStagedValidation(options),
+    {
+      executeRepository: async () => {
+        assert.equal(isolated, true);
+        return {
+          status: 'passed',
+          cases: { passed: 1, failed: 0, skipped: 0 },
+        };
+      },
+      executeBrowser: async () => {
+        assert.equal(isolated, true);
+        return {
+          status: 'passed',
+          counts: { passed: 1, failed: 0, pending: 0, skipped: 0 },
+        };
+      },
+      withRepositoryIsolation: async (operation, context) => {
+        assert.deepEqual(context.candidate, candidate);
+        isolatedUnits.push(context.unitId);
+        assert.equal(isolated, false);
+        isolated = true;
+        try {
+          return await operation();
+        } finally {
+          isolated = false;
+        }
+      },
+      run: async (command) => ({
+        id: command.id,
+        status: 'passed',
+        exitCode: 0,
+        wallMs: 1,
+        lifecycle: { completed: true },
+      }),
+      readFile: async () => Buffer.alloc(0),
+      writeArtifact: async () => {},
+      verifySource: async () => {},
+      verifyStageBoundary: async () => {
+        assert.equal(isolated, false);
+      },
+    }
+  );
+
+  assert.equal(report.status, 'passed');
+  assert.deepEqual(isolatedUnits, ['native-repository', 'native-browser']);
+  assert.equal(isolated, false);
 });
 
 test('repository isolation restoration is awaited on native rejection', async () => {
@@ -441,6 +529,7 @@ test('repository isolation restoration is awaited on native rejection', async ()
       readFile: async () => '',
       writeArtifact: async () => {},
       verifySource: async () => {},
+      verifyStageBoundary: async () => {},
     }
   );
   assert.equal(report.status, 'failed');
@@ -676,6 +765,11 @@ test('hosted GitHub plan is deterministic and binds the distributed native DAG',
   assert.equal(playwright.caseAssignments[0].mode, 'full');
   assert.deepEqual(playwright.caseAssignments[0].lanes[0].files, [
     'playwright/audiobookshelf-settings.spec.ts',
+    'playwright/request-edit-without-media.spec.ts',
+    'playwright/settings-search.spec.ts',
+    'playwright/sportarr-port-field.spec.ts',
+    'playwright/swipe-card-surface.spec.ts',
+    'playwright/tmdb-rating-vote-count.spec.ts',
   ]);
   assert.deepEqual(
     first.units.filter((unit) => !unit.applicable).map((unit) => unit.id),
@@ -736,6 +830,13 @@ test('hosted GitHub applicability matches native event, branch and path filters'
     'ci-test',
     'ci-playwright',
   ]);
+
+  const nextConfigChange = hostedInput({
+    changedFiles: ['next.config.mjs'],
+  });
+  const nextConfigSuites = applicableIds(nextConfigChange);
+  assert(nextConfigSuites.includes('ci-playwright'));
+  assert(nextConfigSuites.includes('cypress-run'));
 
   const cypressOnly = hostedInput({
     changedFiles: ['cypress/e2e/login.cy.ts'],

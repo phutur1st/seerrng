@@ -45,6 +45,7 @@ connects to.
 - [Choose available media categories](/using-seerr/settings/media-categories/)
 - [Configure media-server libraries](/using-seerr/settings/mediaserver)
 - [Choose companion services and SeerrNG NG forks](/using-seerr/companion-services)
+- [Why the maintained book and game forks exist, their standalone and SeerrNG features, and upstream replacement criteria](/using-seerr/dependency-forks/)
 - [Configure ChaptarrNG and its SeerrNG service key](/using-seerr/bookshelf-backend/#chaptarrng)
 - [Connect read-only Audiobookshelf availability](/using-seerr/bookshelf-backend/#audiobookshelf-availability)
 - [Enable built-in HTTPS](/using-seerr/advanced/built-in-tls)
@@ -58,6 +59,7 @@ connects to.
 
 ## Integrate and contribute
 
+- [Why SeerrNG is a fork and how upstreaming could retire it](/fork-rationale/)
 - [REST API reference](/api/seerr-api/)
 - [Third-party client compatibility](/using-seerr/third-party-client-compatibility/)
 - [Contribution guidelines](https://github.com/snapetech/seerrng/blob/main/CONTRIBUTING.md)

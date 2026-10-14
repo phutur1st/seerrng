@@ -179,16 +179,23 @@ export async function executeStagedValidation(binding, options) {
     readFile,
     writeArtifact,
     verifySource,
+    verifyStageBoundary,
     withRepositoryIsolation,
+    executeBrowser = executeBrowserStage,
     signal,
   } = options;
   if (
-    [executeRepository, run, readFile, writeArtifact, verifySource].some(
-      (fn) => typeof fn !== 'function'
-    )
+    [
+      executeRepository,
+      run,
+      readFile,
+      writeArtifact,
+      verifySource,
+      verifyStageBoundary,
+    ].some((fn) => typeof fn !== 'function')
   )
     throw new Error(
-      'Existing native executors, artifact and source guards are required'
+      'Existing native executors, artifact and source guards (including full stage-boundary guards) are required'
     );
   if (
     withRepositoryIsolation !== undefined &&
@@ -240,10 +247,23 @@ export async function executeStagedValidation(binding, options) {
       );
     return receipt;
   };
+  const executeContainedStage = async (unit, operation) => {
+    if (
+      !withRepositoryIsolation ||
+      !['native-repository', 'native-browser'].includes(unit.id)
+    )
+      return operation();
+    return withRepositoryIsolation(operation, {
+      candidate: binding.plan.candidate,
+      unitId: unit.id,
+      signal,
+    });
+  };
   const executor = async (unit, context) => {
     const owner = binding.bindings.get(unit.id);
     if (!owner) throw new Error('Unbound stage unit');
-    await verifySource(binding.plan.candidate);
+    if (owner.primary) await verifyStageBoundary(binding.plan.candidate);
+    else await verifySource(binding.plan.candidate);
     let result;
     let cases = zero();
     if (owner.check) {
@@ -303,13 +323,7 @@ export async function executeStagedValidation(binding, options) {
           throw error;
         }
       };
-      result = withRepositoryIsolation
-        ? await withRepositoryIsolation(operation, {
-            candidate: binding.plan.candidate,
-            unitId: unit.id,
-            signal,
-          })
-        : await operation();
+      result = await executeContainedStage(unit, operation);
       cases = counts(result.cases);
       if (cases.passed + cases.failed < 1)
         throw new Error('Repository suite executed zero active cases');
@@ -329,11 +343,14 @@ export async function executeStagedValidation(binding, options) {
         { run: nativeRun, verifySource, signal }
       );
     } else {
-      result = await executeBrowserStage(
-        binding.buildBrowserPlan,
-        buildReceipt,
-        { ...options, run: nativeRun, verifySource, signal }
-      );
+      const operation = () =>
+        executeBrowser(binding.buildBrowserPlan, buildReceipt, {
+          ...options,
+          run: nativeRun,
+          verifySource,
+          signal,
+        });
+      result = await executeContainedStage(unit, operation);
       cases = counts({
         passed: result.counts.passed,
         failed: result.counts.failed,
@@ -366,8 +383,8 @@ export async function executeStagedValidation(binding, options) {
       signal,
     });
   } finally {
-    // A failed/aborted native stage must not evade the post-source guard.
-    await verifySource(binding.plan.candidate);
+    // A failed/aborted native stage must not evade the full post-run guard.
+    await verifyStageBoundary(binding.plan.candidate);
   }
   const pendingRequired = binding.applicability.filter(
     (check) => check.required && check.status !== 'not-applicable'

@@ -1,8 +1,15 @@
+// eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Cypress specs use deterministic local title fixtures.
+import { openTitleDetailsFromSearch } from '../support/titleFixtures';
+
 describe('Movie Details', () => {
   it('loads a movie page', () => {
     cy.loginAsAdmin();
-    // Try to load minions: rise of gru
-    cy.visit('/movie/438148');
+    openTitleDetailsFromSearch({
+      id: 438148,
+      mediaType: 'movie',
+      title: 'Minions: The Rise of Gru',
+      date: '2022-06-29',
+    });
 
     cy.get('[data-testid=media-title]').should(
       'contain',
@@ -17,7 +24,12 @@ describe('Movie Details', () => {
         response.body.movie4kEnabled = true;
       });
     });
-    cy.visit('/movie/438148');
+    openTitleDetailsFromSearch({
+      id: 438148,
+      mediaType: 'movie',
+      title: 'Minions: The Rise of Gru',
+      date: '2022-06-29',
+    });
 
     cy.get('[data-testid=format-request-option-standard]')
       .filter(':visible')
@@ -44,7 +56,12 @@ describe('Movie Details', () => {
         response.body.movie4kEnabled = true;
       });
     });
-    cy.visit('/movie/438148');
+    openTitleDetailsFromSearch({
+      id: 438148,
+      mediaType: 'movie',
+      title: 'Minions: The Rise of Gru',
+      date: '2022-06-29',
+    });
 
     cy.get('[data-testid=format-request-option-standard]').should('be.visible');
     cy.get('[data-testid=format-request-option-4k]').should('not.exist');
@@ -68,7 +85,12 @@ describe('Movie Details', () => {
         activeTags: [],
       },
     ]);
-    cy.visit('/movie/438148');
+    openTitleDetailsFromSearch({
+      id: 438148,
+      mediaType: 'movie',
+      title: 'Minions: The Rise of Gru',
+      date: '2022-06-29',
+    });
 
     cy.get('[data-testid=format-request-control]')
       .filter(':has([data-testid="format-request-option-standard"])')
@@ -83,7 +105,12 @@ describe('Movie Details', () => {
 
   it('keeps unavailable management visible but disabled with an explanation', () => {
     cy.loginAsAdmin();
-    cy.visit('/movie/438148?manage=1');
+    openTitleDetailsFromSearch({
+      id: 438148,
+      mediaType: 'movie',
+      title: 'Minions: The Rise of Gru',
+      date: '2022-06-29',
+    });
     cy.get('button[aria-label="Manage Movie"]')
       .should('be.visible')
       .and('be.disabled')

@@ -99,6 +99,7 @@ export function buildBrowserEnvironment(inherited = {}, fixtureRoot, port) {
     'XAUTHORITY',
     'CYPRESS_CACHE_FOLDER',
     'CYPRESS_RUN_BINARY',
+    'PLAYWRIGHT_BROWSERS_PATH',
     'PNPM_HOME',
   ]);
   const env = Object.fromEntries(

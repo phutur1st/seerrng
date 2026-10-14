@@ -81,6 +81,10 @@ const messages = defineMessages('components.Settings.SettingsMain', {
   validationApplicationUrl: 'You must provide a valid URL',
   validationApplicationUrlTrailingSlash: 'URL must not end in a trailing slash',
   partialRequestsEnabled: 'Allow Partial Series Requests',
+  personMovieBulkRequestsEnabled:
+    'Allow Requesting All Movies From a Person Page',
+  personMovieBulkRequestsEnabledTip:
+    'Let users request every movie listed on a person page. Requests are sent in batches of 100 and still follow normal permissions and request quotas.',
   enableSpecialEpisodes: 'Allow Special Episodes Requests',
   locale: 'Display Language',
   youtubeUrl: 'YouTube URL',
@@ -236,6 +240,8 @@ const SettingsMain = () => {
           blocklistedTags: data?.blocklistedTags,
           blocklistedTagsLimit: data?.blocklistedTagsLimit || 50,
           partialRequestsEnabled: data?.partialRequestsEnabled,
+          personMovieBulkRequestsEnabled:
+            data?.personMovieBulkRequestsEnabled ?? false,
           enableSpecialEpisodes: data?.enableSpecialEpisodes,
           cacheImages: data?.cacheImages,
           includeAdult: data?.includeAdult ?? false,
@@ -271,6 +277,8 @@ const SettingsMain = () => {
               blocklistedTags: values.blocklistedTags,
               blocklistedTagsLimit: values.blocklistedTagsLimit,
               partialRequestsEnabled: values.partialRequestsEnabled,
+              personMovieBulkRequestsEnabled:
+                values.personMovieBulkRequestsEnabled,
               enableSpecialEpisodes: values.enableSpecialEpisodes,
               cacheImages: values.cacheImages,
               includeAdult: values.includeAdult,
@@ -637,6 +645,28 @@ const SettingsMain = () => {
                       />
                     </div>
                   </div>
+                  <SettingsFormRow
+                    htmlFor="personMovieBulkRequestsEnabled"
+                    label={intl.formatMessage(
+                      messages.personMovieBulkRequestsEnabled
+                    )}
+                    description={intl.formatMessage(
+                      messages.personMovieBulkRequestsEnabledTip
+                    )}
+                    labelClassName="checkbox-label"
+                  >
+                    <SettingsField
+                      type="checkbox"
+                      id="personMovieBulkRequestsEnabled"
+                      name="personMovieBulkRequestsEnabled"
+                      onChange={() => {
+                        setFieldValue(
+                          'personMovieBulkRequestsEnabled',
+                          !values.personMovieBulkRequestsEnabled
+                        );
+                      }}
+                    />
+                  </SettingsFormRow>
                   <div className="form-row">
                     <label
                       htmlFor="enableSpecialEpisodes"

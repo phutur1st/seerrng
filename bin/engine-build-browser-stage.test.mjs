@@ -229,6 +229,7 @@ test('inherited runtime/database/provider/cloud credentials are removed, not mac
       DATABASE_URL: 'secret',
       SEERR_EXTERNAL_CONFIG: 'live',
       CYPRESS_RECORD_KEY: 'secret',
+      CYPRESS_CACHE_FOLDER: '/opt/cypress-cache',
       GITHUB_TOKEN: 'secret',
       TMDB_API_KEY: 'secret',
       NODE_OPTIONS: '--require unsafe',
@@ -236,11 +237,14 @@ test('inherited runtime/database/provider/cloud credentials are removed, not mac
       LIVE_QA_EMAIL: 'live',
       CYPRESS_ADMIN_PASSWORD: 'live',
       PLAYWRIGHT_BASE_URL: 'https://production.invalid',
+      PLAYWRIGHT_BROWSERS_PATH: '/opt/playwright-browsers',
     },
     '/owned/fixtures',
     5056
   );
   assert.equal(env.PATH, 'native-path');
+  assert.equal(env.CYPRESS_CACHE_FOLDER, '/opt/cypress-cache');
+  assert.equal(env.PLAYWRIGHT_BROWSERS_PATH, '/opt/playwright-browsers');
   for (const key of [
     'DB_PASSWORD',
     'DATABASE_URL',

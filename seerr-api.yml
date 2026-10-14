@@ -4370,6 +4370,8 @@ components:
         userId:
           type: number
           nullable: true
+          description: >-
+            Optional requester ID for all created requests. Omit this field to use the authenticated user. When supplied, requests are attributed to that account. Supplying it requires both `MANAGE_USERS` and `MANAGE_REQUESTS`; otherwise the API returns HTTP 403.
         tags:
           type: array
           items:
@@ -4404,6 +4406,59 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BulkMediaRequestResult'
+    PersonMovieBulkRequestResult:
+      type: object
+      properties:
+        movieId:
+          type: integer
+          minimum: 1
+          maximum: 1000000000
+        reason:
+          type: string
+      required:
+        - movieId
+        - reason
+    PersonMovieBulkRequestBody:
+      type: object
+      properties:
+        movieIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: Movie metadata IDs. Duplicate IDs are accepted and deduplicated before processing.
+          items:
+            type: integer
+            minimum: 1
+            maximum: 1000000000
+      required:
+        - movieIds
+    PersonMovieBulkRequestResponse:
+      type: object
+      properties:
+        created:
+          type: array
+          description: Movie IDs whose requests were created.
+          items:
+            type: integer
+            minimum: 1
+            maximum: 1000000000
+        skipped:
+          type: array
+          description: Already-requested or blocklisted movies that were skipped.
+          items:
+            $ref: '#/components/schemas/PersonMovieBulkRequestResult'
+        failed:
+          type: array
+          description: Movie requests that could not be processed.
+          items:
+            $ref: '#/components/schemas/PersonMovieBulkRequestResult'
+        stoppedReason:
+          type: string
+          description: Present when a quota or service-configuration error stopped the remaining requests.
+      required:
+        - created
+        - skipped
+        - failed
     AssociationEdge:
       type: object
       properties:
@@ -14492,6 +14547,80 @@ paths:
                         - $ref: '#/components/schemas/MovieResult'
                         - $ref: '#/components/schemas/TvResult'
                         - $ref: '#/components/schemas/PersonResult'
+  /discover/list/{listId}:
+    get:
+      summary: Browse a public TMDB list
+      description: Returns a paginated public TMDB list with mixed movie and series results.
+      tags:
+        - search
+      parameters:
+        - in: path
+          name: listId
+          required: true
+          schema:
+            type: string
+            pattern: '^[1-9][0-9]{0,11}$'
+            example: '8254132'
+        - in: query
+          name: page
+          schema:
+            type: number
+            minimum: 1
+            maximum: 500
+            default: 1
+        - in: query
+          name: language
+          schema:
+            type: string
+            example: en
+      responses:
+        '200':
+          description: Public list results.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - page
+                  - totalPages
+                  - totalResults
+                  - list
+                  - results
+                properties:
+                  page:
+                    type: number
+                    example: 1
+                  totalPages:
+                    type: number
+                    example: 8
+                  totalResults:
+                    type: number
+                    description: TMDB v4 list item_count.
+                    example: 158
+                  list:
+                    type: object
+                    required:
+                      - name
+                      - description
+                    properties:
+                      name:
+                        type: string
+                        example: Weekend watchlist
+                      description:
+                        type: string
+                        example: A collection of films and series.
+                  results:
+                    type: array
+                    items:
+                      anyOf:
+                        - $ref: '#/components/schemas/MovieResult'
+                        - $ref: '#/components/schemas/TvResult'
+        '400':
+          description: Invalid language query.
+        '404':
+          description: The list does not exist or is not public.
+        '502':
+          description: TMDB could not return the list.
   /discover/music:
     get:
       summary: Discover music
@@ -17157,6 +17286,8 @@ paths:
                 userId:
                   type: number
                   nullable: true
+                  description: >-
+                    Optional requester ID. Omit this field to use the authenticated user. When supplied, the request is attributed to that account. Supplying it requires both `MANAGE_USERS` and `MANAGE_REQUESTS`; otherwise the API returns HTTP 403.
                 ignoreQuota:
                   type: boolean
                   example: false
@@ -17191,6 +17322,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkMediaRequestResponse'
+  /request/person-movies:
+    post:
+      summary: Create movie requests from a person's movie credits
+      description: |
+        Requires the administrator's person-page bulk movie request setting and the normal movie request permissions. Each unique ID is processed through standard request admission and quota checks. Already-requested and blocklisted movies are listed as skipped; individual failures are listed in the response. Processing stops when a quota or service-configuration error prevents further requests.
+
+        Submit between 1 and 100 movie IDs per call. The person page sends larger credit lists as separate calls.
+      tags:
+        - request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonMovieBulkRequestBody'
+      responses:
+        '200':
+          description: Movie request summary returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonMovieBulkRequestResponse'
+        '400':
+          description: Invalid or out-of-range movie ID list
+        '401':
+          description: Authentication required
+        '403':
+          description: Bulk requests are disabled, movie requests are disabled, or the user lacks request permission
   /request/count:
     get:
       summary: Gets request counts

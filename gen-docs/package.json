@@ -7,7 +7,7 @@
     "docusaurus": "docusaurus",
     "start": "docusaurus start",
     "build": "docusaurus build",
-    "test:security": "node --test scripts/image-size-security.test.mjs",
+    "test:security": "node --test scripts/image-size-security.test.mjs scripts/dependency-policy.test.mjs scripts/dependency-patches.test.mjs",
     "gen-api-docs": "docusaurus gen-api-docs all",
     "clean-api-docs": "node ./scripts/clean-api-docs.cjs",
     "swizzle": "docusaurus swizzle",

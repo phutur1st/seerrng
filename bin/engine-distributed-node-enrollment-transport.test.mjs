@@ -14,15 +14,30 @@ import {
 // eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- These focused tests run in native Node without application aliases.
 import {
   DEFAULT_NODE_ENROLLMENT_BODY_BYTES,
+  isPrivateLanAddress,
   NODE_ENROLLMENT_ROUTE,
   NODE_ENROLLMENT_TRUST_BOUNDARY,
-  requestNodeEnrollment,
-  requestSupportedApplications,
+  requestNodeEnrollment as requestNodeEnrollmentPrototype,
+  requestSupportedApplications as requestSupportedApplicationsPrototype,
   startNodeEnrollmentServer,
   SUPPORTED_APPLICATIONS_ROUTE,
 } from '../tools/validation-engine/runtime/distributed-node-enrollment-transport.mjs';
 
 const sharedAuthenticationKey = 'a'.repeat(64);
+
+function requestNodeEnrollment(options) {
+  return requestNodeEnrollmentPrototype({
+    ...options,
+    allowPrototypeTestTransport: true,
+  });
+}
+
+function requestSupportedApplications(options) {
+  return requestSupportedApplicationsPrototype({
+    ...options,
+    allowPrototypeTestTransport: true,
+  });
+}
 
 function controllerConfig(nodes = [], changes = {}) {
   return {
@@ -101,6 +116,7 @@ async function startEnrollmentFixture(t, nodes = [], changes = {}) {
     controllerConfigPath: configPath,
     host: '127.0.0.1',
     port: 0,
+    allowPrototypeTestTransport: true,
   });
   t.after(async () => {
     await enrollmentServer.close();
@@ -161,10 +177,10 @@ async function withResponseServer(t, handler) {
   return port;
 }
 
-test('first contact explicitly uses the trusted private LAN boundary', () => {
+test('unauthenticated first contact is restricted to loopback prototype tests', () => {
   assert.equal(
     NODE_ENROLLMENT_TRUST_BOUNDARY,
-    'trusted-private-lan-unauthenticated-first-contact'
+    'loopback-test-only-unauthenticated-prototype'
   );
   assert.equal(NODE_ENROLLMENT_ROUTE, '/engine/v1/nodes/enroll');
   assert.equal(SUPPORTED_APPLICATIONS_ROUTE, '/engine/v1/applications');
@@ -262,6 +278,37 @@ test('controller accepts a new node and returns the shared cluster key', async (
   assert.deepEqual(persisted.nodes, [
     controllerNode({ threads: null, minimumThreadCount: null }),
   ]);
+});
+
+test('controller rejects browser origins and host aliases', async (t) => {
+  const { configPath, enrollmentServer } = await startEnrollmentFixture(t);
+  const body = JSON.stringify(enrollmentRequest());
+  const browserOrigin = await rawHttpRequest({
+    port: enrollmentServer.port,
+    body,
+    headers: { origin: 'http://attacker.example' },
+  });
+  assert.equal(browserOrigin.statusCode, 403);
+
+  const hostAlias = await rawHttpRequest({
+    port: enrollmentServer.port,
+    body,
+    headers: { host: `attacker.example:${enrollmentServer.port}` },
+  });
+  assert.equal(hostAlias.statusCode, 403);
+  assert.deepEqual(readControllerConfigFile(configPath).nodes, []);
+});
+
+test('enrollment listener refuses every non-loopback bind address', async () => {
+  for (const host of ['10.1.2.3', '192.168.1.20', '0.0.0.0', '::'])
+    await assert.rejects(
+      startNodeEnrollmentServer({
+        controllerConfigPath: '/unread/controller.cfg',
+        host,
+        allowPrototypeTestTransport: true,
+      }),
+      /restricted to loopback/
+    );
 });
 
 test('occupied node number returns 409 and never exposes the shared key', async (t) => {
@@ -535,4 +582,85 @@ test('client stops on timeout and caller abort', async (t) => {
     controller.abort();
     await assert.rejects(pending, { code: 'ERR_NODE_ENROLLMENT_ABORTED' });
   });
+});
+
+test('private address classification remains explicit while transport stays loopback-only', async () => {
+  for (const address of [
+    '10.1.2.3',
+    '127.0.0.1',
+    '172.16.0.1',
+    '172.31.255.254',
+    '192.168.1.20',
+    '169.254.1.1',
+    '::1',
+    'fd00::1',
+    'fe80::1',
+    '::ffff:192.168.1.20',
+  ])
+    assert.equal(isPrivateLanAddress(address), true, address);
+  for (const address of [
+    '8.8.8.8',
+    '172.15.0.1',
+    '172.32.0.1',
+    '192.169.0.1',
+    '2001:4860:4860::8888',
+    '::ffff:8.8.8.8',
+    'localhost',
+    '',
+    undefined,
+  ])
+    assert.equal(isPrivateLanAddress(address), false, String(address));
+  await assert.rejects(
+    startNodeEnrollmentServer({
+      controllerConfigPath: '/nonexistent/controller.cfg',
+      host: '8.8.8.8',
+      allowPrototypeTestTransport: true,
+    }),
+    /restricted to loopback tests/
+  );
+});
+
+test('unauthenticated prototype transport is disabled by default and loopback-only', async () => {
+  const controllerConfigPath = '/nonexistent/controller.cfg';
+  await assert.rejects(
+    startNodeEnrollmentServer({
+      controllerConfigPath,
+      host: '127.0.0.1',
+    }),
+    /disabled outside focused tests/
+  );
+  await assert.rejects(
+    startNodeEnrollmentServer({
+      controllerConfigPath,
+      host: '8.8.8.8',
+      allowPrototypeTestTransport: true,
+    }),
+    /restricted to loopback tests/
+  );
+
+  await assert.rejects(
+    requestNodeEnrollmentPrototype({
+      controllerIpAddress: '127.0.0.1',
+      controllerPort: 62021,
+      enrollmentRequest: enrollmentRequest(),
+    }),
+    /disabled outside focused tests/
+  );
+  await assert.rejects(
+    requestNodeEnrollmentPrototype({
+      controllerIpAddress: '192.168.1.20',
+      controllerPort: 62021,
+      enrollmentRequest: enrollmentRequest(),
+      allowPrototypeTestTransport: true,
+    }),
+    /restricted to loopback tests/
+  );
+  await assert.rejects(
+    requestSupportedApplicationsPrototype({
+      controllerIpAddress: '192.168.1.20',
+      controllerPort: 62021,
+      allowPrototypeTestTransport: true,
+    }),
+    /restricted to loopback tests/
+  );
 });

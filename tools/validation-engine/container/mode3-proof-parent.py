@@ -30,7 +30,14 @@ if sys.platform != "win32":
 
 SCHEMA = "seerrng-distributed-linux-proof-parent/v1"
 SOCKET_LIMIT = 16_384
+SHARED_UID_EXECUTION_BLOCKER = (
+    "Proof-parent execution is blocked: repository processes share the "
+    "infrastructure UID and can access its control sockets. Use hosted Mode 2 "
+    "until native processes have a separate identity and inaccessible control sockets."
+)
 CONTAINED_REQUEST_SHA256_ENV = "SEERR_MODE3_CONTAINED_REQUEST_SHA256"
+MODE1_LOCAL_REQUEST_PATH_ENV = "SEERR_MODE1_LOCAL_REQUEST_PATH"
+MODE1_LOCAL_REQUEST_SHA256_ENV = "SEERR_MODE1_LOCAL_REQUEST_SHA256"
 UNSAFE_ENVIRONMENT = {
     "BASH_ENV",
     "ENV",
@@ -158,6 +165,22 @@ def normalize_config(value: Any) -> dict[str, Any]:
         },
         "proof parent paths",
     )
+    network = exact_object(
+        config["network"],
+        {
+            "baselineDeniedCidrsV4",
+            "baselineDeniedCidrsV6",
+            "baselineMode",
+            "bridgeCidr",
+            "distributedEndpoints",
+            "distributedMode",
+            "distributedUnitId",
+            "leaseMaximumMs",
+            "repositoryMode",
+            "repositoryUnitId",
+        },
+        "proof parent network",
+    )
     engine = exact_object(
         config["engine"],
         {"arguments", "environment", "executable", "workingDirectory"},
@@ -179,27 +202,15 @@ def normalize_config(value: Any) -> dict[str, Any]:
         raise ValueError("Engine environment must contain exact strings")
     if any(
         key in UNSAFE_ENVIRONMENT
-        or key == CONTAINED_REQUEST_SHA256_ENV
+        or key in {CONTAINED_REQUEST_SHA256_ENV, MODE1_LOCAL_REQUEST_SHA256_ENV}
+        or (
+            network["distributedMode"] != "disabled"
+            and key == MODE1_LOCAL_REQUEST_PATH_ENV
+        )
         or re.search(r"secret|token|password|credential|api[_-]?key", key, re.IGNORECASE)
         for key in engine["environment"]
     ):
         raise ValueError("Engine environment contains a privileged-process injection key")
-    network = exact_object(
-        config["network"],
-        {
-            "baselineDeniedCidrsV4",
-            "baselineDeniedCidrsV6",
-            "baselineMode",
-            "bridgeCidr",
-            "distributedEndpoints",
-            "distributedMode",
-            "distributedUnitId",
-            "leaseMaximumMs",
-            "repositoryMode",
-            "repositoryUnitId",
-        },
-        "proof parent network",
-    )
     fixture = exact_object(
         config["dockerFixture"],
         {
@@ -248,7 +259,12 @@ def normalize_config(value: Any) -> dict[str, Any]:
         normalize_endpoint(entry, f"distributed endpoint {index}")
         for index, entry in enumerate(network["distributedEndpoints"])
     ]
-    if not endpoints or len({(entry["host"], entry["port"]) for entry in endpoints}) != len(endpoints):
+    distributed_disabled = network["distributedMode"] == "disabled"
+    if (
+        (distributed_disabled and endpoints)
+        or (not distributed_disabled and not endpoints)
+        or len({(entry["host"], entry["port"]) for entry in endpoints}) != len(endpoints)
+    ):
         raise ValueError("Unique distributed endpoints are required")
     bridge = ipaddress.ip_network(exact_text(network["bridgeCidr"], "bridge CIDR"), strict=True)
     if bridge.version != 4:
@@ -474,7 +490,10 @@ class Kernel:
 
     def verify_bridge_not_overlapping(self) -> dict[str, Any]:
         bridge = ipaddress.ip_network(self.config["network"]["bridgeCidr"])
+        bridge_name = self.config["dockerFixture"]["bridgeName"]
+        bridge_address = bridge.network_address + 1
         observed: list[str] = []
+        bridge_interface_seen = False
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as control:
             for _, interface in socket.if_nameindex():
                 request = struct.pack("256s", interface.encode()[:15])
@@ -489,13 +508,29 @@ class Kernel:
                     continue
                 network = ipaddress.ip_network(f"{address}/{netmask}", strict=False)
                 observed.append(str(network))
-                if network.overlaps(bridge):
+                if interface == bridge_name:
+                    if (
+                        bridge_interface_seen
+                        or network != bridge
+                        or ipaddress.ip_address(address) != bridge_address
+                    ):
+                        raise RuntimeError("Private Docker bridge interface differs")
+                    bridge_interface_seen = True
+                elif network.overlaps(bridge):
                     raise RuntimeError("Private Docker bridge overlaps a helper address")
+        if not bridge_interface_seen:
+            raise RuntimeError("Private Docker bridge interface is absent")
+
+        bridge_route_seen = False
         route_table = Path("/proc/net/route").read_text(encoding="ascii")
         for network in proc_ipv4_routes(route_table):
             observed.append(str(network))
             if network.overlaps(bridge):
-                raise RuntimeError("Private Docker bridge overlaps a helper route")
+                if network != bridge or bridge_route_seen:
+                    raise RuntimeError("Private Docker bridge overlaps a helper route")
+                bridge_route_seen = True
+        if not bridge_route_seen:
+            raise RuntimeError("Private Docker bridge route is absent")
         return {
             "bridgeCidr": str(bridge),
             "bridgeOverlapVerified": True,
@@ -586,9 +621,35 @@ class Kernel:
         ):
             raise RuntimeError("Private Docker fixture differs")
         port = positive_integer(int(ports[0]["HostPort"]), "ephemeral fixture port", 65_535)
-        container_address = fixture.get("NetworkSettings", {}).get("IPAddress")
-        if not isinstance(container_address, str) or not container_address:
-            raise RuntimeError("Private fixture address is absent")
+        network_settings = fixture.get("NetworkSettings", {})
+        bridge_id = bridge.get("Id")
+        bridge_attachment = network_settings.get("Networks", {}).get("bridge")
+        if (
+            not isinstance(bridge_id, str)
+            or not bridge_id
+            or not isinstance(bridge_attachment, dict)
+            or bridge_attachment.get("NetworkID") != bridge_id
+        ):
+            raise RuntimeError("Private fixture is not attached to the inspected bridge")
+        # Recent Docker inspect responses may leave the legacy top-level address
+        # blank; the address belongs to the named bridge attachment.
+        container_address = bridge_attachment.get("IPAddress")
+        legacy_address = network_settings.get("IPAddress")
+        if (
+            not isinstance(container_address, str)
+            or not container_address
+            or legacy_address not in (None, "", container_address)
+        ):
+            raise RuntimeError("Private fixture bridge address is absent or inconsistent")
+        try:
+            parsed_address = ipaddress.ip_address(container_address)
+        except ValueError as error:
+            raise RuntimeError("Private fixture bridge address is invalid") from error
+        if (
+            parsed_address.version != 4
+            or parsed_address not in ipaddress.ip_network(self.config["network"]["bridgeCidr"])
+        ):
+            raise RuntimeError("Private fixture address is outside the private bridge")
         self.verify_loopback_fixture(port, container_address)
         return {
             "daemonId": daemon_id,
@@ -716,7 +777,10 @@ class Admission:
         result = {**self.observe(), "token": self.token, "unitId": unit_id}
         if mode == self.config["network"]["distributedMode"]:
             result["allowedEndpoints"] = self.config["network"]["distributedEndpoints"]
-        self.record({"transition": transition, **result})
+        # A lease is a bearer credential, not retained evidence. Record only
+        # its digest; the raw value belongs exclusively to the RPC response.
+        evidence = {key: value for key, value in result.items() if key != "token"}
+        self.record({"transition": transition, **evidence, "tokenSha256": sha256(self.token.encode())})
         return result
 
     def end(self, token: Any, unit_id: Any, transition: str) -> dict[str, Any]:
@@ -737,7 +801,8 @@ class Admission:
         if self.frozen != self.baseline_frozen:
             guard_error = guard_error or "Original network policy was not restored"
         result = {**self.observe(), "restoredToken": restored_token, "guardFailure": guard_error}
-        self.record({"transition": transition, **result})
+        evidence = {key: value for key, value in result.items() if key != "restoredToken"}
+        self.record({"transition": transition, **evidence, "restoredTokenSha256": sha256(restored_token.encode())})
         if guard_error:
             raise RuntimeError(guard_error)
         return result
@@ -761,6 +826,8 @@ class Admission:
             "distributed-end": ("end", network["distributedMode"], network["distributedUnitId"]),
         }
         route = routes.get(op)
+        if op.startswith("distributed-") and network["distributedMode"] == "disabled":
+            raise ValueError("Distributed network leases are disabled for this run")
         if route is None or request.get("unitId") != route[2]:
             raise ValueError("Unknown fixed proof operation")
         if route[0] == "begin":
@@ -769,12 +836,15 @@ class Admission:
 
 
 def engine_command(config: dict[str, Any], request_sha256: str) -> list[str]:
+    request_hash = exact_digest(request_sha256, "contained request hash")
     environment = {
         **config["engine"]["environment"],
-        CONTAINED_REQUEST_SHA256_ENV: exact_digest(
-            request_sha256, "contained request hash"
-        ),
+        CONTAINED_REQUEST_SHA256_ENV: request_hash,
     }
+    if config["network"]["distributedMode"] == "disabled":
+        if MODE1_LOCAL_REQUEST_PATH_ENV not in environment:
+            raise ValueError("Mode 1 local request path is absent")
+        environment[MODE1_LOCAL_REQUEST_SHA256_ENV] = request_hash
     return [
         config["binaries"]["setpriv"],
         "--bounding-set=-all",
@@ -895,9 +965,18 @@ def stable_file_bytes(path_value: str, label: str) -> bytes:
 def engine_request_path(config: dict[str, Any]) -> str:
     arguments = config["engine"]["arguments"]
     indexes = [index for index, value in enumerate(arguments) if value == "--request-file"]
-    if len(indexes) != 1 or indexes[0] + 1 >= len(arguments):
-        raise ValueError("Engine requires one contained request argument")
-    return exact_path(arguments[indexes[0] + 1], "engine contained request path")
+    local_path = config["engine"]["environment"].get(MODE1_LOCAL_REQUEST_PATH_ENV)
+    if len(indexes) == 1 and indexes[0] + 1 < len(arguments) and local_path is None:
+        request_path = exact_path(
+            arguments[indexes[0] + 1], "engine contained request path"
+        )
+    elif not indexes and local_path is not None:
+        request_path = exact_path(local_path, "Mode 1 local request path")
+    else:
+        raise ValueError("Engine requires one unambiguous contained request path")
+    if not request_path.startswith("/config/"):
+        raise ValueError("Contained request must stay under read-only config")
+    return request_path
 
 
 def verify_contained_request(path_value: str, expected_sha: str) -> bytes:
@@ -907,12 +986,22 @@ def verify_contained_request(path_value: str, expected_sha: str) -> bytes:
     return raw
 
 
+def assert_execution_isolation() -> None:
+    raise RuntimeError(SHARED_UID_EXECUTION_BLOCKER)
+
+
 def serve(
     config_path: str,
     expected_sha: str,
     request_path_value: str,
     request_sha256: str,
 ) -> int:
+    # Dropping capabilities does not separate uid0 repository code from the
+    # proof parent or the privileged Docker socket in their shared state mount.
+    # Refuse this topology before reading paths, opening sockets, changing
+    # firewall rules, or starting either infrastructure or repository processes.
+    assert_execution_isolation()
+
     raw = Path(config_path).read_bytes()
     if sha256(raw) != exact_digest(expected_sha, "proof config hash"):
         raise ValueError("Read-only proof config changed")

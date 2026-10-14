@@ -78,9 +78,9 @@ different paths. For example:
 ```
 
 Mappings are supported for Radarr, Sonarr, Readarr-compatible ebook and
-audiobook services, LazyLibrarian magazines, and Kapowarr comics. Mylar3 comic
-issues are streamed through its authenticated API and do not need a path
-mapping. Keep the mounted library read-only and map the narrowest practical
+audiobook services, LazyLibrarian magazines, and Kapowarr comics. Mylar3 and
+Issuarr comic issues are streamed through their authenticated API and do not
+need a path mapping. Keep the mounted library read-only and map the narrowest practical
 folder. If the backend does not report an imported file, the path is not
 mounted, or a mapping cannot be resolved safely, the download action stays
 hidden.

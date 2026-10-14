@@ -17,7 +17,7 @@
 
 SeerrNG is a self-hosted request and discovery app for personal media libraries. It extends the Seerr/Jellyseerr/Overseerr lineage beyond movies and TV into music, books, comics, magazines, emulation ROMs, and PC games while keeping the familiar request approval workflow for Plex, Jellyfin, Emby, and automation-service users.
 
-This fork is maintained by snapetech. Upstream Seerr remains the base project for inherited video, user, server, and deployment behavior; SeerrNG-specific work focuses on multi-format media requests, service routing, caching, and fork-owned packaging/docs. See [NOTICE.md](./NOTICE.md) for attribution rules.
+SeerrNG is maintained by snapetech as a separate fork so we can move quickly on cross-media workflows and test ambitious features while keeping Seerr as the base for inherited video, user, server, and deployment behavior. The fork gives us room to develop and validate ideas before proposing them upstream; it does not presume that upstream should adopt every feature or the entire product direction. See [why SeerrNG is a fork](./docs/fork-rationale.md) for the rationale, integration changes, and conditions that could let upstream equivalents replace the fork, and [NOTICE.md](./NOTICE.md) for attribution rules.
 
 ## Contents
 
@@ -34,6 +34,7 @@ This fork is maintained by snapetech. Upstream Seerr remains the base project fo
   - [Configure comics](./docs/using-seerr/comics-backend.md)
   - [Configure magazines](./docs/using-seerr/magazines-backend.md)
   - [Companion services and SeerrNG NG forks](./docs/using-seerr/companion-services.md)
+  - [Why SeerrNG is a fork and what could retire it](./docs/fork-rationale.md)
   - [Cross-platform setup assistant](./docs/using-seerr/setup-assistant.md)
   - [Indexer searches by media category](./docs/using-seerr/indexer-searches.md)
   - [Configure services](./docs/using-seerr/settings/services.md)
@@ -63,7 +64,7 @@ This fork is maintained by snapetech. Upstream Seerr remains the base project fo
 - Music discovery and metadata through MusicBrainz, ListenBrainz, Cover Art Archive, TheAudioDB, and archive-backed artwork sources.
 - Book discovery and identity matching through Open Library, ISBN-10/ISBN-13 normalization, foreign book IDs, and edition IDs.
 - Audiobook discovery from connected audiobook catalogs, with author and narrator filtering and no ebook-only search results.
-- Comic discovery through ComicVine and magazine discovery through Google Books or LazyLibrarian, with Mylar3, Kapowarr, or BackIssue handling comic acquisition and LazyLibrarian handling magazines.
+- Comic discovery through ComicVine and magazine discovery through Google Books or LazyLibrarian. For new comic automation setups, SeerrNG recommends [Issuarr](https://github.com/issuarr/issuarr), the actively developed successor to [Mylar3](https://github.com/MylarComics/mylar3); existing Mylar3 connections remain supported through the same service type. Kapowarr and BackIssue are also supported comic backends, and LazyLibrarian handles magazines.
 - Separate ebook and audiobook service routing so both formats can be requested, approved, scanned, retried, and removed independently.
 - One BookshelfNG instance can manage both formats on the same book record.
   When both formats are enabled, their separate SeerrNG service entries can
@@ -73,6 +74,12 @@ This fork is maintained by snapetech. Upstream Seerr remains the base project fo
   progress and retry timing, and resume after imports complete. Pending imports
   are cancelled only when no other active request still needs them; ChaptarrNG
   `0.9.941+` also supports a restricted SeerrNG service key.
+- The BookshelfNG-to-ChaptarrNG consolidation is still gated on BookshelfNG's
+  complete enhanced feature set, populated-data conversion, and each old
+  installation channel. The later ChaptarrNG-to-upstream gate also includes
+  every ChaptarrNG feature it maintains or is actively adding, including
+  unpublished work. See the [BookshelfNG consolidation report](https://github.com/snapetech/bookshelfng/blob/main/docs/maintainers/chaptarr-consolidation.md)
+  and [ChaptarrNG's itemized retirement matrix](https://github.com/snapetech/chaptarrng/blob/main/docs/FORK_FEATURES.md#itemized-active-and-unreleased-chaptarrng-blockers).
 - Optional read-only Audiobookshelf library scanning marks ISBN-matched items
   as available audiobooks without sending acquisition requests or changing
   Audiobookshelf data.
@@ -120,6 +127,9 @@ SeerrNG documentation is maintained in the [docs folder](https://github.com/snap
 - [Install SeerrNG](./docs/getting-started/index.mdx)
 - [Install on Unraid](./docs/getting-started/third-parties/unraid.mdx)
 - [Find books, authors, and series](./docs/using-seerr/books-and-series.md)
+- [Create custom Discover sliders](./docs/using-seerr/custom-discover-sliders.md)
+- [Why SeerrNG maintains companion forks](./docs/using-seerr/dependency-forks.md)
+- [Why SeerrNG is a fork and what could retire it](./docs/fork-rationale.md)
 - [ChaptarrNG fork changes and capabilities](https://github.com/snapetech/chaptarrng/blob/main/docs/FORK_FEATURES.md)
 - [Discover and request comics](./docs/using-seerr/comics-backend.md)
 - [Discover and request magazines](./docs/using-seerr/magazines-backend.md)
@@ -197,7 +207,7 @@ macOS, or Linux, use the [cross-platform setup assistant](./docs/using-seerr/set
 
 ### Unraid
 
-Install SeerrNG from Community Applications with the [Unraid template](https://raw.githubusercontent.com/snapetech/seerrng/main/packaging/unraid/seerrng.xml). It uses the stable `latest` image, maps HTTP port `5055` and optional HTTPS port `5056`, and persists `/app/config`. The image runs as UID/GID `1000:1000`, so make the selected appdata directory writable by that user before the first start. Optional BookshelfNG, ChaptarrNG, ROMarrNG, and QuestarrNG templates live in each fork's own repository; the [Unraid guide](docs/getting-started/third-parties/unraid.mdx) links to their templates and to the existing Community Apps listings for LazyLibrarian, Mylar3, and Kapowarr. BackIssue has its own Docker image and Unraid template; see its [getting-started guide](https://backissue.app/getting-started).
+Install SeerrNG from Community Applications with the [Unraid template](https://raw.githubusercontent.com/snapetech/seerrng/main/packaging/unraid/seerrng.xml). It uses the stable `latest` image, maps HTTP port `5055` and optional HTTPS port `5056`, and persists `/app/config`. The image runs as UID/GID `1000:1000`, so make the selected appdata directory writable by that user before the first start. Optional BookshelfNG, ChaptarrNG, ROMarrNG, and QuestarrNG templates live in each fork's own repository; the [Unraid guide](docs/getting-started/third-parties/unraid.mdx) links to their templates and to the existing Community Apps listings for LazyLibrarian, Mylar3, and Kapowarr, plus Issuarr's own Unraid guide. BackIssue has its own Docker image and Unraid template; see its [getting-started guide](https://backissue.app/getting-started).
 
 ### Linux Packages
 
@@ -254,10 +264,24 @@ can each handle Book and Audiobook formats; one BookshelfNG instance can serve
 both. QuestarrNG handles PC game acquisition, while ROMarrNG handles emulation
 systems and ROM acquisition.
 
-Radarr, Sonarr, Lidarr, LazyLibrarian, Mylar3, Kapowarr, and BackIssue are
+BookshelfNG's planned retirement in favor of ChaptarrNG is not released yet:
+there is no populated-library converter or old-channel bridge, so existing
+BookshelfNG installations should keep their current data and backup path.
+ChaptarrNG remains the maintained destination. Its later retirement into
+upstream Chaptarr must preserve both ChaptarrNG's maintained and actively added
+features, including unpublished work, and the BookshelfNG features carried
+over. That complete union blocks ChaptarrNG retirement as a whole. Each
+feature, sub-feature, data path, and distribution channel remains an individual
+blocker; active ChaptarrNG branches and open feature PRs count before release.
+See the
+[combined feature snapshot](https://github.com/snapetech/chaptarrng/blob/main/docs/FORK_FEATURES.md#chaptarrng-retirement-blockers)
+and the [fork transition criteria](./docs/using-seerr/dependency-forks.md).
+
+Radarr, Sonarr, Lidarr, LazyLibrarian, Mylar3, Issuarr, Kapowarr, and BackIssue are
 separate upstream or third-party integrations. They are not NG forks. The
 [companion services guide](./docs/using-seerr/companion-services.md) compares
-providers and explains when each NG fork is needed.
+providers, explains what each maintained NG fork provides, and links to the
+[upstream transition criteria](./docs/using-seerr/dependency-forks.md).
 
 ## Bookshelf and Hardcover
 
@@ -517,6 +541,9 @@ Common runtime variables:
 | --- | --- |
 | `PORT` | HTTP port. Defaults to `5055`. |
 | `LOG_LEVEL` | Server log level. |
+| `NO_COLOR` | Set to a non-empty value to disable ANSI colors in console logs, unless `FORCE_COLOR` is non-empty. |
+| `FORCE_COLOR` | A non-empty value overrides terminal detection and `NO_COLOR`; `0` or `false` disables console colors, and any other value enables them. |
+| `TERM` | The terminal type; `dumb` disables console colors unless `FORCE_COLOR` is non-empty. |
 | `CONFIG_DIRECTORY` | Alternate config directory for non-container installs. |
 | `TMDB_API_KEY` | Optional TMDB v3 API key override. SeerrNG uses its bundled application key when this is unset. |
 | `TMDB_READ_ACCESS_TOKEN` | Optional TMDB v4 bearer-token override. When set, it takes precedence over `TMDB_API_KEY`. |

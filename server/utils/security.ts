@@ -402,6 +402,25 @@ export const isUnsafeLocalAddress = (hostname: string): boolean => {
   return false;
 };
 
+/**
+ * Accepts only credential-free HTTP(S) player endpoints whose literal host is
+ * not loopback, unspecified, or link-local. DNS names are re-checked against
+ * resolved addresses by the safe lookup at connection time.
+ */
+export const isSafePlayerConnectionUri = (uri: string): boolean => {
+  try {
+    const parsed = new URL(uri);
+    return (
+      ['http:', 'https:'].includes(parsed.protocol) &&
+      !parsed.username &&
+      !parsed.password &&
+      !isUnsafeLocalAddress(parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
+};
+
 export const resolvesToLocalOrPrivateAddress = async (
   hostname: string
 ): Promise<boolean> => {

@@ -1,5 +1,6 @@
 const LOOPBACK_HOST = '127.0.0.1';
 const DEFAULT_PORT = 5055;
+export const INTERNAL_API_PORT_ENV = 'SEERR_INTERNAL_API_PORT';
 
 export const INTERNAL_API_HTTP_OPTIONS = {
   timeout: 5_000,
@@ -52,18 +53,26 @@ const normalizeInternalApiHost = (host?: string): string => {
   }
 };
 
-const normalizeInternalApiPort = (value?: string): number => {
+const parseInternalApiPort = (value?: string): number | undefined => {
   if (!value || !/^\d{1,5}$/.test(value)) {
-    return DEFAULT_PORT;
+    return undefined;
   }
 
   const port = Number(value);
   return Number.isSafeInteger(port) && port >= 1 && port <= 65_535
     ? port
-    : DEFAULT_PORT;
+    : undefined;
 };
 
+const normalizeInternalApiPort = (value?: string): number =>
+  parseInternalApiPort(value) ?? DEFAULT_PORT;
+
 export const getInternalApiBaseUrl = (): string => {
+  const internalPort = parseInternalApiPort(process.env[INTERNAL_API_PORT_ENV]);
+  if (internalPort) {
+    return `http://${LOOPBACK_HOST}:${internalPort}`;
+  }
+
   const host = normalizeInternalApiHost(process.env.HOST);
   const port = normalizeInternalApiPort(process.env.PORT);
 

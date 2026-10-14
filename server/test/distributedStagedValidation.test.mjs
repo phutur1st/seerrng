@@ -144,6 +144,9 @@ function stagedOptions({ events = [], isolateOperation } = {}) {
     verifySource: async () => {
       events.push('verify-source');
     },
+    verifyStageBoundary: async () => {
+      events.push('verify-stage-boundary');
+    },
   };
 }
 

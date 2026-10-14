@@ -468,6 +468,31 @@ describe('Settings route input validation', () => {
     }
   });
 
+  it('persists and validates the person-page movie bulk-request setting', async () => {
+    const settings = getSettings();
+    const original = settings.main.personMovieBulkRequestsEnabled;
+
+    try {
+      const response = await request(app)
+        .post('/settings/main')
+        .send({ personMovieBulkRequestsEnabled: true });
+      const invalidResponse = await request(app)
+        .post('/settings/main')
+        .send({ personMovieBulkRequestsEnabled: 'true' });
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.personMovieBulkRequestsEnabled, true);
+      assert.strictEqual(settings.main.personMovieBulkRequestsEnabled, true);
+      assert.strictEqual(invalidResponse.status, 400);
+      assert.match(
+        invalidResponse.body.message,
+        /personMovieBulkRequestsEnabled must be a boolean/
+      );
+    } finally {
+      settings.main.personMovieBulkRequestsEnabled = original;
+    }
+  });
+
   it('saves category availability flags independently and validates their shape', async () => {
     const settings = getSettings();
     const original = { ...settings.main.enabledMediaCategories };

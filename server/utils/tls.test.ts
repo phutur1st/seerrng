@@ -1,9 +1,15 @@
+import {
+  INTERNAL_API_PORT_ENV,
+  getInternalApiBaseUrl,
+} from '@app/utils/internalApi';
 import assert from 'node:assert/strict';
 import { X509Certificate } from 'node:crypto';
 import fs from 'node:fs/promises';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
+import { startLoopbackHttpServer } from './httpServer';
 import {
   buildHttpsRedirectLocation,
   createHttpsUpgradeHandler,
@@ -127,6 +133,60 @@ describe('TLS configuration parsing', () => {
       'https://server.example:5056/login'
     );
     assert.match(response.body, /HTTPS is enabled/);
+  });
+
+  it('routes SSR API calls through loopback while public HTTP only upgrades', async () => {
+    const originalInternalApiPort = process.env[INTERNAL_API_PORT_ENV];
+    const internalApi = await startLoopbackHttpServer((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end('{"id":1}');
+    });
+    const publicHttp = http.createServer(
+      createHttpsUpgradeHandler(5056, ['127.0.0.1'])
+    );
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        publicHttp.once('error', reject);
+        publicHttp.listen(0, '127.0.0.1', resolve);
+      });
+      const publicAddress = publicHttp.address();
+      assert.ok(publicAddress && typeof publicAddress !== 'string');
+
+      process.env[INTERNAL_API_PORT_ENV] = String(internalApi.port);
+      const internalResponse = await fetch(
+        `${getInternalApiBaseUrl()}/api/v1/movie/1`
+      );
+      assert.equal(internalResponse.status, 200);
+      assert.deepEqual(await internalResponse.json(), { id: 1 });
+
+      const publicResponse = await fetch(
+        `http://127.0.0.1:${publicAddress.port}/api/v1/movie/1`
+      );
+      assert.equal(publicResponse.status, 426);
+      assert.equal(
+        publicResponse.headers.get('location'),
+        'https://127.0.0.1:5056/api/v1/movie/1'
+      );
+    } finally {
+      if (originalInternalApiPort === undefined) {
+        delete process.env[INTERNAL_API_PORT_ENV];
+      } else {
+        process.env[INTERNAL_API_PORT_ENV] = originalInternalApiPort;
+      }
+      await Promise.all(
+        [internalApi.server, publicHttp].map(
+          (server) =>
+            new Promise<void>((resolve, reject) => {
+              if (!server.listening) {
+                resolve();
+                return;
+              }
+              server.close((error) => (error ? reject(error) : resolve()));
+            })
+        )
+      );
+    }
   });
 });
 

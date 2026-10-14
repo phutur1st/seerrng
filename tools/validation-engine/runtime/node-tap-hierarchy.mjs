@@ -190,15 +190,15 @@ export function readNodeTapHierarchy(
         children.push(node);
         nodes.push(node);
         if (type === 'test') {
-          if (nested.length)
-            issue(
-              'Parent test with children requires explicit reporter count semantics'
-            );
+          // Node TAP counts each `type: 'test'` row, including a parent test
+          // with nested children. The parent and every child are separate
+          // counted test rows, while a suite is counted only in `# suites`.
           const fullName = parentNames.length ? suiteNames.join(' > ') : name;
           cases.push({
             ...node,
             name: fullName,
             leafName: name,
+            reporterRole: nested.length ? 'parent' : 'leaf',
             caseId: JSON.stringify([file, ordinalPath, suiteNames]),
           });
         } else if (type === 'suite' && !nested.length)
@@ -241,22 +241,25 @@ export function readNodeTapHierarchy(
     } else if (/^\s*(?:# Subtest:|(?:not )?ok \d|1\.\.|Bail out!)/.test(line))
       issue('Unexpected trailing TAP structure');
   }
-  const counts = {
-    passed: cases.filter((c) => c.status === 'passed').length,
-    failed: cases.filter((c) => c.status === 'failed').length,
-    skipped: cases.filter((c) => c.status === 'skip').length,
-  };
+  const reporterTests = nodes.filter((node) => node.type === 'test'),
+    reporterSuites = nodes.filter((node) => node.type === 'suite'),
+    counts = {
+      passed: reporterTests.filter((node) => node.status === 'passed').length,
+      failed: reporterTests.filter((node) => node.status === 'failed').length,
+      skipped: reporterTests.filter((node) => node.status === 'skip').length,
+    };
   if (
     Object.keys(summaries).length !== 7 ||
     !cases.length ||
-    summaries.tests !== cases.length ||
-    summaries.suites !== nodes.filter((n) => n.type === 'suite').length ||
+    cases.length !== reporterTests.length ||
+    summaries.tests !== reporterTests.length ||
+    summaries.suites !== reporterSuites.length ||
     summaries.pass !== counts.passed ||
     summaries.fail !== counts.failed ||
     summaries.skipped !== counts.skipped ||
     Object.values(counts).reduce((a, b) => a + b, 0) !== cases.length
   )
-    issue('Actual hierarchy leaf/summary counts disagree');
+    issue('Actual Node test/suite reporter counts disagree');
   if (summaries.cancelled !== 0 || summaries.todo !== 0)
     issue('Cancelled/TODO native cases not accepted');
   for (const node of nodes) {

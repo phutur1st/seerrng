@@ -1,24 +1,32 @@
 ---
 title: Comics Backend
-description: Configure ComicVine, Mylar3, Kapowarr, and BackIssue for comic requests.
+description: Configure ComicVine, Mylar3 or Issuarr, Kapowarr, and BackIssue for comic requests.
 sidebar_position: 24
 ---
 
 # Comics Backend
 
 SeerrNG discovers comics through [ComicVine](https://comicvine.gamespot.com/)
-and can send full-volume requests to [Mylar3](https://github.com/mylar3/mylar3),
-[Kapowarr](https://github.com/Casvt/Kapowarr), or
-[BackIssue](https://backissue.app/). You can configure more than one backend.
+and can send full-volume requests to [Issuarr](https://github.com/issuarr/issuarr),
+[Mylar3](https://github.com/MylarComics/mylar3),
+[Kapowarr](https://github.com/Casvt/Kapowarr), or [BackIssue](https://backissue.app/).
+For new Mylar-compatible setups, SeerrNG recommends Issuarr: its project
+describes it as the actively developed Mylar3 successor, and its
+[API guide](https://github.com/issuarr/issuarr/blob/main/docs/API.md) confirms
+that it uses the same web API. Existing Mylar3 installations remain supported.
+Connect either app through SeerrNG's existing **Mylar3** service type; no
+separate Issuarr service type is needed. You can configure more than one
+backend.
 Users with advanced request permission can choose a configured server; other
-requests go to the single default across all three backends. For Kapowarr,
+requests go to the single default across the configured backends. For Kapowarr,
 advanced requesters can also select a root folder already configured there.
 
 BackIssue is the most complete choice when you want to read comics in the
 browser or share a library between household members. It has a browser reader
 with resume and bookmarks, role-based accounts, RSS watching for new uploads,
-and an Android companion app. Mylar3 and Kapowarr remain fine choices for
-automated downloads when you do not need those features.
+and an Android companion app. Issuarr is the recommended choice for a new
+automated comic-download setup. Existing Mylar3 users can continue using their
+current service connection; Kapowarr is another supported option.
 
 ## Metron Fallback (Optional)
 
@@ -35,7 +43,7 @@ ComicVine.
 ## ComicVine API Key
 
 Comic discovery and requests require a free ComicVine API key, independent of
-any ComicVine key configured inside Mylar3 or Kapowarr themselves.
+any ComicVine key configured inside Mylar3, Issuarr, or Kapowarr themselves.
 
 1. Sign in or create an account at
    [comicvine.gamespot.com](https://comicvine.gamespot.com/).
@@ -61,7 +69,7 @@ catalog can take hours to index.
 
 ## Choosing a backend
 
-| | Mylar3 | Kapowarr | BackIssue |
+| | Issuarr or Mylar3 | Kapowarr | BackIssue |
 | --- | --- | --- | --- |
 | API style | Legacy query-string (`?apikey=&cmd=`) | JSON REST | JSON REST |
 | Acquisition | Usenet and torrent indexers | Direct-download sources | BackIssue's configured sources and download settings |
@@ -89,26 +97,31 @@ collection and show owned or actively tracked issues in SeerrNG.
 SeerrNG's **Indexer Search** page can query Prowlarr's configured comic
 categories for manual inspection by users with **Manage Requests**. These
 results are not grabbed or tracked; the selected comic backend handles approved
-requests. Prowlarr can sync indexers to Mylar3, so confirm the providers are
-enabled in Mylar3's search settings. BackIssue can use its own
+requests. Prowlarr can sync indexers to Mylar3 or Issuarr, so confirm the
+providers are enabled in that app's search settings. BackIssue can use its own
 [Prowlarr plugin](https://backissue.app/prowlarr) to feed its Usenet and torrent
 sources. Prowlarr does not add indexers to Kapowarr, which uses its
 direct-download sources. See [Indexer searches by media category](./indexer-searches.md).
 
-Mylar3 and Kapowarr need their own, separately configured ComicVine API key for
-their own internal search — this is unrelated to the SeerrNG-level key above,
+Mylar3, Issuarr, and Kapowarr need their own, separately configured ComicVine
+API key for their own internal search — this is unrelated to the SeerrNG-level key above,
 and only affects features SeerrNG does not use (SeerrNG's own ComicVine client
 handles discovery; the backends are only asked to add and track already-
 identified comics).
 
-## Mylar3 setup
+## Issuarr or Mylar3 setup
 
-1. Deploy Mylar3 (for example `lscr.io/linuxserver/mylar3`).
-2. In SeerrNG, open **Settings > Services** and add a Mylar3 server.
+1. For a new deployment, install [Issuarr](https://github.com/issuarr/issuarr)
+   using its `ghcr.io/issuarr/issuarr:latest` image and
+   [installation guide](https://issuarr.github.io/issuarr/). Existing
+   [Mylar3](https://github.com/MylarComics/mylar3) installations remain
+   supported.
+2. In SeerrNG, open **Settings > Services** and add a **Mylar3** server for
+   either app; enter the Issuarr host and API key here when using Issuarr.
 3. Enter its hostname, port, and API key (**Mylar3 > Settings > General >
-   Security**).
-4. If Mylar3 should be the default comics destination, mark this instance as
-   the default across all configured comic services.
+   Security** or **Issuarr > Settings > General > API and OPDS**).
+4. If this server should be the default comics destination, mark it as the
+   default across all configured comic services.
 5. Enable **Sync** to bring already-owned comics into SeerrNG as available.
 
 ## Kapowarr setup
@@ -194,7 +207,8 @@ endpoints require administrator authentication.
 ## Configuration checklist
 
 1. Add a ComicVine API key in **Settings > General**.
-2. Add a Mylar3, Kapowarr, and/or BackIssue server in **Settings > Services**.
+2. Add a Mylar3 or Issuarr server (using the **Mylar3** service type),
+   Kapowarr, and/or BackIssue in **Settings > Services**.
 3. Mark one server across all comic services as the default. Requests without
    an explicitly selected server use this instance.
 4. Enable **Sync** on each service you want scanned into SeerrNG's local
@@ -210,8 +224,8 @@ endpoints require administrator authentication.
 This is a first-pass integration; the following is a deliberate scope cut, not
 a bug:
 
-- Mylar3 does not expose per-request folder or profile choices through the API
-  used by SeerrNG. Kapowarr supports a per-request root-folder choice for users
+- The Mylar3/Issuarr API does not expose per-request folder or profile choices
+  through the API used by SeerrNG. Kapowarr supports a per-request root-folder choice for users
   with **Advanced Request** or **Manage Requests**; other requests use the
   folder configured for that Kapowarr server. BackIssue does not expose
   per-request download choices through the API used by SeerrNG. No comic
@@ -237,15 +251,15 @@ tracked comic's details page. Administrators can open the comic in its backend,
 remove it from the backend, mark it available, or clear its SeerrNG data.
 
 Cancelling an active comic request removes it from Kapowarr's or BackIssue's
-download queue directly. Mylar3 has no equivalent API to cancel an individual
-in-progress download, so cancelling an active Mylar-backed request fails with
-an error; wait for it to finish or remove the download manually in Mylar3 or
-the download client first.
+download queue directly. Mylar3 and Issuarr have no equivalent API to cancel
+an individual in-progress download, so cancelling an active Mylar-backed
+request fails with an error; wait for it to finish or remove the download
+manually in the comic manager or download client first.
 
 Kapowarr reports live download percent, size, and status. BackIssue reports
 queue status and a percentage when available, but not download size or an ETA.
-Mylar3 has no API for reading an in-progress download's status, so a
-Mylar-backed request moves through requested, approved, and available without
+Mylar3 and Issuarr have no API for reading an in-progress download's status, so
+a Mylar-backed request moves through requested, approved, and available without
 a live progress bar in between.
 
 ## Troubleshooting

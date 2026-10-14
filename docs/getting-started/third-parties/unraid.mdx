@@ -43,14 +43,17 @@ catalog does not show an optional fork, use its manual template and setup guide
 above. Complete the service's own setup before connecting it to SeerrNG.
 
 BookshelfNG, ChaptarrNG, ROMarrNG, and QuestarrNG are Snapetech NG forks that
-work independently and add SeerrNG integration APIs. ChaptarrNG is the
-maintained Chaptarr fork; we keep it so SeerrNG can depend on format-scoped
-book requests and durable tracking for author imports that complete
-asynchronously. Its Unraid profile and template live in the dedicated
+work independently and add SeerrNG integration APIs. Their standalone features,
+SeerrNG-specific behavior, and upstream replacement criteria are documented in
+the [maintained fork guide](/using-seerr/dependency-forks). ChaptarrNG is the
+maintained Chaptarr fork; SeerrNG uses its capability-discovered format routes,
+provider identity, and restricted service key. The upstream Chaptarr project
+also has pending author imports, so pending imports alone do not distinguish
+the NG integration. Its Unraid profile and template live in the dedicated
 [ChaptarrNG Unraid package repository](https://github.com/snapetech/chaptarrng-unraid).
-The public `v0.9.937` GHCR image is available. Pin
-`ghcr.io/snapetech/chaptarrng:0.9.937` for a reproducible install. The template
-is not listed in Community Apps yet; submit
+Use the current stable image or a versioned tag listed in the
+[ChaptarrNG release history](https://github.com/snapetech/chaptarrng/releases).
+The template is not listed in Community Apps yet; submit
 `https://github.com/snapetech/chaptarrng-unraid` there to make it searchable.
 Use the
 [SeerrNG issue tracker](https://github.com/snapetech/seerrng/issues) for
@@ -59,17 +62,22 @@ and [Questarr](https://ca.unraid.net/apps/questarr-0335hnh1oyuaqh) listings
 are different apps and do not replace the NG forks for SeerrNG's extended
 contracts.
 
-LazyLibrarian, Mylar3, and Kapowarr are **third-party apps, not Snapetech NG
-forks**. They already have Unraid Community Apps packages, so install them
-directly from these existing listings rather than a SeerrNG package:
+LazyLibrarian, Mylar3, Issuarr, and Kapowarr are **third-party apps, not
+Snapetech NG forks**. Install LazyLibrarian, Mylar3, and Kapowarr from their
+existing Community Apps listings; Issuarr provides its own Unraid guide.
 
-| Optional service | Purpose | Existing Community Apps listing |
+| Optional service | Purpose | Project and installation links |
 | --- | --- | --- |
 | LazyLibrarian | Magazines | [Install LazyLibrarian](https://ca.unraid.net/apps/lazylibrarian-1o5cqti19ivs1e) |
-| Mylar3 | Comics, including full volumes | [Install Mylar3](https://ca.unraid.net/apps/mylar3-1avghds0trt4q4) |
+| Issuarr (recommended for new setups) | Comics, including full volumes | [Project](https://github.com/issuarr/issuarr) · [Unraid guide](https://issuarr.github.io/issuarr/UNRAID/) |
+| Mylar3 (existing connections supported) | Comics, including full volumes | [Project](https://github.com/MylarComics/mylar3) · [Install from Community Apps](https://ca.unraid.net/apps/mylar3-1avghds0trt4q4) |
 | Kapowarr | Comics, including full volumes | [Install Kapowarr](https://ca.unraid.net/apps/kapowarr-1p27chu0mk08ni) |
 
-Mylar3 and Kapowarr are alternatives for comic acquisition; neither is
+Issuarr is the actively developed Mylar3 successor and the recommended choice
+for a new comic automation setup. SeerrNG connects to Issuarr and Mylar3 through
+the existing **Mylar3** service type.
+
+Issuarr, Mylar3, and Kapowarr are alternatives for comic acquisition; none is
 mandatory. On separate bridge networks, use the Unraid host address and each
 service's mapped web port when adding it in SeerrNG. For SeerrNG integration
 questions, use the [SeerrNG issue tracker](https://github.com/snapetech/seerrng/issues).

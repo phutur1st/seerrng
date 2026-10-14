@@ -1371,35 +1371,41 @@ const validateCurrentBatchContract = (files) => {
     '### Main-menu cleanup',
     'must retain the main-menu cleanup task'
   );
-  for (const navigationFile of [
+  const navigationModel = 'src/components/Layout/Sidebar/navigation.tsx';
+  requireCount(
+    navigationModel,
+    "href: '/discover/audiobooks'",
+    1,
+    'primary navigation must contain exactly one Audiobooks entry'
+  );
+  requireCount(
+    navigationModel,
+    "href: '/requests'",
+    1,
+    'primary navigation must retain exactly one main Requests entry'
+  );
+  rejectText(
+    navigationModel,
+    "href: '/requests/status'",
+    'primary navigation must not contain the removed Request Status entry'
+  );
+  for (const navigationConsumer of [
     'src/components/Layout/Sidebar/index.tsx',
     'src/components/Layout/MobileMenu/index.tsx',
   ]) {
-    requireCount(
-      navigationFile,
-      "href: '/discover/audiobooks'",
-      1,
-      'primary navigation must contain exactly one Audiobooks entry'
-    );
-    requireCount(
-      navigationFile,
-      "href: '/requests'",
-      1,
-      'primary navigation must retain exactly one main Requests entry'
-    );
-    rejectText(
-      navigationFile,
-      "href: '/requests/status'",
-      'primary navigation must not contain the removed Request Status entry'
+    requireText(
+      navigationConsumer,
+      "from '@app/components/Layout/Sidebar/navigation'",
+      'desktop and mobile menus must render the same shared navigation model'
     );
   }
   requireText(
-    'src/components/Layout/Sidebar/index.tsx',
+    navigationModel,
     "users: 'User List',",
     'the shared desktop and mobile main-menu label must read User List'
   );
   rejectText(
-    'src/components/Layout/Sidebar/index.tsx',
+    navigationModel,
     "users: 'Users',",
     'the main-menu label must not revert to Users'
   );
@@ -2725,11 +2731,6 @@ const validateCurrentBatchContract = (files) => {
     '.app-search-input {',
     'global search must consume the shared blue control surface'
   );
-  requireText(
-    'package.json',
-    '"validate:development": "node bin/run-local-validation.mjs"',
-    'the complete validation command must retain the repository engine entry point'
-  );
   // Keep visual and translation checks on the ordinary build without forcing
   // full staged validation into every build, development session or commit.
   let publicScripts = {};
@@ -2745,6 +2746,11 @@ const validateCurrentBatchContract = (files) => {
     )
       errors.push(`package.json: ${reason}`);
   };
+  requirePublicCommand(
+    'validate:development',
+    'node bin/run-local-validation.mjs --package-entry',
+    'the complete validation command must retain the repository engine entry point'
+  );
   requirePublicCommand(
     'build',
     'pnpm build:all',
@@ -2762,7 +2768,7 @@ const validateCurrentBatchContract = (files) => {
   );
   requirePublicCommand(
     'build:server',
-    'tsc --project server/tsconfig.json && copyfiles -u 2 server/templates/**/*.{html,pug} dist/templates && copyfiles -u 2 "server/i18n/locale/*.json" dist/i18n && tsc-alias -p server/tsconfig.json && node scripts/replace-server-import-aliases.mjs dist',
+    'tsc --project server/tsconfig.json && copyfiles -u 2 server/templates/**/*.{html,pug} dist/templates && copyfiles -u 2 "server/i18n/locale/*.json" dist/i18n && node scripts/replace-server-import-aliases.mjs dist',
     'the public server build must retain upstream compilation, resources and alias resolution'
   );
   requirePublicCommand(
@@ -2786,16 +2792,38 @@ const validateCurrentBatchContract = (files) => {
     'the translation command must retain its actual validator'
   );
   if (
-    typeof publicScripts.dev !== 'string' ||
-    !publicScripts.dev.startsWith('nodemon ') ||
-    !publicScripts.dev.includes(
-      '--project server/tsconfig.json server/index.ts'
-    )
+    publicScripts.dev !== 'node scripts/dev-server.mjs' ||
+    publicScripts['dev:server'] !== 'node scripts/dev-server.mjs'
   ) {
     errors.push(
-      'package.json: public development must retain the upstream watched server entry point'
+      'package.json: public development must retain the local server watcher'
     );
   }
+  requireText(
+    'scripts/dev-server.mjs',
+    "new Set(['.ts', '.json', '.yml'])",
+    'the development watcher must preserve supported server file extensions'
+  );
+  requireText(
+    'scripts/dev-server.mjs',
+    "'server/index.ts'",
+    'the development watcher must preserve the server entry point'
+  );
+  requireText(
+    'bin/run-tooling-tests.mjs',
+    'scripts/dev-server.test.mjs',
+    'the tooling suite must cover the local development watcher'
+  );
+  requireText(
+    'bin/check-current-batch-contract.js',
+    "'scripts/dev-server.mjs',",
+    'the current-batch check must include the development watcher as a contract input'
+  );
+  requireText(
+    'bin/check-current-batch-contract.js',
+    "'bin/run-tooling-tests.mjs',",
+    'the current-batch check must include the tooling suite as a contract input'
+  );
   for (const check of [
     'check-current-batch-contract.js',
     'check-refreshed-ui-style.js',

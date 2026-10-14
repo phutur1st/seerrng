@@ -1,21 +1,28 @@
 import Ellipsis from '@app/assets/ellipsis.svg';
+import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
 import ImageFader from '@app/components/Common/ImageFader';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
+import Modal from '@app/components/Common/Modal';
 import PageTitle from '@app/components/Common/PageTitle';
 import ExternalLinkBlock from '@app/components/ExternalLinkBlock';
 import TitleCard from '@app/components/TitleCard';
+import { SettingsContext } from '@app/context/SettingsContext';
+import useToasts from '@app/hooks/useToasts';
+import { Permission, useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
 import ErrorPage from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
 import { CircleStackIcon } from '@heroicons/react/24/solid';
 import type { PersonCombinedCreditsResponse } from '@server/interfaces/api/personInterfaces';
+import type { PersonMovieBulkRequestResponse } from '@server/interfaces/api/requestInterfaces';
 import type { PersonDetails as PersonDetailsType } from '@server/models/Person';
+import axios from 'axios';
 import { useRouter } from 'next/router';
-import { useMemo, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 import TruncateMarkup from 'react-truncate-markup';
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
 
 const messages = defineMessages('components.PersonDetails', {
   birthdate: 'Born {birthdate}',
@@ -24,6 +31,14 @@ const messages = defineMessages('components.PersonDetails', {
   appearsin: 'Appearances',
   crewmember: 'Crew',
   ascharacter: 'as {character}',
+  requestAllMovies: 'Request All Movies',
+  requestAllMoviesTitle: 'Request All Movies by {person}',
+  requestAllMoviesDescription:
+    'Submit requests for {count} movies by {person}. Existing requests and blocklisted movies are skipped. Normal permissions and request quotas apply.',
+  requestAllMoviesConfirm: 'Request All',
+  requestAllMoviesSuccess:
+    'Submitted {created} movie requests. {skipped} skipped; {failed} failed.',
+  requestAllMoviesFailure: 'Could not request movies by this person.',
 });
 
 type MediaType = 'all' | 'movie' | 'tv';
@@ -38,7 +53,12 @@ const groupById = <T extends { id: number | string }>(items: T[]) =>
 const PersonDetails = () => {
   const intl = useIntl();
   const router = useRouter();
+  const { currentSettings } = useContext(SettingsContext);
+  const { hasPermission } = useUser();
+  const { addToast } = useToasts();
   const [currentMediaType, setCurrentMediaType] = useState<string>('all');
+  const [showRequestAllMovies, setShowRequestAllMovies] = useState(false);
+  const [requestingAllMovies, setRequestingAllMovies] = useState(false);
   const personId =
     typeof router.query.personId === 'string' ? router.query.personId : '';
   const { data, error } = useSWR<PersonDetailsType>(
@@ -80,6 +100,89 @@ const PersonDetails = () => {
 
     return reduced;
   }, [combinedCredits, currentMediaType]);
+
+  const movieIds = useMemo(() => {
+    const movies = [
+      ...(combinedCredits?.cast ?? []),
+      ...(combinedCredits?.crew ?? []),
+    ].filter((credit) => credit.mediaType === 'movie');
+
+    return Object.values(groupById(movies))
+      .map((credits) => Number(credits[0].id))
+      .filter((id) => Number.isSafeInteger(id) && id > 0);
+  }, [combinedCredits]);
+
+  const canRequestAllMovies =
+    currentSettings.personMovieBulkRequestsEnabled &&
+    hasPermission([Permission.REQUEST, Permission.REQUEST_MOVIE], {
+      type: 'or',
+    }) &&
+    movieIds.length > 0;
+
+  const requestAllMovies = async () => {
+    setRequestingAllMovies(true);
+    try {
+      const result: PersonMovieBulkRequestResponse = {
+        created: [],
+        skipped: [],
+        failed: [],
+      };
+      const batchSize = 100;
+      for (let offset = 0; offset < movieIds.length; offset += batchSize) {
+        const batch = movieIds.slice(offset, offset + batchSize);
+        try {
+          const { data: response } =
+            await axios.post<PersonMovieBulkRequestResponse>(
+              '/api/v1/request/person-movies',
+              { movieIds: batch }
+            );
+          result.created.push(...response.created);
+          result.skipped.push(...response.skipped);
+          result.failed.push(...response.failed);
+
+          if (response.stoppedReason) {
+            result.failed.push(
+              ...movieIds.slice(offset + batch.length).map((movieId) => ({
+                movieId,
+                reason: response.stoppedReason!,
+              }))
+            );
+            break;
+          }
+        } catch {
+          result.failed.push(
+            ...movieIds.slice(offset).map((movieId) => ({
+              movieId,
+              reason: 'Unable to process this movie.',
+            }))
+          );
+          break;
+        }
+      }
+      setShowRequestAllMovies(false);
+      addToast(
+        intl.formatMessage(messages.requestAllMoviesSuccess, {
+          created: result.created.length,
+          skipped: result.skipped.length,
+          failed: result.failed.length,
+        }),
+        {
+          autoDismiss: true,
+          appearance: result.failed.length > 0 ? 'error' : 'success',
+        }
+      );
+      void mutate('/api/v1/request/count');
+      void mutate('/api/v1/request?filter=all&take=10&sort=modified&skip=0');
+      void mutate(`/api/v1/person/${personId}/combined_credits`);
+    } catch {
+      addToast(intl.formatMessage(messages.requestAllMoviesFailure), {
+        autoDismiss: true,
+        appearance: 'error',
+      });
+    } finally {
+      setRequestingAllMovies(false);
+    }
+  };
 
   if (!data && !error) {
     return <LoadingSpinner />;
@@ -331,6 +434,39 @@ const PersonDetails = () => {
           )}
         </div>
       </div>
+      {canRequestAllMovies && (
+        <div className="app-action-row" data-action-placement="leading">
+          <Button
+            buttonType="primary"
+            onClick={() => setShowRequestAllMovies(true)}
+          >
+            {intl.formatMessage(messages.requestAllMovies)}
+          </Button>
+        </div>
+      )}
+      {showRequestAllMovies && canRequestAllMovies && (
+        <Modal
+          title={intl.formatMessage(messages.requestAllMoviesTitle, {
+            person: data.name,
+          })}
+          onCancel={() =>
+            !requestingAllMovies && setShowRequestAllMovies(false)
+          }
+          onOk={() => void requestAllMovies()}
+          cancelText={intl.formatMessage(globalMessages.cancel)}
+          okText={intl.formatMessage(messages.requestAllMoviesConfirm)}
+          okDisabled={requestingAllMovies}
+          loading={requestingAllMovies}
+          backgroundClickable={!requestingAllMovies}
+        >
+          <p>
+            {intl.formatMessage(messages.requestAllMoviesDescription, {
+              count: movieIds.length,
+              person: data.name,
+            })}
+          </p>
+        </Modal>
+      )}
       {data.knownForDepartment === 'Acting' ? [cast, crew] : [crew, cast]}
       {isLoading && <LoadingSpinner />}
     </>

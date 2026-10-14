@@ -121,7 +121,8 @@ function fixture() {
     'gen-docs/package.json',
     JSON.stringify({
       scripts: {
-        'test:security': 'node --test scripts/image-size-security.test.mjs',
+        'test:security':
+          'node --test scripts/image-size-security.test.mjs scripts/dependency-policy.test.mjs scripts/dependency-patches.test.mjs',
       },
     })
   );
@@ -175,6 +176,16 @@ function fixture() {
     'gen-docs/scripts/image-size-security.test.mjs',
     "import test from 'node:test';\n"
   );
+  write(
+    root,
+    'gen-docs/scripts/dependency-policy.test.mjs',
+    "import test from 'node:test';\n"
+  );
+  write(
+    root,
+    'gen-docs/scripts/dependency-patches.test.mjs',
+    "import test from 'node:test';\n"
+  );
   write(root, 'cypress/e2e/login.cy.ts', "describe('login', () => {});\n");
   write(
     root,
@@ -224,6 +235,23 @@ test('current repository has complete deterministic hosted ownership', () => {
     )?.owner,
     'docs-security'
   );
+  assert.equal(
+    inventory.entries.find(
+      ({ file }) => file === 'gen-docs/scripts/dependency-policy.test.mjs'
+    )?.owner,
+    'docs-security'
+  );
+  assert.equal(
+    inventory.entries.find(
+      ({ file }) => file === 'gen-docs/scripts/dependency-patches.test.mjs'
+    )?.owner,
+    'docs-security'
+  );
+  const mode1Lifecycle = inventory.entries.find(
+    ({ file }) => file === 'bin/engine-mode1-local-lifecycle.test.mjs'
+  );
+  assert.equal(mode1Lifecycle?.owner, 'tooling');
+  assert.equal(mode1Lifecycle?.toolingGroup, 'portableTests');
   assert.deepEqual(
     verifyHostedTestInventory(repositoryRoot, inventory),
     inventory

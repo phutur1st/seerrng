@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, win32 } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+// eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Native tooling tests exercise concrete admission without invoking Docker.
+import { createDistributedLinuxHostAdapters } from '../tools/validation-engine/runtime/distributed-linux-host-adapters.mjs';
 
 // eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Native tooling tests exercise the engine module directly.
 import { createAdaptiveTimingProfile } from '../tools/validation-engine/runtime/distributed-adaptive-scheduler.mjs';
@@ -18,6 +20,7 @@ import {
   createDistributedLinuxHostContainmentPlan,
   createDistributedLinuxProofParentConfig,
   createDistributedLinuxProofSocketAdapter,
+  createMode1LinuxHostContainmentCallbacks,
   executeDistributedLinuxHostContainment,
 } from '../tools/validation-engine/runtime/distributed-linux-host-containment.mjs';
 // eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Native tooling tests exercise the engine module directly.
@@ -414,6 +417,40 @@ function manifestFixture() {
   };
 }
 
+function mode1ManifestFixture() {
+  const fixture = manifestFixture();
+  const manifest = structuredClone(fixture.manifest);
+  manifest.schema = 'seerrng-mode1-local-containment/v1';
+  for (const key of [
+    'dependencyMountpoint',
+    'images',
+    'inputs',
+    'namePrefix',
+    'ownershipLabelKey',
+    'resources',
+  ])
+    delete manifest[key];
+  manifest.network.distributed = {
+    mode: 'disabled',
+    unitId: 'distributed-disabled',
+    runtimeApplicationKey: 'distributed-disabled',
+    endpoints: [],
+  };
+  const proofParentConfig = createDistributedLinuxProofParentConfig({
+    candidate: manifest.candidate,
+    dockerFixture: manifest.dockerFixture,
+    evidence: manifest.evidence,
+    inner: manifest.inner,
+    network: manifest.network,
+    outerDaemonId: manifest.outerDaemonId,
+    paths: manifest.paths,
+    proof: manifest.proof,
+    runId: manifest.runId,
+  });
+  manifest.proofParentConfig = proofParentConfig.value;
+  return { ...fixture, manifest, proofParentConfig };
+}
+
 function createPlan(fixture, options) {
   return createDistributedLinuxHostContainmentPlan(fixture.manifest, {
     ...options,
@@ -721,6 +758,21 @@ test('plan binds a fresh owner, exact mounts, corrected helper capabilities, and
 
 test('manifest mutations fail closed before Docker execution', () => {
   const fixture = manifestFixture();
+  const disabledDistributedPolicy = structuredClone(fixture.manifest);
+  disabledDistributedPolicy.network.distributed = {
+    ...disabledDistributedPolicy.network.distributed,
+    mode: 'disabled',
+    endpoints: [],
+  };
+  assert.throws(
+    () =>
+      createDistributedLinuxHostContainmentPlan(disabledDistributedPolicy, {
+        preparationRequest: fixture.preparationRequest,
+        uniqueToken: 'disabled-distributed-1',
+      }),
+    /Mode 3 requires configured distributed network leases/u
+  );
+
   const configMutation = structuredClone(fixture.manifest);
   configMutation.proofParentConfig.network.distributedEndpoints[0].port += 1;
   assert.throws(
@@ -837,6 +889,88 @@ test('callbacks prove boundaries and restore leases with operation-once semantic
   );
 });
 
+test('Mode 1 reuses local host proofs and exposes no distributed lease callback', async () => {
+  const fixture = mode1ManifestFixture();
+  const harness = proofHarness(fixture);
+  const localTagRefsSha256 = sha256(
+    Buffer.from(`refs/tags/v1 ${hash40('5')}\n`)
+  );
+  harness.adapters.gitHistory = {
+    verifyEvidence: async () => ({
+      verified: true,
+      completeClosure: true,
+      sourceSha256: fixture.manifest.candidate.sourceSha256,
+      commit: fixture.manifest.candidate.commit,
+      version: 'test-local-git-proof-v1',
+      localTagRefsSha256,
+      remoteTagRefsSha256: localTagRefsSha256,
+      remoteRefsSha256: digest('a'),
+      evidenceSha256: fixture.manifest.gitHistory.evidenceSha256,
+    }),
+  };
+  const callbacks = createMode1LinuxHostContainmentCallbacks(
+    fixture.manifest,
+    harness.adapters
+  );
+  assert.deepEqual(Object.keys(callbacks).toSorted(), [
+    'verifyDockerFixture',
+    'verifyGitHistory',
+    'verifyNetworkBoundary',
+    'withRepositoryIsolation',
+  ]);
+
+  const candidate = fixture.manifest.candidate;
+  assert.equal(
+    (await callbacks.verifyNetworkBoundary({ candidate })).isolated,
+    true
+  );
+  assert.equal(
+    (await callbacks.verifyDockerFixture({ candidate })).daemonVerified,
+    true
+  );
+  assert.equal(
+    (
+      await callbacks.verifyGitHistory({
+        candidate,
+        localTagRefsSha256,
+      })
+    ).completeClosure,
+    true
+  );
+  let repositoryCalls = 0;
+  await callbacks.withRepositoryIsolation(
+    async () => {
+      repositoryCalls += 1;
+    },
+    {
+      candidate,
+      unitId: 'native-repository',
+    }
+  );
+  assert.equal(repositoryCalls, 1);
+  await callbacks.withRepositoryIsolation(
+    async () => {
+      repositoryCalls += 1;
+    },
+    {
+      candidate,
+      unitId: 'native-browser',
+    }
+  );
+  assert.equal(repositoryCalls, 2);
+  await assert.rejects(
+    callbacks.withRepositoryIsolation(async () => {}, {
+      candidate,
+      unitId: 'native-codeql',
+    }),
+    /Repository isolation context differs from containment/u
+  );
+  assert.equal(
+    harness.requests.some(({ op }) => op.startsWith('distributed-')),
+    false
+  );
+});
+
 test('authenticated Git evidence rejects a coherently resealed missing clean-source proof', async () => {
   const fixture = manifestFixture();
   const evidence = gitEvidence(fixture.manifest.candidate);
@@ -924,20 +1058,20 @@ function proofParentLedgerBytes(fixture) {
     { event: 'fixture-created', fixtureId: 'fixture-id' },
     {
       transition: 'repository-begin',
-      token: repositoryToken,
+      tokenSha256: sha256(Buffer.from(repositoryToken)),
     },
     {
       transition: 'repository-end',
-      restoredToken: repositoryToken,
+      restoredTokenSha256: sha256(Buffer.from(repositoryToken)),
       guardFailure: null,
     },
     {
       transition: 'distributed-begin',
-      token: distributedToken,
+      tokenSha256: sha256(Buffer.from(distributedToken)),
     },
     {
       transition: 'distributed-end',
-      restoredToken: distributedToken,
+      restoredTokenSha256: sha256(Buffer.from(distributedToken)),
       guardFailure: null,
     },
     {
@@ -976,6 +1110,7 @@ function outerHarness(
     mutateHelperUser = false,
     mutateOuterEvidence = null,
     mutateProductionArtifact = false,
+    retainRawProofToken = false,
     mutateTimingProfileArtifact = false,
     mutateVolume = false,
     mountSourceOverrides = {},
@@ -1248,8 +1383,23 @@ function outerHarness(
       });
     if (containerPath.endsWith('containment-callbacks.jsonl'))
       return callbackLedgerBytes();
-    if (containerPath.endsWith('proof-parent-events.jsonl'))
-      return proofParentLedgerBytes(fixture);
+    if (containerPath.endsWith('proof-parent-events.jsonl')) {
+      const bytes = proofParentLedgerBytes(fixture);
+      if (!retainRawProofToken) return bytes;
+      return Buffer.from(
+        bytes
+          .toString('utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map((line) => {
+            const event = JSON.parse(line);
+            if (event.transition === 'repository-begin')
+              event.token = '1'.repeat(48);
+            return JSON.stringify(event);
+          })
+          .join('\n') + '\n'
+      );
+    }
     const productionRole = fixture.manifest.evidence.artifacts.find(
       (entry) => entry.containerPath === containerPath
     )?.role;
@@ -1532,6 +1682,33 @@ function outerHarness(
     files,
   };
 }
+
+test('concrete host lifecycle rejects shared-UID execution before creating any asset', async () => {
+  const concrete = createDistributedLinuxHostAdapters();
+  for (const adapters of [
+    concrete,
+    { ...concrete },
+    { ...concrete, docker: { ...concrete.docker } },
+  ])
+    await assert.rejects(
+      executeDistributedLinuxHostContainment(null, adapters),
+      /repository processes share the infrastructure UID/
+    );
+});
+
+test('outer reconciliation rejects retained raw bearer tokens despite matching digest evidence', async () => {
+  const fixture = manifestFixture();
+  const plan = createPlan(fixture, { uniqueToken: 'raw-proof-token' });
+  const harness = outerHarness(fixture, plan, { retainRawProofToken: true });
+  await assert.rejects(
+    executeDistributedLinuxHostContainment(plan, harness.adapters)
+  );
+  assert.ok(
+    !harness.writes.some((entry) =>
+      entry.endsWith(DISTRIBUTED_LINUX_HOST_FINAL_MARKER)
+    )
+  );
+});
 
 test('outer lifecycle reconciles evidence, stops assets, retains them, and writes its marker last', async () => {
   const fixture = manifestFixture();

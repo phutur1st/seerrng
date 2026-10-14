@@ -21,10 +21,13 @@ import { fileURLToPath } from 'node:url';
 // eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Standalone Node tests cannot resolve application aliases.
 import {
   MODE3_DEPENDENCY_MOUNTPOINT_SCHEMA,
+  createNativeInputClosureList,
   createNativeRepositoryCheckExecutor,
   createNativeStageContext,
   createOwnedDocsLinkSnapshot,
   createOwnedSourceSnapshot,
+  createReadonlyBrowserCacheInputs,
+  createReadonlyNativeInputReference,
   disposeSourceSnapshot,
   evaluatorHeadroom,
   findNativeExecutable,
@@ -439,6 +442,23 @@ test('snapshot seals actual working bytes/modes, includes unignored files and om
   assert.equal(existsSync(snapshot.scratchRoot), false);
 });
 
+test('source snapshot allows only its canonical root when Git global config is disabled', (t) => {
+  const { root, parent } = fixture(t);
+  const previous = process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER;
+  process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = '1';
+  let snapshot;
+  try {
+    snapshot = createOwnedSourceSnapshot(root, { scratchParent: parent });
+  } finally {
+    if (previous === undefined)
+      delete process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER;
+    else process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = previous;
+  }
+
+  assert.equal(snapshot.authoritativeRoot, root);
+  assert.equal(verifySourceSnapshot(snapshot), true);
+});
+
 test('snapshot preserves a clean tracked executable mode', (t) => {
   const { root, parent } = fixture(t);
   git(root, 'update-index', '--chmod=+x', 'source.mjs');
@@ -851,6 +871,99 @@ test('read-only dependency proof uses the innermost actual mount, not ancestor o
       .verified,
     false
   );
+});
+
+test('browser cache inputs require an exact read-only mount and a stable content closure', (t) => {
+  const { root } = fixture(t);
+  mkdirSync(path.join(root, 'browser-cache'));
+  writeFileSync(
+    path.join(root, 'browser-cache', 'browser.bin'),
+    'pinned bytes\n'
+  );
+  const cache = path.join(root, 'browser-cache');
+  const mountPath = fs.realpathSync(cache).replaceAll(' ', '\\040');
+  const readOnlyMountInfo = `1 0 0:1 / / rw - overlay overlay rw\n2 1 0:2 / ${mountPath} ro,nosuid - ext4 /dev/a ro\n`;
+  const writableMountInfo = readOnlyMountInfo.replace('ro,nosuid', 'rw,nosuid');
+
+  assert.throws(
+    () =>
+      createReadonlyNativeInputReference(cache, {
+        platform: 'linux',
+        mountInfo: writableMountInfo,
+      }),
+    /not proven read-only/u
+  );
+  const reference = createReadonlyNativeInputReference(cache, {
+    platform: 'linux',
+    mountInfo: readOnlyMountInfo,
+  });
+  assert.equal(reference.root, fs.realpathSync(cache));
+  assert.equal(reference.readOnlyProof.verified, true);
+  assert.equal(reference.paths.includes(cache), true);
+  verifyNativeInputFreshness({ closures: [reference], files: [] });
+
+  writeFileSync(path.join(cache, 'browser.bin'), 'changed bytes\n');
+  assert.throws(
+    () => verifyNativeInputFreshness({ closures: [reference], files: [] }),
+    /Frozen native input closure changed/u
+  );
+});
+
+test('native setup classifies exact browser-cache references as read-only inputs', (t) => {
+  const { root } = fixture(t);
+  const playwrightBrowsers = path.join(root, 'playwright-browsers');
+  const cypressCache = path.join(root, 'cypress-cache');
+  mkdirSync(playwrightBrowsers);
+  mkdirSync(cypressCache);
+  const input = createReadonlyBrowserCacheInputs(
+    { playwrightBrowsers, cypressCache },
+    {
+      PLAYWRIGHT_BROWSERS_PATH: playwrightBrowsers,
+      CYPRESS_CACHE_FOLDER: cypressCache,
+    }
+  );
+  assert.deepEqual(input.inputClosures, []);
+  assert.deepEqual(
+    input.blockers.map(({ id, status }) => [id, status]),
+    [
+      ['readonly-playwrightBrowsers-cache-reference', 'prerequisite-blocked'],
+      ['readonly-cypressCache-cache-reference', 'prerequisite-blocked'],
+    ]
+  );
+  assert.ok(
+    input.blockers.every(({ reason }) => /not proven read-only/u.test(reason))
+  );
+});
+
+test('native input closures keep the mutable dependency closure first', () => {
+  const dependency = { root: '/dependencies', sha256: 'dependency-closure' };
+  const readonlyCache = Object.freeze({
+    root: '/readonly/browser-cache',
+    paths: Object.freeze(['/readonly/browser-cache']),
+  });
+  const sourceRoot = path.join(tmpdir(), 'native-input-source');
+  const snapshotRoot = path.join(tmpdir(), 'native-input-snapshot');
+  const closures = createNativeInputClosureList(
+    dependency,
+    sourceRoot,
+    snapshotRoot,
+    [readonlyCache]
+  );
+
+  assert.equal(closures[0].root, dependency.root);
+  assert.deepEqual(closures[0].paths, [
+    path.join(sourceRoot, 'node_modules'),
+    path.join(snapshotRoot, 'node_modules'),
+  ]);
+  const supplementalRoot = path.join(tmpdir(), 'native-input-supplemental');
+  closures[0].paths.push(path.join(supplementalRoot, 'node_modules'));
+  assert.deepEqual(closures[0].paths, [
+    path.join(sourceRoot, 'node_modules'),
+    path.join(snapshotRoot, 'node_modules'),
+    path.join(supplementalRoot, 'node_modules'),
+  ]);
+  assert.equal(closures[1], readonlyCache);
+  assert.equal(Object.isFrozen(closures[1].paths), true);
 });
 
 function inputClosure(root, files) {

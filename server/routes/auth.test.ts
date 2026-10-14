@@ -854,6 +854,11 @@ describe('POST /auth/plex', () => {
 
       const response = await loginPromise;
       assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.email, 'friend@seerr.dev');
+      assert.strictEqual(response.body.plexId, 2);
+      assert.strictEqual(response.body.requestCount, 0);
+      assert.strictEqual(response.body.plexToken, undefined);
+      assert.strictEqual(response.body.password, undefined);
       const persisted = await userRepository.findOneByOrFail({ id: 2 });
       assert.strictEqual(persisted.permissions, Permission.ADMIN);
     } finally {
@@ -1033,6 +1038,55 @@ describe('POST /auth/plex', () => {
 
     assert.strictEqual(res.status, 400);
     assert.strictEqual(res.body.message, 'Request body must be an object.');
+  });
+});
+
+describe('GET /auth/plex/pin/:id', () => {
+  it('keeps a transient Plex PIN 404 in the pending state', async () => {
+    const settings = getSettings();
+    settings.main.mediaServerType = MediaServerType.PLEX;
+    settings.main.mediaServerLogin = true;
+    const getMock = mock.method(axios, 'get', async () => {
+      throw Object.assign(new Error('PIN temporarily unavailable'), {
+        isAxiosError: true,
+        response: { status: 404 },
+      });
+    });
+
+    try {
+      const response = await request(app).get('/auth/plex/pin/42?code=abcd');
+
+      assert.strictEqual(response.status, 200);
+      assert.deepStrictEqual(response.body, {
+        authToken: null,
+        expiresAt: null,
+      });
+      assert.strictEqual(getMock.mock.callCount(), 1);
+    } finally {
+      getMock.mock.restore();
+    }
+  });
+
+  it('continues to report non-404 Plex PIN lookup failures', async () => {
+    const settings = getSettings();
+    settings.main.mediaServerType = MediaServerType.PLEX;
+    settings.main.mediaServerLogin = true;
+    const getMock = mock.method(axios, 'get', async () => {
+      throw Object.assign(new Error('Plex unavailable'), {
+        isAxiosError: true,
+        response: { status: 503 },
+      });
+    });
+
+    try {
+      const response = await request(app).get('/auth/plex/pin/42?code=abcd');
+
+      assert.strictEqual(response.status, 502);
+      assert.match(response.body.message, /unable to contact plex/i);
+      assert.strictEqual(getMock.mock.callCount(), 1);
+    } finally {
+      getMock.mock.restore();
+    }
   });
 });
 
@@ -1945,14 +1999,19 @@ describe('POST /auth/logout', () => {
       releaseCleanup = resolve;
     });
     let deletedDeviceId: string | undefined;
+    let cleanupHeaders: Record<string, string> | undefined;
     const deleteMock = mock.method(
       axios,
       'delete',
       async (
         _url: string,
-        config?: { params?: { Id?: string } }
+        config?: {
+          params?: { Id?: string };
+          headers?: Record<string, string>;
+        }
       ): Promise<{ status: number }> => {
         deletedDeviceId = config?.params?.Id;
+        cleanupHeaders = config?.headers;
         cleanupStarted();
         await releaseCleanupPromise;
         return { status: 204 };
@@ -1988,6 +2047,11 @@ describe('POST /auth/logout', () => {
       assert.strictEqual(logoutResponse.status, 200);
       assert.strictEqual((await agent.get('/auth/me')).status, 403);
       assert.strictEqual(deletedDeviceId, 'logout-device-id');
+      assert.match(
+        cleanupHeaders?.Authorization ?? '',
+        /MediaBrowser .*Token="logout-cleanup-api-key"/
+      );
+      assert.strictEqual(cleanupHeaders?.['X-Emby-Authorization'], undefined);
     } finally {
       if (timeout) clearTimeout(timeout);
       releaseCleanup();

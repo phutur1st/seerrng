@@ -10,7 +10,10 @@ import {
   type RatingOption,
 } from '@app/components/Discover/FilterPanel/CompactFilterSelect';
 import { tvNetworks } from '@app/components/Discover/NetworkSlider';
-import type { FilterOptions } from '@app/components/Discover/constants';
+import {
+  DEFAULT_TMDB_RATING_MINIMUM_VOTES,
+  type FilterOptions,
+} from '@app/components/Discover/constants';
 import {
   CompanySelector,
   WatchProviderSelector,
@@ -39,6 +42,8 @@ const messages = defineMessages('components.Discover.FilterPanel', {
   searchMovies: 'Search Movies',
   searchSeries: 'Search Series',
   tmdbuserscore: 'TMDB Rating',
+  minimumTmdbVotes: 'Minimum TMDB Votes',
+  voteCount: '{count} votes',
   runtime: 'Runtime',
   streamingservices: 'Streaming Services',
   region: 'Region',
@@ -199,6 +204,19 @@ const FilterPanel = ({
     { label: intl.formatMessage(messages.ended), value: '3' },
     { label: intl.formatMessage(messages.canceled), value: '4' },
     { label: intl.formatMessage(messages.pilot), value: '5' },
+  ];
+  const ratingSortSelected =
+    currentFilters.sortBy === 'vote_average.asc' ||
+    currentFilters.sortBy === 'vote_average.desc';
+  const minimumVoteCount =
+    currentFilters.voteCountGte ??
+    (ratingSortSelected ? DEFAULT_TMDB_RATING_MINIMUM_VOTES : '0');
+  const minimumVoteCountOptions: CompactSelectOption[] = [
+    { label: intl.formatMessage(messages.any), value: '0' },
+    ...[10, 50, 100, 500, 1000].map((count) => ({
+      label: intl.formatMessage(messages.voteCount, { count }),
+      value: count.toString(),
+    })),
   ];
   const yearOptions: CompactSelectOption[] = [
     { label: intl.formatMessage(messages.any), value: 'any' },
@@ -600,6 +618,17 @@ const FilterPanel = ({
             )
           }
         />
+        {variant === 'discover' && (
+          <CompactSelect
+            label={intl.formatMessage(messages.minimumTmdbVotes)}
+            value={minimumVoteCount}
+            options={minimumVoteCountOptions}
+            defaultValue={
+              ratingSortSelected ? DEFAULT_TMDB_RATING_MINIMUM_VOTES : '0'
+            }
+            onChange={(value) => updateFilter('voteCountGte', value)}
+          />
+        )}
         <CompactSelect
           label={intl.formatMessage(messages.language)}
           value={currentLanguage}

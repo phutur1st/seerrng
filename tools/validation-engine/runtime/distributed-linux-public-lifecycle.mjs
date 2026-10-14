@@ -3,7 +3,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  appendFileSync,
   chmodSync,
   closeSync,
   constants,
@@ -28,6 +27,7 @@ import {
 
 // eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Native engine modules share the repository-owned process runner.
 import { runCommand } from '../../../bin/local-validation.mjs';
+import { appendJsonLineNoFollow } from './append-json-line.mjs';
 import {
   createRequiredWorkerCapacityProof,
   detectOperatorGithubLogin,
@@ -1499,7 +1499,7 @@ export function runDistributedLinuxProofClientCommand(args, options) {
 }
 
 function appendJsonLine(path, value) {
-  appendFileSync(path, canonicalBytes(value), { encoding: null, mode: 0o600 });
+  appendJsonLineNoFollow(path, canonicalBytes(value));
 }
 
 function findCypressBinary() {

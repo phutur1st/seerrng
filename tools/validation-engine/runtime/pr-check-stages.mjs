@@ -169,7 +169,7 @@ export async function createSupplementalPrStages(options) {
   );
   if (
     docsPackage.scripts?.['test:security'] !==
-      'node --test scripts/image-size-security.test.mjs' ||
+      'node --test scripts/image-size-security.test.mjs scripts/dependency-policy.test.mjs scripts/dependency-patches.test.mjs' ||
     docsPackage.scripts?.['gen-api-docs'] !== 'docusaurus gen-api-docs all' ||
     docsPackage.scripts?.build !== 'docusaurus build' ||
     !appPackage.scripts?.['security:council']?.includes(
@@ -288,6 +288,11 @@ export async function createSupplementalPrStages(options) {
   docsSecurity.caseLedger = {
     format: 'node-tap13-hierarchy-v1',
     file: 'gen-docs/scripts/image-size-security.test.mjs',
+    files: [
+      'gen-docs/scripts/image-size-security.test.mjs',
+      'gen-docs/scripts/dependency-policy.test.mjs',
+      'gen-docs/scripts/dependency-patches.test.mjs',
+    ],
   };
   const docsGenerate = command('docs-api-generate', 'pnpm', ['gen-api-docs'], {
     ...docsOptions,
@@ -760,7 +765,9 @@ export function normalizeSupplementalPrChecks(plan) {
         .filter((check) => check.command)
         .map((check) => ({ ...check })),
       files: checks.flatMap((check) =>
-        check.caseLedger ? [check.caseLedger.file] : []
+        check.caseLedger
+          ? (check.caseLedger.files ?? [check.caseLedger.file])
+          : []
       ),
       applicability: first.applicability,
       workflowHashes: plan.workflowHashes,

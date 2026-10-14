@@ -1,5 +1,6 @@
 // Copyright (c) snapetech and SeerrNG contributors.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -137,10 +138,7 @@ function fixture(t, mode = {}) {
   let ordinal = 0;
   const nativeRun = async (command) => {
     calls.push(command.kind);
-    assert.equal(
-      command.env.NODE_OPTIONS,
-      command.kind === 'tooling' ? '--test-reporter=tap' : undefined
-    );
+    assert.equal(command.env.NODE_OPTIONS, undefined);
     const failed =
       (mode.failedVitest && command.kind === 'vitest') ||
       (mode.failedNode && command.kind === 'node-js') ||
@@ -399,6 +397,57 @@ test('duplicate Node TAP level plans are rejected as trailing structure', () => 
   const ledger = readNodeTapHierarchy(Buffer.from(report), 'node:test');
   assert.equal(ledger.complete, false);
   assert.ok(ledger.issues.includes('Unexpected trailing TAP structure'));
+});
+test('Node TAP counts parent tests and their children as separate test rows', (t) => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'seerrng-node-tap-parent-')),
+    fixtureFile = path.join(root, 'nested.test.mjs');
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(
+    fixtureFile,
+    [
+      "import test from 'node:test';",
+      "test('parent', async (t) => {",
+      "  await t.test('passing child', () => {});",
+      "  await t.test('failing child', () => { throw new Error('fixture failure'); });",
+      '});',
+      '',
+    ].join('\n')
+  );
+  const childEnvironment = { ...process.env };
+  delete childEnvironment.NODE_TEST_CONTEXT;
+  const child = spawnSync(
+    process.execPath,
+    ['--test', '--test-reporter=tap', fixtureFile],
+    { encoding: 'utf8', env: childEnvironment }
+  );
+  assert.equal(child.error, undefined, child.error?.message);
+  assert.equal(child.signal, null);
+  assert.equal(child.status, 1, child.stderr);
+  const ledger = readNodeTapHierarchy(Buffer.from(child.stdout), 'node:test');
+  assert.equal(ledger.complete, true, ledger.issues.join('; '));
+  assert.deepEqual(ledger.issues, []);
+  assert.deepEqual(ledger.summaries, {
+    tests: 3,
+    suites: 0,
+    pass: 1,
+    fail: 2,
+    cancelled: 0,
+    skipped: 0,
+    todo: 0,
+  });
+  assert.deepEqual(
+    Object.fromEntries(
+      ledger.cases.map(({ name, status, reporterRole }) => [
+        name,
+        { status, reporterRole },
+      ])
+    ),
+    {
+      'parent > passing child': { status: 'passed', reporterRole: 'leaf' },
+      'parent > failing child': { status: 'failed', reporterRole: 'leaf' },
+      parent: { status: 'failed', reporterRole: 'parent' },
+    }
+  );
 });
 test('missing/malformed/off-source/duplicate/unclosed/zero-active native reports abort independent owners', async (t) => {
   for (const mode of [

@@ -5,6 +5,7 @@ import {
   HTTP_SERVER_LIMITS,
   configureHttpServer,
   parseListenPort,
+  startLoopbackHttpServer,
 } from './httpServer';
 
 describe('parseListenPort', () => {
@@ -50,5 +51,31 @@ describe('configureHttpServer', () => {
       server.maxRequestsPerSocket,
       HTTP_SERVER_LIMITS.maxRequestsPerSocket
     );
+  });
+});
+
+describe('startLoopbackHttpServer', () => {
+  it('serves its handler on an ephemeral loopback-only port', async () => {
+    const { server, port } = await startLoopbackHttpServer(
+      (_request, response) => {
+        response.writeHead(200, { 'Content-Type': 'text/plain' });
+        response.end('internal API');
+      }
+    );
+
+    try {
+      const address = server.address();
+      assert.ok(address && typeof address !== 'string');
+      assert.equal(address.address, '127.0.0.1');
+      assert.equal(address.port, port);
+
+      const response = await fetch(`http://127.0.0.1:${port}/api/v1/movie/1`);
+      assert.equal(response.status, 200);
+      assert.equal(await response.text(), 'internal API');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
   });
 });

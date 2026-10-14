@@ -212,7 +212,8 @@ function fixture({ zeroCaseNativeFile = false } = {}) {
     'gen-docs/package.json',
     JSON.stringify({
       scripts: {
-        'test:security': 'node --test scripts/image-size-security.test.mjs',
+        'test:security':
+          'node --test scripts/image-size-security.test.mjs scripts/dependency-policy.test.mjs scripts/dependency-patches.test.mjs',
       },
     })
   );
@@ -291,6 +292,16 @@ function fixture({ zeroCaseNativeFile = false } = {}) {
     root,
     'gen-docs/scripts/image-size-security.test.mjs',
     "import test from 'node:test'; test('docs security', () => {});\n"
+  );
+  write(
+    root,
+    'gen-docs/scripts/dependency-policy.test.mjs',
+    "import test from 'node:test'; test('dependency policy', () => {});\n"
+  );
+  write(
+    root,
+    'gen-docs/scripts/dependency-patches.test.mjs',
+    "import test from 'node:test'; test('dependency patches', () => {});\n"
   );
   for (const name of [
     'admin',

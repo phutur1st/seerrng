@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import socket
 import struct
 import sys
 import unittest
@@ -130,6 +131,149 @@ class FakeKernel:
 
 
 class ProofParentTests(unittest.TestCase):
+    def test_shared_uid_serve_is_rejected_before_any_privileged_operation(self) -> None:
+        with (
+            mock.patch.object(MODULE, "Kernel") as kernel,
+            mock.patch.object(MODULE.socket, "socket") as socket_factory,
+            mock.patch.object(MODULE.subprocess, "Popen") as spawn,
+            mock.patch.object(MODULE.Path, "read_bytes") as read_bytes,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "infrastructure UID"):
+                MODULE.serve("/nonexistent-config", "a" * 64, "/nonexistent-request", "b" * 64)
+            kernel.assert_not_called()
+            socket_factory.assert_not_called()
+            spawn.assert_not_called()
+            read_bytes.assert_not_called()
+
+    def test_network_lease_bearer_tokens_never_enter_retained_evidence(self) -> None:
+        for kind in ("repository", "distributed"):
+            with self.subTest(kind=kind):
+                normalized = MODULE.normalize_config(config())
+                events = []
+                admission = MODULE.Admission(
+                    normalized, FakeKernel(normalized), events.append,
+                    namespace=lambda: "net:[audit]",
+                )
+                lease = admission.request({
+                    "op": f"{kind}-begin",
+                    "sourceSha256": normalized["sourceSha256"],
+                    "unitId": normalized["network"][f"{kind}UnitId"],
+                })
+                token = lease["token"]
+                restored = admission.request({
+                    "op": f"{kind}-end",
+                    "sourceSha256": normalized["sourceSha256"],
+                    "unitId": normalized["network"][f"{kind}UnitId"],
+                    "token": token,
+                })
+                self.assertEqual(restored["restoredToken"], token)
+                self.assertNotIn(token, json.dumps(events))
+                self.assertNotIn("token", events[0])
+                self.assertNotIn("restoredToken", events[1])
+                self.assertEqual(events[0]["tokenSha256"], digest(token.encode()))
+                self.assertEqual(events[1]["restoredTokenSha256"], digest(token.encode()))
+
+    def verify_bridge(
+        self, interfaces: dict[str, tuple[str, str]], routes: list[str]
+    ) -> dict:
+        normalized = MODULE.normalize_config(config())
+        interface_indexes = [
+            (index, name) for index, name in enumerate(interfaces, start=1)
+        ]
+        route_table = (
+            "Iface Destination Gateway Flags RefCnt Use Metric Mask\n"
+            + "\n".join(routes)
+            + "\n"
+        )
+        control = mock.MagicMock()
+        control.__enter__.return_value = control
+        control.fileno.return_value = 9
+
+        def ioctl(_fd: int, operation: int, request: bytes) -> bytes:
+            name = request.split(b"\0", 1)[0].decode("ascii")
+            address, netmask = interfaces[name]
+            value = address if operation == 0x8915 else netmask
+            return bytes(20) + socket.inet_aton(value) + bytes(8)
+
+        with (
+            mock.patch.object(
+                MODULE.socket, "if_nameindex", return_value=interface_indexes
+            ),
+            mock.patch.object(MODULE.socket, "socket", return_value=control),
+            mock.patch.object(MODULE.fcntl, "ioctl", side_effect=ioctl),
+            mock.patch.object(
+                MODULE.Path, "read_text", return_value=route_table
+            ),
+        ):
+            return MODULE.Kernel(normalized).verify_bridge_not_overlapping()
+
+    @staticmethod
+    def bridge_fixture_routes(*extra: str) -> list[str]:
+        return [
+            "eth0 000011AC 00000000 0001 0 0 0 0000FFFF",
+            "docker0 006433C6 00000000 0001 0 0 0 F8FFFFFF",
+            *extra,
+        ]
+
+    def test_bridge_overlap_allows_only_the_configured_docker_bridge(self) -> None:
+        result = self.verify_bridge(
+            {
+                "lo": ("127.0.0.1", "255.0.0.0"),
+                "eth0": ("172.17.0.15", "255.255.0.0"),
+                "docker0": ("198.51.100.1", "255.255.255.248"),
+            },
+            self.bridge_fixture_routes(),
+        )
+
+        self.assertEqual(result["bridgeCidr"], "198.51.100.0/29")
+        self.assertTrue(result["bridgeOverlapVerified"])
+
+    def test_bridge_overlap_rejects_an_unexpected_overlapping_interface(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "overlaps a helper address"):
+            self.verify_bridge(
+                {
+                    "lo": ("127.0.0.1", "255.0.0.0"),
+                    "eth0": ("172.17.0.15", "255.255.0.0"),
+                    "docker0": ("198.51.100.1", "255.255.255.248"),
+                    "br-extra": ("198.51.100.2", "255.255.255.248"),
+                },
+                self.bridge_fixture_routes(),
+            )
+
+    def test_bridge_overlap_rejects_an_incorrect_bridge_address_or_subnet(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "bridge interface differs"):
+            self.verify_bridge(
+                {
+                    "eth0": ("172.17.0.15", "255.255.0.0"),
+                    "docker0": ("198.51.100.2", "255.255.255.248"),
+                },
+                self.bridge_fixture_routes(),
+            )
+
+    def test_bridge_overlap_requires_the_expected_interface_and_route(self) -> None:
+        interfaces = {
+            "eth0": ("172.17.0.15", "255.255.0.0"),
+            "docker0": ("198.51.100.1", "255.255.255.248"),
+        }
+        with self.assertRaisesRegex(RuntimeError, "interface is absent"):
+            self.verify_bridge(
+                {"eth0": interfaces["eth0"]}, self.bridge_fixture_routes()
+            )
+        with self.assertRaisesRegex(RuntimeError, "route is absent"):
+            self.verify_bridge(interfaces, [self.bridge_fixture_routes()[0]])
+
+    def test_bridge_overlap_rejects_an_unexpected_overlapping_route(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "overlaps a helper route"):
+            self.verify_bridge(
+                {
+                    "eth0": ("172.17.0.15", "255.255.0.0"),
+                    "docker0": ("198.51.100.1", "255.255.255.248"),
+                },
+                self.bridge_fixture_routes(
+                    "docker0 026433C6 00000000 0001 0 0 0 FFFFFFFF"
+                ),
+            )
+
     def test_config_and_policy_are_manifest_driven(self) -> None:
         normalized = MODULE.normalize_config(config())
         output4, forward4 = MODULE.policy_rules(
@@ -147,6 +291,26 @@ class ProofParentTests(unittest.TestCase):
             output6,
         )
         self.assertEqual(forward4[-2], ["-i", "docker0", "-j", "REJECT"])
+
+    def test_mode1_disabled_policy_rejects_distributed_leases(self) -> None:
+        local_config = config()
+        local_config["network"]["distributedMode"] = "disabled"
+        local_config["network"]["distributedEndpoints"] = []
+        normalized = MODULE.normalize_config(local_config)
+        admission = MODULE.Admission(
+            normalized,
+            FakeKernel(normalized),
+            lambda _event: None,
+            namespace=lambda: "net:[generic]",
+        )
+        with self.assertRaisesRegex(ValueError, "disabled for this run"):
+            admission.request(
+                {
+                    "op": "distributed-begin",
+                    "sourceSha256": normalized["sourceSha256"],
+                    "unitId": normalized["network"]["distributedUnitId"],
+                }
+            )
 
     def test_engine_child_drops_all_capability_sets(self) -> None:
         normalized = MODULE.normalize_config(config())
@@ -169,6 +333,9 @@ class ProofParentTests(unittest.TestCase):
         self.assertIn(
             f"{MODULE.CONTAINED_REQUEST_SHA256_ENV}={request_sha256}", command[8:]
         )
+        self.assertNotIn(
+            f"{MODULE.MODE1_LOCAL_REQUEST_SHA256_ENV}={request_sha256}", command[8:]
+        )
         self.assertEqual(
             command[-6:],
             [
@@ -180,6 +347,97 @@ class ProofParentTests(unittest.TestCase):
                 "/config/contained-request.json",
             ],
         )
+
+    def test_mode1_engine_receives_only_its_contained_local_request_hash(self) -> None:
+        local_config = config()
+        local_config["network"]["distributedMode"] = "disabled"
+        local_config["network"]["distributedEndpoints"] = []
+        local_config["engine"]["arguments"] = ["/engine/entry.mjs"]
+        local_config["engine"]["environment"][
+            MODULE.MODE1_LOCAL_REQUEST_PATH_ENV
+        ] = "/config/mode1-request.json"
+        normalized = MODULE.normalize_config(local_config)
+        request_sha256 = "d" * 64
+        command = MODULE.engine_command(normalized, request_sha256)
+
+        self.assertIn(
+            f"{MODULE.MODE1_LOCAL_REQUEST_PATH_ENV}=/config/mode1-request.json",
+            command[8:],
+        )
+        self.assertIn(
+            f"{MODULE.MODE1_LOCAL_REQUEST_SHA256_ENV}={request_sha256}",
+            command[8:],
+        )
+        self.assertIn(
+            f"{MODULE.CONTAINED_REQUEST_SHA256_ENV}={request_sha256}", command[8:]
+        )
+        self.assertEqual(
+            MODULE.engine_request_path(normalized), "/config/mode1-request.json"
+        )
+
+    def test_docker_observe_uses_verified_nested_bridge_address(self) -> None:
+        normalized = MODULE.normalize_config(config())
+        bridge_id = "private-bridge-id"
+        bridge = {
+            "Id": bridge_id,
+            "IPAM": {"Config": [{"Subnet": normalized["network"]["bridgeCidr"]}]},
+            "Options": {"com.docker.network.bridge.name": "docker0"},
+        }
+        fixture = {
+            "Id": "fixture-id",
+            "Name": "/generic-fixture",
+            "State": {"Running": True},
+            "Config": {"Image": normalized["dockerFixture"]["imageReference"]},
+            "Mounts": [
+                {
+                    "Source": normalized["dockerFixture"]["bindSource"],
+                    "Destination": normalized["dockerFixture"]["bindTarget"],
+                    "RW": False,
+                }
+            ],
+            "NetworkSettings": {
+                "IPAddress": "",
+                "Ports": {
+                    "8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "32768"}]
+                },
+                "Networks": {
+                    "bridge": {
+                        "NetworkID": bridge_id,
+                        "IPAddress": "198.51.100.2",
+                    }
+                },
+            },
+        }
+        kernel = MODULE.Kernel(normalized)
+
+        def docker(arguments: list[str]) -> bytes:
+            if arguments == ["network", "inspect", "bridge"]:
+                return json.dumps([bridge]).encode()
+            if arguments == ["inspect", normalized["dockerFixture"]["name"]]:
+                return json.dumps([fixture]).encode()
+            raise AssertionError(arguments)
+
+        with (
+            mock.patch.object(MODULE.Path, "is_socket", return_value=True),
+            mock.patch.object(MODULE.Path, "read_bytes", return_value=b"docker cli"),
+            mock.patch.object(
+                kernel,
+                "docker_json",
+                return_value={"ID": "private-daemon", "ServerVersion": "29.8.0"},
+            ),
+            mock.patch.object(kernel, "docker", side_effect=docker),
+            mock.patch.object(kernel, "verify_loopback_fixture") as verify_loopback,
+        ):
+            observed = kernel.docker_observe()
+            self.assertTrue(observed["loopbackReachabilityVerified"])
+            self.assertTrue(observed["directReachabilityDenied"])
+            verify_loopback.assert_called_once_with(32768, "198.51.100.2")
+
+            fixture["NetworkSettings"]["Networks"]["bridge"]["NetworkID"] = (
+                "unexpected-bridge-id"
+            )
+            with self.assertRaisesRegex(RuntimeError, "not attached to the inspected bridge"):
+                kernel.docker_observe()
 
     def test_contained_request_is_raw_hash_bound_and_rechecked(self) -> None:
         raw = b'{\n  "schema": "focused"\n}\n'
@@ -197,6 +455,47 @@ class ProofParentTests(unittest.TestCase):
                 MODULE.verify_contained_request(
                     "/config/contained-request.json", digest(raw)
                 )
+
+    def test_mode1_request_path_uses_sealed_environment_without_cli_mode(self) -> None:
+        local_config = config()
+        local_config["network"]["distributedMode"] = "disabled"
+        local_config["network"]["distributedEndpoints"] = []
+        local_config["engine"]["arguments"] = ["/engine/entry.mjs"]
+        local_config["engine"]["environment"][
+            MODULE.MODE1_LOCAL_REQUEST_PATH_ENV
+        ] = "/config/mode1-request.json"
+        normalized = MODULE.normalize_config(local_config)
+        self.assertEqual(
+            MODULE.engine_request_path(normalized), "/config/mode1-request.json"
+        )
+
+        ambiguous_config = config()
+        ambiguous_config["network"]["distributedMode"] = "disabled"
+        ambiguous_config["network"]["distributedEndpoints"] = []
+        ambiguous_config["engine"]["environment"][
+            MODULE.MODE1_LOCAL_REQUEST_PATH_ENV
+        ] = "/config/mode1-request.json"
+        normalized_ambiguous = MODULE.normalize_config(ambiguous_config)
+        with self.assertRaisesRegex(ValueError, "unambiguous"):
+            MODULE.engine_request_path(normalized_ambiguous)
+
+        outside_config = config()
+        outside_config["network"]["distributedMode"] = "disabled"
+        outside_config["network"]["distributedEndpoints"] = []
+        outside_config["engine"]["arguments"] = ["/engine/entry.mjs"]
+        outside_config["engine"]["environment"][
+            MODULE.MODE1_LOCAL_REQUEST_PATH_ENV
+        ] = "/run-state/mode1-request.json"
+        normalized_outside = MODULE.normalize_config(outside_config)
+        with self.assertRaisesRegex(ValueError, "read-only config"):
+            MODULE.engine_request_path(normalized_outside)
+
+        mode3_config = config()
+        mode3_config["engine"]["environment"][
+            MODULE.MODE1_LOCAL_REQUEST_PATH_ENV
+        ] = "/config/mode1-request.json"
+        with self.assertRaisesRegex(ValueError, "privileged-process injection key"):
+            MODULE.normalize_config(mode3_config)
 
     def test_proc_route_parser_excludes_the_default_route(self) -> None:
         raw = (
@@ -280,6 +579,12 @@ class ProofParentTests(unittest.TestCase):
         ] = "e" * 64
         with self.assertRaisesRegex(ValueError, "injection key"):
             MODULE.normalize_config(reserved_environment)
+        local_reserved_environment = config()
+        local_reserved_environment["engine"]["environment"][
+            MODULE.MODE1_LOCAL_REQUEST_SHA256_ENV
+        ] = "e" * 64
+        with self.assertRaisesRegex(ValueError, "injection key"):
+            MODULE.normalize_config(local_reserved_environment)
         cleanup_budget = config()
         cleanup_budget["cleanup"]["terminalBudgetSeconds"] -= 1
         with self.assertRaisesRegex(ValueError, "cleanup budget differs"):

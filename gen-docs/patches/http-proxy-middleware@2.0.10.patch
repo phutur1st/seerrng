@@ -1,0 +1,18 @@
+diff --git a/dist/context-matcher.js b/dist/context-matcher.js
+index d9e3d13..de77814 100644
+--- a/dist/context-matcher.js
++++ b/dist/context-matcher.js
+@@ -5 +5 @@ const isGlob = require("is-glob");
+-const micromatch = require("micromatch");
++const picomatch = require("picomatch");
+@@ -46,2 +46 @@ function matchSingleGlobPath(pattern, uri) {
+-    const matches = micromatch([pathname], pattern);
+-    return matches && matches.length > 0;
++    return Boolean(pathname && picomatch(pattern)(pathname));
+diff --git a/package.json b/package.json
+index 9237203..f11d8b5 100644
+--- a/package.json
++++ b/package.json
+@@ -91 +91 @@
+-    "micromatch": "^4.0.2"
++    "picomatch": "^4.0.4"

@@ -497,6 +497,7 @@ export interface MainSettings {
   blocklistedTagsLimit: number;
   mediaServerType: number;
   partialRequestsEnabled: boolean;
+  personMovieBulkRequestsEnabled: boolean;
   enableSpecialEpisodes: boolean;
   locale: string;
   youtubeUrl: string;
@@ -571,6 +572,7 @@ interface FullPublicSettings extends PublicSettings {
   jellyfinForgotPasswordUrl?: string;
   jellyfinServerName?: string;
   partialRequestsEnabled: boolean;
+  personMovieBulkRequestsEnabled: boolean;
   enableSpecialEpisodes: boolean;
   cacheImages: boolean;
   vapidPublic: string;
@@ -884,6 +886,7 @@ class Settings {
         blocklistedTagsLimit: 50,
         mediaServerType: MediaServerType.NOT_CONFIGURED,
         partialRequestsEnabled: true,
+        personMovieBulkRequestsEnabled: false,
         enableSpecialEpisodes: false,
         locale: 'en',
         youtubeUrl: '',
@@ -1648,6 +1651,8 @@ class Settings {
       originalLanguage: this.data.main.originalLanguage,
       mediaServerType: this.main.mediaServerType,
       partialRequestsEnabled: this.data.main.partialRequestsEnabled,
+      personMovieBulkRequestsEnabled:
+        this.data.main.personMovieBulkRequestsEnabled,
       enableSpecialEpisodes: this.data.main.enableSpecialEpisodes,
       cacheImages: this.data.main.cacheImages,
       vapidPublic: this.vapidPublic,
@@ -1888,6 +1893,7 @@ class Settings {
         blocklistedTagsLimit: 50,
         mediaServerType: MediaServerType.NOT_CONFIGURED,
         partialRequestsEnabled: true,
+        personMovieBulkRequestsEnabled: false,
         enableSpecialEpisodes: false,
         locale: 'en',
         youtubeUrl: '',

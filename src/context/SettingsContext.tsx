@@ -37,6 +37,7 @@ const defaultSettings: PublicSettingsResponse = {
   originalLanguage: '',
   mediaServerType: MediaServerType.NOT_CONFIGURED,
   partialRequestsEnabled: true,
+  personMovieBulkRequestsEnabled: false,
   enableSpecialEpisodes: false,
   cacheImages: true,
   vapidPublic: '',

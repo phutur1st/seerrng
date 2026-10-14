@@ -89,6 +89,39 @@ describe('Discover Customization', () => {
   });
 
   it('can create a new discover option and remove it', () => {
+    cy.intercept('GET', '/api/v1/search/keyword*', (request) => {
+      if (request.query.query === 'invalidkeyword') {
+        request.reply({
+          page: 1,
+          totalPages: 1,
+          totalResults: 0,
+          results: [],
+        });
+        return;
+      }
+
+      request.reply({
+        page: 1,
+        totalPages: 1,
+        totalResults: 1,
+        results: [{ id: 987654, name: 'Christmas' }],
+      });
+    });
+    cy.intercept('GET', '/api/v1/discover/movies*', {
+      page: 1,
+      totalPages: 1,
+      totalResults: 1,
+      results: [
+        {
+          id: 987650,
+          mediaType: 'movie',
+          title: 'Christmas Fixture Movie',
+          releaseDate: '2026-12-01',
+          posterPath: null,
+          overview: 'A local result used by the discover slider preview.',
+        },
+      ],
+    });
     cy.visit('/');
     cy.intercept('POST', '/api/v1/settings/discover/add').as(
       'addDiscoverSlider'

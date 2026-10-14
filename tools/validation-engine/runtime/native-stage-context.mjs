@@ -104,6 +104,8 @@ const git = (root, args, input) =>
       'core.longpaths=true',
       '-c',
       'init.templateDir=',
+      '-c',
+      `safe.directory=${root}`,
       ...args,
     ],
     {
@@ -891,6 +893,80 @@ function closure(root) {
   };
 }
 
+export function createReadonlyNativeInputReference(
+  directory,
+  mountProofOptions = {}
+) {
+  const absolute = path.resolve(directory),
+    metadata = lstatSync(absolute);
+  if (metadata.isSymbolicLink() || !metadata.isDirectory())
+    throw new Error('Native tool input must be an ordinary directory');
+  const root = realpathSync(absolute),
+    readOnlyProof = readonlyMountProof(root, mountProofOptions);
+  if (!readOnlyProof.verified)
+    throw new Error('Native tool input is not proven read-only');
+  return Object.freeze({
+    ...closure(root),
+    paths: Object.freeze([...new Set([absolute, root])]),
+    readOnlyProof: Object.freeze(readOnlyProof),
+  });
+}
+
+export function createReadonlyBrowserCacheInputs(
+  prerequisiteReferences = {},
+  inherited = process.env
+) {
+  const inputClosures = [],
+    blockers = [];
+  for (const [referenceName, environmentName, label] of [
+    ['playwrightBrowsers', 'PLAYWRIGHT_BROWSERS_PATH', 'Playwright browser'],
+    ['cypressCache', 'CYPRESS_CACHE_FOLDER', 'Cypress browser'],
+  ]) {
+    const reference = prerequisiteReferences[referenceName];
+    if (reference === undefined) continue;
+    try {
+      if (
+        typeof reference !== 'string' ||
+        inherited[environmentName] !== reference
+      )
+        throw new Error(
+          `${label} path differs from the contained process environment`
+        );
+      inputClosures.push({
+        ...createReadonlyNativeInputReference(reference),
+        role: `${referenceName}-cache`,
+      });
+    } catch (error) {
+      blockers.push({
+        id: `readonly-${referenceName}-cache-reference`,
+        stage: 'browser',
+        required: true,
+        status: 'prerequisite-blocked',
+        reason: error.message,
+      });
+    }
+  }
+  return { inputClosures, blockers };
+}
+
+export function createNativeInputClosureList(
+  dependency,
+  sourceRoot,
+  snapshotRoot,
+  readonlyInputs = []
+) {
+  return [
+    {
+      ...dependency,
+      paths: [
+        path.join(sourceRoot, 'node_modules'),
+        path.join(snapshotRoot, 'node_modules'),
+      ],
+    },
+    ...readonlyInputs,
+  ];
+}
+
 export function nativeInputFileIdentity(file, expectedRealpath) {
   const absolute = path.resolve(file),
     actual = realpathSync(absolute);
@@ -1481,6 +1557,7 @@ export async function executeNativeRepository(
       signal,
       workers,
       collectFailures: true,
+      onProgress: (summary) => stderr.write(`${summary}\n`),
       executor: async (command, execution) => {
         attemptedSteps.push(command.name);
         let receipt;
@@ -1488,12 +1565,10 @@ export async function executeNativeRepository(
           receipt = await nativeRun({
             ...command,
             cwd: plan.root,
-            env: {
-              ...execution.env,
-              ...(command.kind === 'tooling'
-                ? { NODE_OPTIONS: '--test-reporter=tap' }
-                : {}),
-            },
+            // The tooling wrapper sets its TAP reporter explicitly. Adding
+            // the same option through NODE_OPTIONS makes Node 24 reject the
+            // duplicate reporter before any tooling tests can run.
+            env: execution.env,
           });
         } catch (error) {
           if (command.kind === 'check' || error.receipt?.status !== 'failed') {
@@ -1862,6 +1937,11 @@ export async function createNativeStageContext(
         status: 'prerequisite-blocked',
         reason,
       });
+    const browserCacheInputs = createReadonlyBrowserCacheInputs(
+      prerequisiteReferences,
+      inherited
+    );
+    blockers.push(...browserCacheInputs.blockers);
     if (!dependencyProof.verified)
       blocked(
         'readonly-installed-dependency-reference',
@@ -1879,15 +1959,12 @@ export async function createNativeStageContext(
         'Installed dependency lockfile does not match the actual frozen source lockfile'
       );
     const dependency = closure(dependencyRoot);
-    const inputClosures = [
-      {
-        ...dependency,
-        paths: [
-          path.join(sourceRoot, 'node_modules'),
-          path.join(snapshot.root, 'node_modules'),
-        ],
-      },
-    ];
+    const inputClosures = createNativeInputClosureList(
+      dependency,
+      sourceRoot,
+      snapshot.root,
+      browserCacheInputs.inputClosures
+    );
     const inputFiles = [nativeInputFileIdentity(process.execPath)];
     if (existsSync(installedLock)) {
       const installed = nativeInputFileIdentity(installedLock);
@@ -2429,13 +2506,16 @@ export async function createNativeStageContext(
       verifySourceSnapshot(snapshot);
       verifySourceSnapshot(docsLinkSnapshot);
       verifySourceSnapshot(supplementalSnapshot, { derivedOutputs });
+    };
+    const verifySource = async () => {
+      verifyRepositoryCheckSource();
+    };
+    const verifyStageBoundary = async () => {
+      await verifySource();
       verifyNativeInputFreshness({
         closures: inputClosures,
         files: inputFiles,
       });
-    };
-    const verifySource = async () => {
-      verifyRepositoryCheckSource();
       if (networkBoundaryProof.isolated) {
         if (typeof verifyNetworkBoundary === 'function') {
           const fresh = validateNativeBoundaryProof(
@@ -2503,6 +2583,7 @@ export async function createNativeStageContext(
         writeFileSync(artifact.path, artifact.contents, { flag: 'wx' });
       },
       verifySource,
+      verifyStageBoundary,
       networkBoundaryProof,
       ...(typeof withRepositoryIsolation === 'function'
         ? { withRepositoryIsolation }
@@ -2513,9 +2594,9 @@ export async function createNativeStageContext(
           nativeRun,
           scratchRoot: snapshot.scratchRoot,
           inherited: env,
-          // The coordinator's full guards verify live policy before and after
-          // the repository stage. Per-check guards run inside loopback-only
-          // isolation, so they revalidate only sealed source and native inputs.
+          // Per-check guards run inside loopback-only isolation, so they
+          // revalidate sealed source. The coordinator checks native inputs and
+          // live policy at each complete stage boundary.
           verifySource: verifyRepositoryCheckSource,
           stdout,
         }
@@ -2623,7 +2704,7 @@ export async function createNativeStageContext(
       describeNativeProcessReceipts: processReceipts.describe,
       cleanup: async (error) => {
         preserveTemporary ||= error?.preserveTemporary === true;
-        await verifySource();
+        await verifyStageBoundary();
         if (!preserveTemporary) disposeSourceSnapshot(snapshot);
       },
     };

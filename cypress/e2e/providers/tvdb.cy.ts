@@ -1,3 +1,6 @@
+// eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Cypress specs use deterministic local title fixtures.
+import { openTitleDetailsFromSearch } from '../../support/titleFixtures';
+
 describe('TVDB Integration', () => {
   // Constants for routes and selectors
   const ROUTES = {
@@ -27,6 +30,33 @@ describe('TVDB Integration', () => {
     episode9: '9 - Hang Men',
   };
 
+  const seasonFixture = (
+    showId: number,
+    seasonNumber: number,
+    episodeCount: number,
+    seasonId: number,
+    firstEpisodeId: number
+  ) => ({
+    airDate: null,
+    id: seasonId,
+    name: `Season ${seasonNumber}`,
+    overview: '',
+    seasonNumber,
+    episodes: Array.from({ length: episodeCount }, (_, index) => ({
+      id: firstEpisodeId + index,
+      name: `Episode ${index + 1}`,
+      airDate: null,
+      episodeNumber: index + 1,
+      overview: '',
+      productionCode: '',
+      seasonNumber,
+      showId,
+      voteAverage: 0,
+      voteCount: 0,
+    })),
+    externalIds: {},
+  });
+
   // Reusable commands
   const navigateToMetadataSettings = () => {
     cy.visit(ROUTES.home);
@@ -38,9 +68,13 @@ describe('TVDB Integration', () => {
   };
 
   const testAndVerifyMetadataConnection = () => {
-    cy.intercept('POST', '/api/v1/settings/metadatas/test').as(
-      'testConnection'
-    );
+    cy.intercept('POST', '/api/v1/settings/metadatas/test', {
+      statusCode: 200,
+      body: {
+        success: true,
+        tests: { tmdb: 'not tested', tvdb: 'ok' },
+      },
+    }).as('testConnection');
     cy.get(SELECTORS.metadataTestButton)
       .scrollIntoView()
       .should('be.visible')
@@ -48,17 +82,20 @@ describe('TVDB Integration', () => {
     return cy.wait('@testConnection');
   };
 
-  const saveMetadataSettings = (
-    customBody: Record<string, string> | null = null
-  ) => {
-    if (customBody) {
-      cy.intercept('PUT', '/api/v1/settings/metadatas', (req) => {
-        req.body = customBody;
-      }).as('saveMetadata');
-    } else {
-      // Else just intercept without modifying body
-      cy.intercept('PUT', '/api/v1/settings/metadatas').as('saveMetadata');
-    }
+  const saveMetadataSettings = (customBody: Record<string, string>) => {
+    // Saving provider settings probes the configured provider on the server.
+    // Keep this browser fixture independent of live TMDB/TVDB availability.
+    cy.intercept('PUT', '/api/v1/settings/metadatas', (request) => {
+      expect(request.body).to.deep.include(customBody);
+      request.reply({
+        statusCode: 200,
+        body: {
+          success: true,
+          ...customBody,
+          tests: { tvdb: 'ok', tmdb: 'not tested' },
+        },
+      });
+    }).as('saveMetadata');
 
     cy.get(SELECTORS.metadataSaveButton).click();
     return cy.wait('@saveMetadata');
@@ -72,47 +109,6 @@ describe('TVDB Integration', () => {
       });
     cy.get('#series-media-server-panel').should('be.visible');
     cy.get('#series-media-server-panel [data-selection-tree]').should('exist');
-  };
-
-  const recordClientSeasonSummary = (tvId: number, seasonNumber: number) => {
-    cy.intercept('GET', `/api/v1/tv/${tvId}`, (request) => {
-      request.continue((response) => {
-        Cypress.log({
-          name: 'client season summary',
-          message: JSON.stringify({
-            id: response.body.id,
-            season: response.body.seasons?.find(
-              (season: { seasonNumber: number }) =>
-                season.seasonNumber === seasonNumber
-            ),
-          }),
-        });
-      });
-    }).as('seriesDetails');
-  };
-
-  const verifySsrSeasonSummary = (tvId: number, seasonNumber: number) => {
-    // Initial full-page metadata is server-side; don't require a browser GET.
-    cy.get('script#__NEXT_DATA__')
-      .invoke('text')
-      .then((text) => {
-        const details = JSON.parse(text).props.pageProps.tv;
-        const season = details.seasons.find(
-          (item: { seasonNumber: number }) => item.seasonNumber === seasonNumber
-        );
-        Cypress.log({
-          name: 'SSR season summary',
-          message: JSON.stringify({ id: details.id, season }),
-        });
-        expect(details.id, 'SSR canonical series TMDB ID').to.eq(tvId);
-        expect(season, `SSR advertises season ${seasonNumber}`).not.to.equal(
-          undefined
-        );
-        expect(
-          season.episodeCount,
-          'SSR season meets the current tree episodeCount > 0 eligibility filter'
-        ).to.be.greaterThan(0);
-      });
   };
 
   beforeEach(() => {
@@ -129,6 +125,9 @@ describe('TVDB Integration', () => {
     cy.get(SELECTORS.tvMetadataProviderSelector).click();
 
     // get id react-select-4-option-1
+    cy.get('[class*="react-select__option"]').contains('TheTVDB').click();
+
+    cy.get(SELECTORS.animeMetadataProviderSelector).click();
     cy.get('[class*="react-select__option"]').contains('TheTVDB').click();
 
     // Test the connection
@@ -155,11 +154,27 @@ describe('TVDB Integration', () => {
   });
 
   it('should display "Tomorrow is Ours" show information with multiple seasons from TVDB', () => {
-    recordClientSeasonSummary(72879, 2);
-    cy.intercept('GET', '/api/v1/tv/72879/season/2').as('tomorrowSeason2');
-    // Navigate to the TV show
-    cy.visit(ROUTES.tomorrowIsOursTvShow);
-    verifySsrSeasonSummary(72879, 2);
+    // The browser loads metadata for every visible season together.
+    cy.intercept('GET', '/api/v1/tv/72879/season/1', {
+      statusCode: 200,
+      body: seasonFixture(72879, 1, 100, 701, 7000),
+    });
+    cy.intercept('GET', '/api/v1/tv/72879/season/2', {
+      statusCode: 200,
+      body: seasonFixture(72879, 2, 247, 702, 8000),
+    }).as('tomorrowSeason2');
+    openTitleDetailsFromSearch({
+      id: 72879,
+      mediaType: 'tv',
+      title: 'Tomorrow is Ours',
+      date: '2017-07-17',
+      details: {
+        seasons: [
+          { id: 701, name: 'Season 1', seasonNumber: 1, episodeCount: 100 },
+          { id: 702, name: 'Season 2', seasonNumber: 2, episodeCount: 247 },
+        ],
+      },
+    });
     openMediaServer();
     cy.get(SELECTORS.season2).should('be.visible');
 
@@ -172,6 +187,11 @@ describe('TVDB Integration', () => {
       .and('have.attr', 'aria-expanded', 'false')
       .scrollIntoView()
       .click();
+    cy.get('button[aria-label="Collapse Season 02"]').should(
+      'have.attr',
+      'aria-expanded',
+      'true'
+    );
 
     // Verify that episodes are displayed for Season 2
     cy.get(`${SELECTORS.episodeList}[aria-label="Season 02 Episodes"]`)
@@ -185,11 +205,38 @@ describe('TVDB Integration', () => {
   });
 
   it('Should display "Monster" show information correctly when not existing on TVDB', () => {
-    recordClientSeasonSummary(225634, 1);
-    cy.intercept('GET', '/api/v1/tv/225634/season/1').as('monsterSeason1');
-    // Navigate to the TV show
-    cy.visit(ROUTES.monsterTvShow);
-    verifySsrSeasonSummary(225634, 1);
+    const episodes = Array.from({ length: 9 }, (_, index) => ({
+      id: 9000 + index,
+      name: index === 8 ? 'Hang Men' : `Episode ${index + 1}`,
+      airDate: null,
+      episodeNumber: index + 1,
+      overview: '',
+      productionCode: '',
+      seasonNumber: 1,
+      showId: 225634,
+      voteAverage: 0,
+      voteCount: 0,
+    }));
+    cy.intercept('GET', '/api/v1/tv/225634/season/1', {
+      airDate: null,
+      id: 901,
+      name: 'Season 1',
+      overview: '',
+      seasonNumber: 1,
+      episodes,
+      externalIds: {},
+    }).as('monsterSeason1');
+    openTitleDetailsFromSearch({
+      id: 225634,
+      mediaType: 'tv',
+      title: 'Monster',
+      date: '2014-07-07',
+      details: {
+        seasons: [
+          { id: 901, name: 'Season 1', seasonNumber: 1, episodeCount: 9 },
+        ],
+      },
+    });
     openMediaServer();
     cy.get(SELECTORS.season1).should('be.visible');
 
@@ -212,11 +259,26 @@ describe('TVDB Integration', () => {
   });
 
   it('should display "Dragon Ball Z Kai" show information with multiple only 2 seasons from TVDB', () => {
-    recordClientSeasonSummary(61709, 2);
-    cy.intercept('GET', '/api/v1/tv/61709/season/2').as('dragonSeason2');
-    // Navigate to the TV show
-    cy.visit(ROUTES.dragonnBallZKaiAnime);
-    verifySsrSeasonSummary(61709, 2);
+    cy.intercept('GET', '/api/v1/tv/61709/season/1', {
+      statusCode: 200,
+      body: seasonFixture(61709, 1, 98, 1001, 10_000),
+    });
+    cy.intercept('GET', '/api/v1/tv/61709/season/2', {
+      statusCode: 200,
+      body: seasonFixture(61709, 2, 25, 1002, 10_100),
+    }).as('dragonSeason2');
+    openTitleDetailsFromSearch({
+      id: 61709,
+      mediaType: 'tv',
+      title: 'Dragon Ball Z Kai',
+      date: '2009-04-05',
+      details: {
+        seasons: [
+          { id: 1001, name: 'Season 1', seasonNumber: 1, episodeCount: 98 },
+          { id: 1002, name: 'Season 2', seasonNumber: 2, episodeCount: 25 },
+        ],
+      },
+    });
     openMediaServer();
     cy.get(SELECTORS.season2).should('be.visible');
 
@@ -227,6 +289,11 @@ describe('TVDB Integration', () => {
       .and('have.attr', 'aria-expanded', 'false')
       .scrollIntoView()
       .click();
+    cy.get('button[aria-label="Collapse Season 02"]').should(
+      'have.attr',
+      'aria-expanded',
+      'true'
+    );
 
     // select season 3 and verify it not visible
     cy.get(SELECTORS.season3).should('not.exist');

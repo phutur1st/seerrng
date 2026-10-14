@@ -30,7 +30,11 @@ const VITEST_TEST = /^(?:server\/.+\.test\.ts|src\/.+\.test\.tsx?)$/;
 const MJS_TEST = /\.(?:test|spec)\.mjs$/;
 const CYPRESS_SPEC = /^cypress\/e2e\/.+\.cy\.[jt]sx?$/;
 const PLAYWRIGHT_SPEC = /^playwright\/.+\.spec\.[jt]sx?$/;
-const DOCS_SECURITY_TEST = 'gen-docs/scripts/image-size-security.test.mjs';
+const DOCS_SECURITY_TESTS = new Set([
+  'gen-docs/scripts/image-size-security.test.mjs',
+  'gen-docs/scripts/dependency-policy.test.mjs',
+  'gen-docs/scripts/dependency-patches.test.mjs',
+]);
 const TOOLING_GROUPS = Object.freeze(['portableTests', 'posixOnlyTests']);
 const VITEST_INCLUDE = Object.freeze([
   'server/**/*.test.ts',
@@ -364,7 +368,7 @@ function validateNativeBindings(root) {
   const docsPackageJson = JSON.parse(docsPackageInput.bytes.toString('utf8'));
   if (
     docsPackageJson.scripts?.['test:security'] !==
-    'node --test scripts/image-size-security.test.mjs'
+    'node --test scripts/image-size-security.test.mjs scripts/dependency-policy.test.mjs scripts/dependency-patches.test.mjs'
   )
     throw new Error('Hosted native command drift: gen-docs:test:security');
 
@@ -589,7 +593,7 @@ export function assertHostedTestInventory(inventory) {
             ? PLAYWRIGHT_SPEC.test(entry.file) &&
               entry.framework === 'playwright'
             : entry.owner === 'docs-security'
-              ? entry.file === DOCS_SECURITY_TEST &&
+              ? DOCS_SECURITY_TESTS.has(entry.file) &&
                 entry.framework === 'node:test'
               : MJS_TEST.test(entry.file) && entry.framework === 'node:test';
     if (!laneFileMatches)
@@ -717,9 +721,12 @@ export function createHostedTestInventory(root, { platform = 'linux' } = {}) {
       tooling.groups[group].map((file) => [file, group])
     )
   );
-  if (tooling.files.has(DOCS_SECURITY_TEST))
+  const duplicateDocsSecurityTest = [...DOCS_SECURITY_TESTS].find((file) =>
+    tooling.files.has(file)
+  );
+  if (duplicateDocsSecurityTest)
     throw new Error(
-      `Duplicate hosted native test ownership: ${DOCS_SECURITY_TEST}`
+      `Duplicate hosted native test ownership: ${duplicateDocsSecurityTest}`
     );
   const entries = discoveredFiles(root).map((file) => {
     const input = checkedFile(root, file);
@@ -738,7 +745,7 @@ export function createHostedTestInventory(root, { platform = 'linux' } = {}) {
     let owner;
     let executionBinding;
     let toolingGroup;
-    if (file === DOCS_SECURITY_TEST) {
+    if (DOCS_SECURITY_TESTS.has(file)) {
       if (framework !== 'node:test')
         throw new Error(`Incompatible hosted docs test: ${file}`);
       owner = 'docs-security';

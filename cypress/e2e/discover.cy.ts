@@ -160,6 +160,7 @@ describe('Discover', () => {
   });
 
   it('displays error for media with invalid TMDB ID', () => {
+    cy.intercept('GET', '/api/v1/movie/998814', { statusCode: 404 });
     cy.intercept('GET', '/api/v1/media?*', {
       pageInfo: { pages: 1, pageSize: 20, results: 1, page: 1 },
       results: [
@@ -201,6 +202,7 @@ describe('Discover', () => {
   });
 
   it('displays error for request with invalid TMDB ID', () => {
+    cy.intercept('GET', '/api/v1/movie/998814', { statusCode: 404 });
     cy.intercept('GET', '/api/v1/request?*', {
       pageInfo: { pages: 1, pageSize: 10, results: 1, page: 1 },
       results: [
@@ -414,7 +416,13 @@ describe('Discover', () => {
       fixture: 'watchlist.json',
     }).as('getWatchlist');
     // Wait for one of the watchlist movies to resolve
-    cy.intercept('/api/v1/movie/361743').as('getTmdbMovie');
+    stubTitleDetails('movie', {
+      id: 361743,
+      mediaType: 'movie',
+      title: 'Top Gun: Maverick',
+      releaseDate: '2022-05-27',
+      posterPath: null,
+    });
 
     cy.visit('/discover/watchlist');
     cy.wait('@getWatchlist');

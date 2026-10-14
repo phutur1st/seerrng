@@ -493,7 +493,7 @@ test('each planned Cypress shard seals its exact specs and native result', () =>
   assert.equal(text.match(/pnpm cypress:build/g)?.length, 1);
   assert.match(
     run.uses,
-    /^cypress-io\/github-action@789d836053c5ca389c2905fc0c9f2909da778c46/
+    /^cypress-io\/github-action@c541a95ea92d9239347a2355f2e895cd4b3f8060/
   );
   assert.match(admission.run, /--case "\$SEERRNG_ENGINE_CASE_ID"/);
   assert.match(receipt.run, /--case "\$SEERRNG_ENGINE_CASE_ID"/);
@@ -553,7 +553,10 @@ test('native environments, commands, permissions, and action pins are preserved'
   assert.equal(jobs.test.container.image, alpine);
   assert.equal(jobs['unit-test'].container.image, alpine);
   assert.equal(jobs.test['runs-on'], 'ubuntu-latest');
-  assert.equal(jobs['unit-test']['runs-on'], 'ubuntu-latest');
+  assert.equal(
+    jobs['unit-test']['runs-on'],
+    "${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && fromJSON('[\"self-hosted\",\"Linux\",\"X64\",\"host\",\"seerrng\"]') || 'ubuntu-latest' }}"
+  );
   assert.equal(jobs.codeql.permissions['security-events'], 'write');
 
   for (const fragment of [
@@ -568,7 +571,7 @@ test('native environments, commands, permissions, and action pins are preserved'
     'pnpm build',
     'pnpm bundle:check',
     'pnpm test:ci',
-    'mikepenz/action-junit-report@a9170d5795813c01ab4901ffb045b52bab4ab09d',
+    'mikepenz/action-junit-report@b7b80d7ac5b1da46d6aaff9fb57ad50d8453bcb3',
   ])
     assert.ok(ci.text.includes(fragment), fragment);
 
@@ -582,7 +585,7 @@ test('native environments, commands, permissions, and action pins are preserved'
       'snapetech/seerrng-codeql-models@0.0.15',
     ],
     cypress: [
-      'cypress-io/github-action@789d836053c5ca389c2905fc0c9f2909da778c46',
+      'cypress-io/github-action@c541a95ea92d9239347a2355f2e895cd4b3f8060',
       'start: env E2E_TESTS=true pnpm start',
       "wait-on: 'http://localhost:5056'",
     ],

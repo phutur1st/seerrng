@@ -1,8 +1,8 @@
 # Hom3lab fork maintenance
 
 This fork is maintained at `phutur1st/seerrng`. `origin` is the only publication
-remote. `upstream` points to `snapetech/seerrng` for fetching and has a disabled
-push URL. Do not create pull requests or publish to upstream.
+remote. `upstream` points to `snapetech-org/seerrng` for fetching and has a
+disabled push URL. Do not create pull requests or publish to upstream.
 
 ## Source and updates
 
@@ -76,3 +76,13 @@ fork image remain separate evidence to collect when a preview/deployment exists.
 The local Mode 1 plan was inspected: 665 discovered test files before the final
 regressions were added. Linux CI owns the complete platform-specific inventory;
 that local discovery count is not an executed or passing test count.
+
+## October 13 upstream integration candidate
+
+The local integration starts from the fork's published `main`, not the older
+Bookshelf-only checkout. It preserves the six subsequent ROMarr, artwork, and
+Bookshelf reconciliation commits alongside the original two fixes. See the
+[integration ledger](hom3lab-upstream-integration-20261013.md) for pinned inputs,
+conflict decisions, focused verification, recovery refs, and incomplete gates.
+The candidate has not been pushed, released, or deployed. Complete hosted
+validation remains pending; focused checks do not certify the candidate.

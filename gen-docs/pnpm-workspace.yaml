@@ -1,6 +1,7 @@
 overrides:
   '@babel/core': 7.29.7
   '@babel/plugin-transform-modules-systemjs': 7.29.4
+  '@docusaurus/core>chokidar': 4.0.3
   '@faker-js/faker': 10.6.0
   '@humanfs/node': 0.16.8
   '@swc/html': 1.16.2
@@ -19,9 +20,10 @@ overrides:
   fast-uri@>=3.0.0 <3.1.8: '>=3.1.8'
   follow-redirects: 1.16.0
   http-proxy-middleware: 2.0.10
+  '@docusaurus/utils-validation>joi': 17.13.8
   image-size: file:./vendor/image-size
   immutable: 5.1.8
-  joi: 17.13.7
+  joi: 17.13.8
   joi@>=17.2.0 <17.13.7: '>=17.13.7'
   js-yaml: 4.3.2
   launch-editor: 2.14.1
@@ -46,10 +48,16 @@ overrides:
   uuid: 11.1.1
   webpack: 5.110.3
   webpack-dev-server: 5.2.6
+  webpack-dev-server>chokidar: 4.0.3
   websocket-driver: 0.7.5
   ws: 8.21.0
   yaml: 2.8.3
 
 patchedDependencies:
+  '@docusaurus/core@3.10.1': patches/@docusaurus__core@3.10.1.patch
+  '@docusaurus/core@3.10.2': patches/@docusaurus__core@3.10.2.patch
+  '@docusaurus/utils@3.10.1': patches/@docusaurus__utils@3.10.1.patch
+  '@docusaurus/utils@3.10.2': patches/@docusaurus__utils@3.10.2.patch
   gray-matter@4.0.3: patches/gray-matter@4.0.3.patch
+  http-proxy-middleware@2.0.10: patches/http-proxy-middleware@2.0.10.patch
   postman-collection@5.3.0: patches/postman-collection@5.3.0.patch

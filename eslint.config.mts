@@ -1,7 +1,5 @@
 import js from '@eslint/js';
-import nextPlugin from '@next/eslint-plugin-next';
 import prettier from 'eslint-config-prettier';
-import formatjs from 'eslint-plugin-formatjs';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import noRelativeImportPaths from 'eslint-plugin-no-relative-import-paths';
 import reactPlugin from 'eslint-plugin-react';
@@ -9,6 +7,8 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import { defineConfig, type Config } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import formatjs from './scripts/eslint/formatjs-no-offset.mjs';
+import nextjsRules from './scripts/eslint/nextjs-rules.mjs';
 
 type Plugin = NonNullable<Config['plugins']>[string];
 
@@ -43,12 +43,10 @@ export default defineConfig(
       react: reactPlugin,
       'react-hooks': reactHooks as Plugin,
       formatjs,
+      '@next/next': nextjsRules,
       'no-relative-import-paths': noRelativeImportPaths,
-      '@next/next': nextPlugin,
     },
     rules: {
-      ...nextPlugin.configs.recommended.rules,
-
       // TypeScript
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-use-before-define': 'off',
@@ -80,6 +78,7 @@ export default defineConfig(
 
       // Plugins
       'formatjs/no-offset': 'error',
+      '@next/next/no-location-assign-relative-destination': 'warn',
       'no-relative-import-paths/no-relative-import-paths': [
         'error',
         { allowSameFolder: true },

@@ -64,7 +64,8 @@ async function fixture(t) {
     path.join(root, 'gen-docs', 'package.json'),
     JSON.stringify({
       scripts: {
-        'test:security': 'node --test scripts/image-size-security.test.mjs',
+        'test:security':
+          'node --test scripts/image-size-security.test.mjs scripts/dependency-policy.test.mjs scripts/dependency-patches.test.mjs',
         'gen-api-docs': 'docusaurus gen-api-docs all',
         build: 'docusaurus build',
       },
@@ -147,6 +148,11 @@ test('native supplemental reporting and compiler lifetime are sealed without cha
   });
   const security = byId(plan, 'docs-image-parser-security');
   assert.deepEqual(security.args, ['test:security']);
+  assert.deepEqual(security.caseLedger.files, [
+    'gen-docs/scripts/image-size-security.test.mjs',
+    'gen-docs/scripts/dependency-policy.test.mjs',
+    'gen-docs/scripts/dependency-patches.test.mjs',
+  ]);
   assert.equal(security.env.NODE_OPTIONS, '--test-reporter=tap');
   assert.ok(
     byId(plan, 'jellyfin-plugin-publish').args.includes(

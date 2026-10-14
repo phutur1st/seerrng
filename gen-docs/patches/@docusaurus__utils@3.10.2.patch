@@ -1,0 +1,188 @@
+diff --git a/lib/globUtils.d.ts b/lib/globUtils.d.ts
+index 839f447..d387ad9 100644
+--- a/lib/globUtils.d.ts
++++ b/lib/globUtils.d.ts
+@@ -7,3 +7,6 @@
+-import Globby from 'globby';
+-/** A re-export of the globby instance. */
+-export { Globby };
++import type { GlobOptions as TinyGlobOptions } from 'tinyglobby';
++/** Options retained for Docusaurus callers of the former globby helper. */
++export type GlobbyOptions = Omit<TinyGlobOptions, 'expandDirectories'> & {
++    expandDirectories?: boolean | string[];
++};
++export declare const Globby: (patterns: string | readonly string[], options?: GlobbyOptions) => Promise<string[]>;
+@@ -18 +21 @@ type Matcher = (str: string) => boolean;
+- * A very thin wrapper around `Micromatch.makeRe`.
++ * A very thin wrapper around `picomatch.makeRe`.
+@@ -41 +44 @@ export declare function createAbsoluteFilePathMatcher(patterns: string[], rootFo
+-export declare function safeGlobby(patterns: string[], options?: Globby.GlobbyOptions): Promise<string[]>;
++export declare function safeGlobby(patterns: string[], options?: GlobbyOptions): Promise<string[]>;
+@@ -44 +46,0 @@ export declare function globTranslatableSourceFiles(patterns: string[]): Promise
+-//# sourceMappingURL=globUtils.d.ts.map
+\ No newline at end of file
+diff --git a/lib/globUtils.d.ts.map b/lib/globUtils.d.ts.map
+deleted file mode 100644
+index bdb6c2a..0000000
+--- a/lib/globUtils.d.ts.map
++++ /dev/null
+@@ -1 +0,0 @@
+-{"version":3,"file":"globUtils.d.ts","sourceRoot":"","sources":["../src/globUtils.ts"],"names":[],"mappings":"AAAA;;;;;GAKG;AAOH,OAAO,MAAM,MAAM,QAAQ,CAAC;AAG5B,0CAA0C;AAC1C,OAAO,EAAC,MAAM,EAAC,CAAC;AAEhB;;;;GAIG;AACH,eAAO,MAAM,kBAAkB,UAK9B,CAAC;AAEF,KAAK,OAAO,GAAG,CAAC,GAAG,EAAE,MAAM,KAAK,OAAO,CAAC;AAExC;;;;;;;;GAQG;AACH,wBAAgB,aAAa,CAAC,QAAQ,EAAE,MAAM,EAAE,GAAG,OAAO,CASzD;AAED;;;;;;;;;;;;GAYG;AACH,wBAAgB,6BAA6B,CAC3C,QAAQ,EAAE,MAAM,EAAE,EAClB,WAAW,EAAE,MAAM,EAAE,GACpB,OAAO,CAqBT;AAID,wBAAsB,UAAU,CAC9B,QAAQ,EAAE,MAAM,EAAE,EAClB,OAAO,CAAC,EAAE,MAAM,CAAC,aAAa,GAC7B,OAAO,CAAC,MAAM,EAAE,CAAC,CAQnB;AAED,eAAO,MAAM,wBAAwB,EAAE,CAAC,QAAQ,EAAE,MAAM,KAAK,OAsBzD,CAAC;AAGL,wBAAsB,2BAA2B,CAC/C,QAAQ,EAAE,MAAM,EAAE,GACjB,OAAO,CAAC,MAAM,EAAE,CAAC,CAGnB"}
+\ No newline at end of file
+diff --git a/lib/globUtils.js b/lib/globUtils.js
+index 78ba3ff..bf38232 100644
+--- a/lib/globUtils.js
++++ b/lib/globUtils.js
+@@ -15,0 +16 @@ const tslib_1 = require("tslib");
++const fs_extra_1 = tslib_1.__importDefault(require("fs-extra"));
+@@ -17 +18,2 @@ const path_1 = tslib_1.__importDefault(require("path"));
+-const micromatch_1 = tslib_1.__importDefault(require("micromatch")); // Note: Micromatch is used by Globby
++const url_1 = require("url");
++const picomatch_1 = tslib_1.__importDefault(require("picomatch"));
+@@ -19,2 +21 @@ const utils_common_1 = require("@docusaurus/utils-common");
+-const globby_1 = tslib_1.__importDefault(require("globby"));
+-exports.Globby = globby_1.default;
++const tinyglobby_1 = require("tinyglobby");
+@@ -21,0 +23,26 @@ const pathUtils_1 = require("./pathUtils");
++exports.Globby = async function Globby(patterns, options) {
++    let globPatterns = typeof patterns === 'string' ? [patterns] : [...patterns];
++    let globOptions = options;
++    if (options && Array.isArray(options.expandDirectories)) {
++        const cwd = options.cwd instanceof URL
++            ? (0, url_1.fileURLToPath)(options.cwd)
++            : options.cwd ?? process.cwd();
++        const directoryPatterns = await Promise.all(globPatterns.map(async (pattern) => {
++            if (pattern.startsWith('!'))
++                return [pattern];
++            try {
++                const stats = await fs_extra_1.default.stat(path_1.default.resolve(cwd, pattern));
++                if (!stats.isDirectory())
++                    return [pattern];
++            }
++            catch {
++                return [pattern];
++            }
++            return options.expandDirectories.map((directoryPattern) => path_1.default.posix.join((0, pathUtils_1.posixPath)(pattern), directoryPattern));
++        }));
++        globPatterns = directoryPatterns.flat();
++        const { expandDirectories: _expandDirectories, ...remainingOptions } = options;
++        globOptions = { ...remainingOptions, expandDirectories: false };
++    }
++    return (0, tinyglobby_1.glob)(globPatterns, globOptions);
++};
+@@ -34 +61 @@ exports.GlobExcludeDefault = [
+- * A very thin wrapper around `Micromatch.makeRe`.
++ * A very thin wrapper around `picomatch.makeRe`.
+@@ -47 +74 @@ function createMatcher(patterns) {
+-    const regexp = new RegExp(patterns.map((pattern) => micromatch_1.default.makeRe(pattern).source).join('|'));
++    const regexp = new RegExp(patterns.map((pattern) => picomatch_1.default.makeRe(pattern).source).join('|'));
+@@ -74 +101 @@ function createAbsoluteFilePathMatcher(patterns, rootFolders) {
+-// Globby that fix Windows path patterns
++// Tinyglobby that fixes Windows path patterns
+@@ -77 +104 @@ async function safeGlobby(patterns, options) {
+-    // Required for Windows support, as paths using \ should not be used by globby
++    // Required for Windows support, as paths using \ should not be used by tinyglobby
+@@ -80 +107 @@ async function safeGlobby(patterns, options) {
+-    return (0, globby_1.default)(globPaths, options);
++    return exports.Globby(globPaths, options);
+@@ -108 +134,0 @@ async function globTranslatableSourceFiles(patterns) {
+-//# sourceMappingURL=globUtils.js.map
+\ No newline at end of file
+diff --git a/lib/globUtils.js.map b/lib/globUtils.js.map
+deleted file mode 100644
+index 459ba63..0000000
+--- a/lib/globUtils.js.map
++++ /dev/null
+@@ -1 +0,0 @@
+-{"version":3,"file":"globUtils.js","sourceRoot":"","sources":["../src/globUtils.ts"],"names":[],"mappings":"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"}
+\ No newline at end of file
+diff --git a/package.json b/package.json
+index c41478d..bf4474f 100644
+--- a/package.json
++++ b/package.json
+@@ -30,2 +30,2 @@
+-    "globby": "^11.1.0",
+-    "jiti": "^1.20.0",
++        "jiti": "^1.20.0",
++    "picomatch": "^4.0.4",
+@@ -34,2 +34,2 @@
+-    "micromatch": "^4.0.5",
+-    "p-queue": "^6.6.2",
++        "p-queue": "^6.6.2",
++    "tinyglobby": "0.2.15",
+@@ -49 +49 @@
+-    "@types/micromatch": "^4.0.2",
++    "@types/picomatch": "^4.0.2",
+diff --git a/src/globUtils.ts b/src/globUtils.ts
+index ba6b558..4b2f582 100644
+--- a/src/globUtils.ts
++++ b/src/globUtils.ts
+@@ -8,2 +8 @@
+-// Globby/Micromatch are the 2 libs we use in Docusaurus consistently
+-
++import fs from 'fs-extra';
+@@ -11 +10,2 @@ import path from 'path';
+-import Micromatch from 'micromatch'; // Note: Micromatch is used by Globby
++import {fileURLToPath} from 'url';
++import picomatch from 'picomatch';
+@@ -13 +13 @@ import {addSuffix} from '@docusaurus/utils-common';
+-import Globby from 'globby';
++import {glob, type GlobOptions as TinyGlobOptions} from 'tinyglobby';
+@@ -16,2 +16,43 @@ import {posixPath} from './pathUtils';
+-/** A re-export of the globby instance. */
+-export {Globby};
++/** Options retained for Docusaurus callers of the former globby helper. */
++export type GlobbyOptions = Omit<TinyGlobOptions, 'expandDirectories'> & {
++  expandDirectories?: boolean | string[];
++};
++
++/**
++ * A compatibility wrapper for the former globby export. The only legacy option
++ * not supported directly by tinyglobby is globby's array form of
++ * `expandDirectories`, used by Docusaurus to expand directories to Markdown.
++ */
++export const Globby = async (
++  patterns: string | readonly string[],
++  options?: GlobbyOptions,
++): Promise<string[]> => {
++  let globPatterns = typeof patterns === 'string' ? [patterns] : [...patterns];
++  let globOptions = options;
++
++  if (options && Array.isArray(options.expandDirectories)) {
++    const cwd =
++      options.cwd instanceof URL
++        ? fileURLToPath(options.cwd)
++        : options.cwd ?? process.cwd();
++    const directoryPatterns = await Promise.all(
++      globPatterns.map(async (pattern) => {
++        if (pattern.startsWith('!')) return [pattern];
++        try {
++          const stats = await fs.stat(path.resolve(cwd, pattern));
++          if (!stats.isDirectory()) return [pattern];
++        } catch {
++          return [pattern];
++        }
++        return options.expandDirectories!.map((directoryPattern) =>
++          path.posix.join(posixPath(pattern), directoryPattern),
++        );
++      }),
++    );
++    globPatterns = directoryPatterns.flat();
++    const {expandDirectories: _expandDirectories, ...remainingOptions} = options;
++    globOptions = {...remainingOptions, expandDirectories: false};
++  }
++
++  return glob(globPatterns, globOptions);
++};
+@@ -34 +75 @@ type Matcher = (str: string) => boolean;
+- * A very thin wrapper around `Micromatch.makeRe`.
++ * A very thin wrapper around `picomatch.makeRe`.
+@@ -48 +89 @@ export function createMatcher(patterns: string[]): Matcher {
+-    patterns.map((pattern) => Micromatch.makeRe(pattern).source).join('|'),
++    patterns.map((pattern) => picomatch.makeRe(pattern).source).join('|'),
+@@ -92 +133 @@ export function createAbsoluteFilePathMatcher(
+-// Globby that fix Windows path patterns
++// Tinyglobby that fixes Windows path patterns.
+@@ -96 +137 @@ export async function safeGlobby(
+-  options?: Globby.GlobbyOptions,
++  options?: GlobbyOptions,

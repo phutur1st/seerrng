@@ -1,8 +1,15 @@
+// eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Cypress specs use deterministic local title fixtures.
+import { openTitleDetailsFromSearch } from '../support/titleFixtures';
+
 describe('TV Details', () => {
   it('loads a tv details page', () => {
     cy.loginAsAdmin();
-    // Try to load stranger things
-    cy.visit('/tv/66732');
+    openTitleDetailsFromSearch({
+      id: 66732,
+      mediaType: 'tv',
+      title: 'Stranger Things',
+      date: '2016-07-15',
+    });
 
     cy.get('[data-testid=media-title]').should(
       'contain',
@@ -48,13 +55,15 @@ describe('TV Details', () => {
         response.body.series4kEnabled = true;
       });
     });
-    cy.intercept('GET', '/api/v1/tv/66732', (request) => {
-      request.continue((response) => {
-        // This entry test uses unrequested media, independently of saved requests.
-        response.body.mediaInfo = null;
-      });
+    openTitleDetailsFromSearch({
+      id: 66732,
+      mediaType: 'tv',
+      title: 'Stranger Things',
+      date: '2016-07-15',
+      // Keep this test focused on the quality selector; a TVDB mapping skips
+      // the separate search-by-name workflow in the request dialog.
+      details: { mediaInfo: null, externalIds: { tvdbId: 123456 } },
     });
-    cy.visit('/tv/66732');
 
     cy.wait('@sonarrDestinations').its('response.statusCode').should('eq', 200);
 
@@ -97,7 +106,12 @@ describe('TV Details', () => {
         response.body.series4kEnabled = false;
       });
     });
-    cy.visit('/tv/66732');
+    openTitleDetailsFromSearch({
+      id: 66732,
+      mediaType: 'tv',
+      title: 'Stranger Things',
+      date: '2016-07-15',
+    });
 
     cy.get('[aria-label^="Quality:"]').should('not.exist');
   });
@@ -105,21 +119,6 @@ describe('TV Details', () => {
   it('shows seasons and expands episodes', () => {
     cy.loginAsAdmin();
 
-    // A full visit obtains initial metadata through SSR, outside cy.intercept.
-    // Record any client revalidation too, without assuming it will occur.
-    cy.intercept('GET', '/api/v1/tv/66732', (request) => {
-      request.continue((response) => {
-        Cypress.log({
-          name: 'client season summary',
-          message: JSON.stringify({
-            id: response.body.id,
-            season: response.body.seasons?.find(
-              (season: { seasonNumber: number }) => season.seasonNumber === 4
-            ),
-          }),
-        });
-      });
-    }).as('seriesDetails');
     cy.intercept('GET', '/api/v1/tv/66732/season/*', (request) => {
       const seasonNumber = Number(
         new URL(request.url).pathname.split('/').pop()
@@ -154,27 +153,23 @@ describe('TV Details', () => {
       }
       request.reply({ body: response });
     });
-    cy.visit('/tv/66732');
-    cy.get('script#__NEXT_DATA__')
-      .invoke('text')
-      .then((text) => {
-        const details = JSON.parse(text).props.pageProps.tv;
-        const season = details.seasons.find(
-          (item: { seasonNumber: number }) => item.seasonNumber === 4
-        );
-        Cypress.log({
-          name: 'SSR season summary',
-          message: JSON.stringify({ id: details.id, season }),
-        });
-        expect(details.id, 'SSR canonical Stranger Things TMDB ID').to.eq(
-          66732
-        );
-        expect(season, 'SSR advertises season 4').not.to.equal(undefined);
-        expect(
-          season.episodeCount,
-          'SSR season 4 meets the current tree episodeCount > 0 eligibility filter'
-        ).to.be.greaterThan(0);
-      });
+    openTitleDetailsFromSearch({
+      id: 66732,
+      mediaType: 'tv',
+      title: 'Stranger Things',
+      date: '2016-07-15',
+      details: {
+        seasons: [
+          {
+            id: 404,
+            name: 'Season 4',
+            seasonNumber: 4,
+            episodeCount: 9,
+            airDate: '2022-05-27',
+          },
+        ],
+      },
+    });
     cy.get('button[aria-controls="series-media-server-panel"]')
       .should('be.visible')
       .then(($button) => {

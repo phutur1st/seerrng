@@ -13,6 +13,12 @@ import { fileURLToPath } from 'node:url';
 // eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Native Node tooling cannot resolve the application's TS aliases.
 import { createNativeStageContext } from '../tools/validation-engine/runtime/native-stage-context.mjs';
 // eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Native Node tooling cannot resolve the application's TS aliases.
+import {
+  MODE1_LOCAL_REQUEST_PATH_ENV,
+  MODE1_LOCAL_REQUEST_SHA256_ENV,
+  createMode1LocalRunnerOptions,
+} from '../tools/validation-engine/runtime/mode1-local-lifecycle.mjs';
+// eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Native Node tooling cannot resolve the application's TS aliases.
 import { executeStagedValidation } from '../tools/validation-engine/runtime/staged-validation.mjs';
 // eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Native Node tooling cannot resolve the application's TS aliases.
 import {
@@ -67,6 +73,19 @@ import {
 } from '../tools/validation-engine/runtime/distributed-linux-node-runner.mjs';
 
 const hash = (value) => createHash('sha256').update(value).digest('hex');
+const trustedOuterSandboxTokenEnv = 'VALIDATION_OUTER_SANDBOX_TOKEN';
+const trustedOuterSandboxMarker = '/run/validation-engine-sandbox';
+
+function hasTrustedOuterSandbox() {
+  const token = process.env[trustedOuterSandboxTokenEnv];
+  if (!/^[a-f0-9]{64}$/u.test(token ?? '')) return false;
+  try {
+    return readFileSync(trustedOuterSandboxMarker, 'utf8') === token;
+  } catch {
+    return false;
+  }
+}
+
 const git = (root, parameters, encoding = 'utf8') =>
   execFileSync('git', ['-C', root, ...parameters], {
     ...(encoding === null ? {} : { encoding }),
@@ -94,18 +113,26 @@ function hostedGithubInput(root) {
     readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')
   );
   const eventName = process.env.GITHUB_EVENT_NAME;
-  if (!['pull_request', 'push'].includes(eventName))
+  if (!['pull_request', 'push', 'workflow_dispatch'].includes(eventName))
     throw new Error(
-      'Hosted CI orchestration supports pull_request and push only'
+      'Hosted CI orchestration supports pull_request, push, and workflow_dispatch only'
     );
   const executionSha = git(root, ['rev-parse', 'HEAD']).trim();
   if (executionSha !== process.env.GITHUB_SHA)
     throw new Error('Checked GitHub execution SHA does not match GITHUB_SHA');
   const pullRequest = payload.pull_request;
   const headSha =
-    eventName === 'pull_request' ? pullRequest?.head?.sha : payload.after;
+    eventName === 'pull_request'
+      ? pullRequest?.head?.sha
+      : eventName === 'push'
+        ? payload.after
+        : process.env.GITHUB_SHA;
   const baseSha =
-    eventName === 'pull_request' ? pullRequest?.base?.sha : payload.before;
+    eventName === 'pull_request'
+      ? pullRequest?.base?.sha
+      : eventName === 'push'
+        ? payload.before
+        : git(root, ['rev-parse', '--verify', `${executionSha}^1`]).trim();
   if (!/^[a-f0-9]{40}$/.test(headSha ?? ''))
     throw new Error('Exact GitHub head SHA is missing');
   if (!/^[a-f0-9]{40}$/.test(baseSha ?? ''))
@@ -266,11 +293,13 @@ function writeHostedAdmissionOutputs(decision) {
 }
 
 const flagOptions = new Set([
+  '--package-entry',
   '--help',
   '-h',
   '--plan',
   '--json',
   '--tests-only',
+  '--inside-sandbox',
   '--github-plan',
   '--github-admit',
   '--github-materialize-test-lane',
@@ -330,6 +359,21 @@ const repeatedValueOptions = new Set([
   '--dependency',
 ]);
 
+const disabledDistributedNetworkModes = new Set([
+  '--distributed-configure-node',
+  '--distributed-controller-service',
+  '--distributed-contained-run',
+  '--distributed-run',
+  '--distributed-node',
+  '--distributed-dependency-report',
+]);
+const disabledDistributedServiceModes = new Set([
+  '--distributed-controller-service',
+  '--distributed-node',
+]);
+const disabledDistributedModeMessage =
+  'Mode 3 network operations are disabled until enrollment uses authenticated, encrypted per-node credentials.';
+
 const optionContracts = {
   'local-full': {
     label: 'Local full mode',
@@ -338,7 +382,7 @@ const optionContracts = {
   },
   'local-tests-only': {
     label: 'Local tests-only mode',
-    allowed: new Set(['--tests-only']),
+    allowed: new Set(['--tests-only', '--inside-sandbox']),
     requiredValues: [],
   },
   'local-plan': {
@@ -652,6 +696,7 @@ function parseOptions(args) {
 }
 
 function validateOptions(options) {
+  const packageEntry = options.flags.delete('--package-entry');
   const helpAliases = ['--help', '-h'].filter((option) =>
     options.flags.has(option)
   );
@@ -693,6 +738,10 @@ function validateOptions(options) {
     '--distributed-dependency-plan',
     '--distributed-dependency-report',
   ].filter((option) => options.flags.has(option));
+  if (packageEntry && distributedModes.length)
+    throw new Error(
+      'Mode 3 is dormant and unavailable through pnpm validate:development'
+    );
   if (distributedModes.length > 1)
     throw new Error('Choose exactly one distributed mode');
   if (hostedModes.length && distributedModes.length)
@@ -899,6 +948,10 @@ if (executedDirectly) {
   try {
     options = parseOptions(process.argv.slice(2));
     selectedMode = validateOptions(options);
+    if (options.flags.has('--inside-sandbox') && !hasTrustedOuterSandbox())
+      throw new Error(
+        '--inside-sandbox requires the trusted outer sandbox marker'
+      );
   } catch (error) {
     options = undefined;
     selectedMode = undefined;
@@ -909,6 +962,17 @@ if (executedDirectly) {
 const has = (option) => options?.flags.has(option) ?? false;
 const value = (option) => options?.values.get(option);
 const repeated = (option) => options?.repeated.get(option) ?? [];
+
+function hasTrustedOuterSandboxMarker() {
+  const token = process.env.VALIDATION_OUTER_SANDBOX_TOKEN;
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/u.test(token)) return false;
+  try {
+    return readFileSync('/run/validation-engine-sandbox', 'utf8') === token;
+  } catch {
+    return false;
+  }
+}
+
 const pathValueOptions = new Set([
   '--active-config-marker',
   '--config-file',
@@ -1019,6 +1083,11 @@ if (!executedDirectly) {
   // Importing exposes focused command helpers without executing the CLI.
 } else if (!options) {
   // The parse error above is the complete fail-closed result.
+} else if (has('--inside-sandbox') && !hasTrustedOuterSandboxMarker()) {
+  process.stderr.write(
+    'The internal --inside-sandbox mode requires the trusted outer sandbox launcher.\n'
+  );
+  process.exitCode = 1;
 } else if (selectedMode.name === 'help') {
   process.stdout
     .write(`Usage: node bin/run-local-validation.mjs [--tests-only] [--plan [--json]]
@@ -1029,16 +1098,16 @@ if (!executedDirectly) {
        node bin/run-local-validation.mjs --github-receipt --unit ID [--case ID] --plan-file FILE --expected-plan-sha256 SHA --receipt-dir DIR --job-status STATUS [--evidence FILE ...] [--json]
        node bin/run-local-validation.mjs --github-reconcile --plan-file FILE --receipt-dir DIR [--json]
        node bin/run-local-validation.mjs --distributed-configure-controller --config-file ABSOLUTE_FILE --profile GITHUB_USER --controller-name NAME --listen-address IP --listen-port PORT --thread-rule RULE --minimum-thread-count COUNT --active-config-marker ABSOLUTE_FILE --state-root ABSOLUTE_DIR --log-root ABSOLUTE_DIR [--allow-existing-config-update]
-       node bin/run-local-validation.mjs --distributed-configure-node --config-file ABSOLUTE_FILE --node-id ## --node-name NAME --listen-address IP --listen-port PORT --controller-address IP --controller-port PORT --active-config-marker ABSOLUTE_FILE --state-root ABSOLUTE_DIR --log-root ABSOLUTE_DIR [--allow-existing-config-update] [--overwrite-node]
-       node bin/run-local-validation.mjs --distributed-controller-service --active-config-marker ABSOLUTE_FILE --state-root ABSOLUTE_DIR --log-root ABSOLUTE_DIR
-       node bin/run-local-validation.mjs --distributed-run --active-config-marker ABSOLUTE_FILE --state-root ABSOLUTE_DIR --log-root ABSOLUTE_DIR --application ENTRY_ID [--json]
-       node bin/run-local-validation.mjs --distributed-node --active-config-marker ABSOLUTE_FILE --state-root ABSOLUTE_DIR --log-root ABSOLUTE_DIR --app ID=ABSOLUTE_ROOT
+       node bin/run-local-validation.mjs --distributed-configure-node --config-file ABSOLUTE_FILE --node-id ## --node-name NAME --listen-address IP --listen-port PORT --controller-address IP --controller-port PORT --active-config-marker ABSOLUTE_FILE --state-root ABSOLUTE_DIR --log-root ABSOLUTE_DIR [--allow-existing-config-update] [--overwrite-node] (disabled)
+       node bin/run-local-validation.mjs --distributed-controller-service --active-config-marker ABSOLUTE_FILE --state-root ABSOLUTE_DIR --log-root ABSOLUTE_DIR (disabled)
+       node bin/run-local-validation.mjs --distributed-run --active-config-marker ABSOLUTE_FILE --state-root ABSOLUTE_DIR --log-root ABSOLUTE_DIR --application ENTRY_ID [--json] (disabled)
+       node bin/run-local-validation.mjs --distributed-node --active-config-marker ABSOLUTE_FILE --state-root ABSOLUTE_DIR --log-root ABSOLUTE_DIR --app ID=ABSOLUTE_ROOT (disabled)
        node bin/run-local-validation.mjs --distributed-node-thread-policy --active-config-marker ABSOLUTE_FILE [--node-id ## --thread-rule RULE --minimum-thread-count COUNT] [--json]
        node bin/run-local-validation.mjs --distributed-applications --active-config-marker ABSOLUTE_FILE --json
        node bin/run-local-validation.mjs --distributed-app-add --active-config-marker ABSOLUTE_FILE --application-id 'PRODUCT VERSION' --application-name NAME --dependency-profile ABSOLUTE_FILE [--json]
        node bin/run-local-validation.mjs --distributed-app-delete --active-config-marker ABSOLUTE_FILE --application ENTRY_ID [--json]
        node bin/run-local-validation.mjs --distributed-dependency-plan --active-config-marker ABSOLUTE_FILE (--application ENTRY_ID ... | --all-applications) [--dependency-name NAME] --json
-       node bin/run-local-validation.mjs --distributed-dependency-report --active-config-marker ABSOLUTE_FILE --application ENTRY_ID ... [--dependency NAME=ACTUAL_VERSION ...] --json
+       node bin/run-local-validation.mjs --distributed-dependency-report --active-config-marker ABSOLUTE_FILE --application ENTRY_ID ... [--dependency NAME=ACTUAL_VERSION ...] --json (disabled)
 
 Runs the existing engine's staged native PR-parity gate: repository checks,
 CodeQL, production builds, browser tests and applicable supplemental checks.
@@ -1059,27 +1128,25 @@ CodeQL, production builds, browser tests and applicable supplemental checks.
 --distributed-configure-controller
               Create or explicitly update the Linux controller configuration.
 --distributed-configure-node
-              Register one Linux node with the selected private-LAN controller.
-              A controller conflict exits with status 20 without activating the node.
+              Disabled while Mode 3 enrollment lacks authenticated credentials.
 --distributed-controller-service
-              Serve private-LAN node enrollment from the exact active configuration.
+              Disabled; exits successfully without opening a listener.
 --distributed-run
-              Run one fresh engine-owned contained four-stage Mode 3 lifecycle.
-              The application entry is singular; thread and worker overrides are forbidden.
+              Disabled while the Mode 3 protocol is being redesigned.
 --distributed-node
-              Serve explicitly bound applications from the exact active node configuration.
+              Disabled; exits successfully without opening a listener.
 --distributed-node-thread-policy
               List enrolled nodes or assign one node's controller-owned thread policy.
 --distributed-applications
-              List controller-supported application entries; nodes fetch the list in memory.
+              List controller-supported applications from the local configuration.
 --distributed-app-add
               Add one controller app entry from its repository-owned dependency profile.
 --distributed-app-delete
               Delete one numbered controller app entry.
 --distributed-dependency-plan
-              Union and deduplicate selected app requirements without installing anything.
+              Plan selected application dependencies from the local configuration.
 --distributed-dependency-report
-              Persist actual node availability and compare it with selected requirements.
+              Disabled until enrollment uses authenticated per-node credentials.
 --app         Register an explicit distributed application as ID=ABSOLUTE_ROOT;
               repeatable for the node service.
 --json        Machine-readable local plan, distributed result, hosted plan, or hosted result.
@@ -1087,9 +1154,22 @@ CodeQL, production builds, browser tests and applicable supplemental checks.
 
 Does not install dependencies, synchronize source, apply live migrations, or edit GitHub workflows.
 Native, Vitest-only, tooling and CI commands retain their existing behavior.
+Mode 3 network operations are disabled until enrollment uses authenticated,
+encrypted per-node credentials. Focused regression tests may still exercise
+the implementation with disposable roots and loopback services.
 Builds and fixture migrations use an owned disposable source/configuration copy.
 Missing native tools, unproven isolation and pending GitHub checks are incomplete;
 failures, partial output closure and zero active tests fail closed.\n`);
+} else if (
+  disabledDistributedNetworkModes.has(selectedMode.distributedOption ?? '')
+) {
+  const message = `${disabledDistributedModeMessage}\n`;
+  if (disabledDistributedServiceModes.has(selectedMode.distributedOption)) {
+    process.stdout.write(`${message}No listener was started.\n`);
+  } else {
+    process.stderr.write(message);
+    process.exitCode = 1;
+  }
 } else {
   const controller = new AbortController();
   const interrupt = () => controller.abort();
@@ -1253,7 +1333,8 @@ failures, partial output closure and zero active tests fail closed.\n`);
       }
     } else if (distributedMode === '--distributed-applications') {
       const active = resolveActiveLinuxConfig(
-        requiredValue('--active-config-marker')
+        requiredValue('--active-config-marker'),
+        { expectedRole: 'controller' }
       );
       const listing = await supportedApplicationsForActiveConfig(
         active,
@@ -1302,7 +1383,8 @@ failures, partial output closure and zero active tests fail closed.\n`);
         );
     } else if (distributedMode === '--distributed-dependency-plan') {
       const active = resolveActiveLinuxConfig(
-        requiredValue('--active-config-marker')
+        requiredValue('--active-config-marker'),
+        { expectedRole: 'controller' }
       );
       const listing = await supportedApplicationsForActiveConfig(
         active,
@@ -1513,6 +1595,7 @@ failures, partial output closure and zero active tests fail closed.\n`);
       preflight(root, { testsOnly: has('--tests-only') });
       const plan = createPlan(root, {
         testsOnly: has('--tests-only'),
+        allowExternalDependencies: has('--tests-only'),
         canonicalTypescript: !has('--tests-only'),
       });
       if (has('--plan')) {
@@ -1540,12 +1623,17 @@ failures, partial output closure and zero active tests fail closed.\n`);
             );
         }
       } else {
-        printPlan(plan, process.stdout, { details: false });
+        printPlan(plan, process.stdout, {
+          details: false,
+          callerSandboxed: has('--inside-sandbox'),
+        });
         process.on('SIGINT', interrupt);
         process.on('SIGTERM', interrupt);
         if (has('--tests-only')) {
           const totals = await executePlan(plan, {
+            sandbox: !has('--inside-sandbox'),
             signal: controller.signal,
+            onProgress: (summary) => process.stderr.write(`${summary}\n`),
           });
           for (const [lane, count] of totals)
             process.stdout.write(
@@ -1553,9 +1641,24 @@ failures, partial output closure and zero active tests fail closed.\n`);
             );
           process.stdout.write('\nLocal tests passed.\n');
         } else {
+          const localRequestConfigured = [
+            MODE1_LOCAL_REQUEST_PATH_ENV,
+            MODE1_LOCAL_REQUEST_SHA256_ENV,
+            'SEERR_MODE1_LOCAL_RUN_ID',
+          ].some((name) => process.env[name] !== undefined);
+          const localMode = localRequestConfigured
+            ? createMode1LocalRunnerOptions(root)
+            : null;
           context = await createNativeStageContext(root, {
-            runId: `local-${randomUUID()}`,
+            runId: localMode?.runId ?? `local-${randomUUID()}`,
             signal: controller.signal,
+            ...(localMode
+              ? {
+                  scratchParent: localMode.scratchParent,
+                  prerequisiteReferences: localMode.prerequisiteReferences,
+                  ...localMode.callbacks,
+                }
+              : {}),
           });
           if (context.report.blockedRequired.length) {
             for (const blocker of context.report.blockedRequired)

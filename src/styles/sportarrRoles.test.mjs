@@ -49,6 +49,24 @@ test('Sportarr league details use shared semantic layout and event roles', () =>
   );
 });
 
+test('number fields use the shared readable form control surface', () => {
+  const rule = [];
+  css.walkRules((candidate) => {
+    if (
+      candidate.selectors?.includes("input[type='number']") &&
+      candidate.selectors?.includes("input[type='text']")
+    ) {
+      rule.push(candidate);
+    }
+  });
+  assert.equal(rule.length, 1);
+  assert.match(rule[0].toString(), /bg-gray-700/);
+  assert.match(rule[0].toString(), /text-white/);
+
+  const sportarr = read('Settings/SportarrModal/index.tsx');
+  assert.match(sportarr, /id="port"[\s\S]*?name="port"[\s\S]*?type="number"/);
+});
+
 test('event rows keep content readable on narrow screens', () => {
   const base = declarations('.sportarr-event-card');
   assert.equal(base.get('display'), 'grid');

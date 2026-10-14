@@ -242,6 +242,7 @@ function preparedContext(selectedCandidate, events) {
       readFile: async () => '',
       writeArtifact: async () => {},
       verifySource: async () => events.push('verify-source'),
+      verifyStageBoundary: async () => events.push('verify-stage-boundary'),
     },
   };
 }

@@ -1325,3 +1325,680 @@ the v3.57.0 GitHub Release remains a draft while the Ubuntu Jammy and Noble PPA
 jobs finish publishing and verifying. Snap, AUR, COPR, Flatpak, Debian, RPM,
 and AppImage checks have passed. No `seerr.home` deployment was run by these
 release checks.
+
+## Open-issue fixes and complete branch/dirty-worktree audit — October 11, 2026
+
+The candidate starts at current `origin/main` `b9b752a8606e8f5436b50147cd3a64ae03893f04`.
+Recovery identities retained before integration are ref
+`recovery/current-main-pre-issue-work-20261011` at that base, stash
+`22143bb0f3679285adb7e4eceb09af41933fdfd0`, and the verified source bundle
+`/tmp/seerrng-validation-20261011-candidate.bundle`. The three Dependabot
+workflow branches were reviewed and merged into the candidate as commits
+`6e5c68054` (#186 Cypress action), `8ae1528a8` (#187 install action), and
+`4a73206f8` (#188 JUnit report action). Their workflow SHA contract tests were
+updated with the pins. The action diffs were checked against the upstream tag
+commits; #186 contains dependency hardening, #187 strengthens checksum
+verification, and #188 includes the fast-uri security update.
+
+All other project-owned remote branch heads are already ancestors of
+`origin/main`. The old local release-integration branches contain four
+patch-unique commits for ROMarrNG DAT catalog, its integration record,
+ChaptarrNG/Audiobookshelf, and the edit-request modal; current `origin/main`
+contains their implementation, regression coverage, and release notes. The
+validation snapshot branch is not a product source branch. External `upstream`
+and contributor-fork branch families were not treated as SeerrNG feature
+branches.
+
+The active worktree changes retain the fixes and regressions for open issues
+#191, #192, #194, #195, and #197, plus the release fragment and action-pin test
+updates. Baseline reproductions and fixed results are recorded separately:
+
+- #191 failed in Playwright because `.swipe-card-body` was transparent; the
+  repaired desktop and narrow captures are
+  `/tmp/seerrng-issue-191-after-desktop.png` and
+  `/tmp/seerrng-issue-191-after-narrow.png` (the original is
+  `/tmp/seerrng-issue-191-before.png`).
+- #192 movie and series requests initially had no `voteCountGte`; the fixed
+  browser checks observed `voteCountGte=50` for both. Explicit minimum-vote
+  options remain available.
+- #194 reproduced the reported `lateststatuscountid` missing-relation error on
+  disposable PostgreSQL; after lowercase underscore aliases, the same query
+  returned all seven zero counts. No live database was used.
+- #195 pressing Enter on “API” stayed on the metadata page; after the fix it
+  navigates to Settings and focuses the API key control. The protected unsaved
+  settings flow remains in place.
+- #197 the Plex response omitted `email`; after the fix the isolated auth
+  regression receives `email`, `plexId`, and `requestCount`, and verifies that
+  credentials remain filtered.
+- Focused Playwright coverage passed 4/4; focused Node route tests passed 3/3;
+  the constants Vitest passed 3/3; PostgreSQL reproduction passed on the
+  disposable `kspls0` service. These are focused receipts, not the complete
+  `validate:development` result.
+
+Dirty-worktree review found that the support-link removal, English empty-message
+payload change, GameLibrary filter overflow fix, reader settings layout and
+its Cypress assertions, request-download asset handling, and edit-request
+regression test are already in current `origin/main`. The local software
+catalog migration uses stale timestamp `179110`; the current tree has its
+renumbered migration at `179113`, so adding the old copy would conflict with
+the migration sequence. Old reader/game/software snapshots lack newer main
+source and were not copied over it. The old validation inventory and tarball
+are excluded by the current validation-engine guide, which prohibits copied
+inventories and bundles. The diagnostic Cypress spec and
+`src/pages/qa-request-edit.tsx` exist only in scratch worktrees; neither is
+shipped. The QA page would expose a development fixture as a routed page. The
+old snapshot edits that weaken or rename the explicit John visual-acceptance
+gate were not applied. No recovery worktree or stash was deleted.
+
+The no-flag `pnpm validate:development` was attempted on `kspls0` for candidate
+commit `4a73206f8c4e7ef3fec4e91ab61c71e935d3834e`, source SHA-256
+`bb148b432e295fe8b66a01d824aff98f4a02b8106ca3dc48d62ebefd696941e2`. It
+stopped in prerequisite admission with status `prerequisite-blocked`; no full
+stage or repository test suite ran. The discovery preamble selected 530 Vitest,
+0 Node TypeScript, 58 Node JavaScript, and 78 tooling files, with zero declared
+platform exclusions. Actual execution was 0 suites, 0 passed, 0 failed, and 0
+skipped. The log and preparation report are retained on `kspls0` at
+`/tmp/seerrng-validation-20261011/full-gate.log` and
+`/tmp/seerrng-native-validation-s5Bcxk/native-context-report.json`.
+
+Required preparation was unavailable for documentation dependencies; Helm,
+chart-testing, yamllint and yamale; Lychee; .NET SDK 9; the isolated Docker
+fixture proof; and authenticated complete Git history/tag closure. The local
+runner also leaves required GitHub PR metadata pending. A second attempt of the
+same gate ran inside `unshare --user --map-root-user --net`; its report verified
+an isolated loopback-only namespace, but it remained prerequisite-blocked on
+the other items above and again executed zero suites. That log and report are
+`/tmp/seerrng-validation-20261011/full-gate-isolated.log` and
+`/tmp/seerrng-native-validation-srGOWU/native-context-report.json`. The default
+no-flag call in `bin/run-local-validation.mjs` does not provide the optional
+`verifyDockerFixture`, `verifyGitHistory`, or reviewed-PR-metadata callbacks
+accepted by `createNativeStageContext`, so installing the missing CLIs alone
+cannot complete those proof checks. Focused verification remains separate:
+Playwright passed 4/4, route tests passed 3/3, the discovery constants Vitest
+passed 3/3, and the two action-contract files passed 18/18 under an isolated
+namespace. PostgreSQL reproduction passed on the disposable `kspls0` database.
+
+The full gate remains incomplete; discovery counts are not execution evidence.
+Release-note preview, final commit/push, release publication and issue closure
+remain pending. Browser screenshots are automated evidence; they do not replace
+the required human visual acceptance for this interface release. This receipt
+was appended after the recorded gate attempt, so the resulting worktree has not
+been represented as a completed final gate candidate.
+
+### Additional main-worktree changes found during finalization — October 11, 2026
+
+The checkout was moved back to `main` at `b9b752a8606e8f5436b50147cd3a64ae03893f04`
+with a separate dirty built-in-TLS fix and its release-note fragment. The latest
+stash `stash@{0}` retained the issue-fix candidate and its Playwright/Vitest
+regressions; it was applied without dropping the stash. The three reviewed
+Dependabot merge commits were fast-forwarded onto `main`, leaving local `main`
+at `4a73206f8c4e7ef3fec4e91ab61c71e935d3834e` while `origin/main` remains at
+the prior base.
+
+The TLS fix addresses Next.js server-side page/API requests that were sent to
+the public HTTP listener after built-in HTTPS repurposed that port for redirect
+or upgrade handling. It adds an ephemeral listener bound to `127.0.0.1`, points
+server-side API requests at that listener only while built-in TLS is active,
+clears the setting when TLS is disabled, and includes the listener in startup
+error handling and graceful shutdown. Focused tests were added for loopback
+binding, private API access, public HTTP upgrade behavior, and invalid internal
+ports. This is a security-sensitive listener change and requires the full
+regression review on the integrated candidate.
+
+GitHub's live open-issue list contains six issues, not five: #191, #192, #194,
+#195, #197, and #198. Issue #198 asks the documentation to name Issuarr without
+removing Mylar3. The Issuarr project's own API guide states that its web API is
+the same as Mylar3's; the SeerrNG connector continues to use the existing
+`mylar3` service type. User-facing comics, companion-service, setup-assistant,
+Unraid, release-calendar, indexer-search, request-status, reader, API-compatibility,
+and README documentation now mention Issuarr while retaining Mylar3 guidance.
+The combined settings/discovery/auth/request-status release fragment also
+records the documentation update. Docs build and link checks remain pending.
+
+The installed-tool `pnpm validate:development` attempt on `kspls0` used the
+previous five-issue candidate. Documentation dependencies, chart and link
+tools, and .NET SDK 9 were installed in disposable scratch paths and verified
+against their frozen lock or published checksums. Preparation now reports three
+required blockers: private Docker fixture proof, complete Git history/tag
+proof, and chart lint's required target-ref proof. Required release-note and
+GitHub PR metadata also remain pending because this is a direct-to-main
+candidate with no PR. No full stage ran. The separate `--tests-only` run is
+still executing on the earlier candidate; its final counts must not be applied
+to the integrated TLS/docs candidate.
+
+## Reported issues and dirty-tree candidate verification — October 11, 2026
+
+This follow-up starts from `main`/`origin/main` at
+`ccec04c9cab2a7a537528ee1d56df1533b5ad8f4`. The current dirty tree includes
+all reported issue work, the unrelated retained documentation and validation
+changes, and the pending feature/doc fragments. The local complete validation
+engine has not been represented as passing. This candidate has not yet been
+pushed, so its exact GitHub-hosted Mode 2 result is pending.
+
+Issue reproduction and current result:
+
+- #191: the desktop and narrow Playwright baseline showed the swipe-card text
+  surface was transparent over stacked cards. The shared semantic card surface
+  is now opaque. Final screenshots are `/tmp/seerrng-issue-191-after-desktop.png`
+  and `/tmp/seerrng-issue-191-after-narrow.png`.
+- #192: browser requests for both movie and series rating sorts lacked a
+  minimum vote threshold. Rating sorts now default to 50 votes and expose a
+  selectable minimum; final Playwright coverage confirms `voteCountGte=50` for
+  both.
+- #194: the PostgreSQL failure was reproduced on an isolated disposable
+  PostgreSQL 17 database. PostgreSQL folded the unquoted mixed-case derived
+  table alias, so its later join referenced a relation that did not exist.
+  Snake-case aliases fix the query; the isolated replay returned all seven
+  expected zero counts. No live database was touched.
+- #195: submitting “API” on Settings Search previously left the current page
+  unchanged. The search now opens the main settings page and focuses the API
+  key. The final Playwright check passed.
+- #197: Plex login returned the ordinary filtered-user response without the
+  fields required by strict clients, including request counts. The route now
+  populates counts and returns the authenticated profile shape; its regression
+  verifies required fields and confirms password/token values remain absent.
+- #198: documentation omitted Issuarr. The relevant docs and README now name
+  Issuarr and retain Mylar3 compatibility guidance and the existing connector.
+- Person-page movie requests are implemented as an administrator-opt-in,
+  bounded 100-ID endpoint and UI action. Requests still use normal per-title
+  permissions, quota, duplicate, and blocklist handling.
+- The Sportarr Port value appeared blank because number inputs were omitted
+  from the shared dark form-control selector. The shared role now styles number
+  inputs; the final desktop/narrow Playwright check entered `1867`, observed a
+  white foreground on a dark input, and passed. Captures are
+  `/tmp/seerrng-sportarr-port-desktop.png` and
+  `/tmp/seerrng-sportarr-port-narrow.png`.
+- Saved per-user destination folders were ignored when new requests did not
+  submit an explicit folder. Radarr and Sonarr creation regressions now confirm
+  the requester's saved destination is used.
+- The partial-request check only rejected episode subsets. The documented
+  setting requires every unavailable season, so creation and edits now compare
+  the selected season set with every eligible unavailable season. Regressions
+  reject one of three seasons and accept all three on both paths. An existing
+  single-episode Episode Queue exception remains bounded to its one starting
+  episode.
+- The screenshot's Carrie email says the request was pending approval. SeerrNG
+  dispatches TV requests to Sonarr only after approval; the adapter and
+  approved-request subscriber tests confirm selected-season monitoring and
+  dispatch. A live Sonarr round trip was not available, so the reporter's
+  post-approval monitoring symptom remains unconfirmed in their environment.
+- The SABnzbd adapter and queue-client fixtures pass. The screenshot's private
+  endpoint and masked credentials were not contacted; whether that connection
+  fails against the user's SABnzbd server remains unknown.
+
+Focused verification on this source: `pnpm test:node` over auth, discovery,
+request, settings, Sonarr, request-status, SABnzbd, and OpenAPI suites passed
+600/600 with no skips. The final `pnpm build` exited 0 after the partial-season
+fix and formatting. `pnpm typecheck` passed. Five production-build Playwright
+specs passed. Changed-file Prettier, `git diff --check`, the 72 UI shared-style
+checks, and all 17 release-note validator tests passed. The PostgreSQL
+regression had separately passed 1/1 on its isolated disposable database.
+These are focused/local receipts; they do not replace the exact-candidate
+hosted engine result.
+
+At this checkpoint the release-note preview, commit/push, GitHub-hosted Mode 2,
+release workflow, publication/signing/assets, announcement, and issue closure
+are still pending. There are no currently open PRs to merge. The latest
+CodeQL, Trivy, and Dependabot baselines had no open findings; GitHub secret
+scanning is disabled, and no secret-scan result is claimed.
+
+### Follow-up audit and Edit Request verification — October 11, 2026
+
+This follow-up is on local `main` at `3df985b134885ee39f48add23e3ea49a27f31e23`,
+one commit ahead of `origin/main` (`88cfb3c2582dc5e12d70bca571269f5a03942f4e`).
+The pre-existing dirty `server/routes/liveTv.test.ts` fixture change remains
+untouched. No branch, stash, worktree, or other agent's files were changed.
+
+The screenshot's Edit Request failure occurs when a pending request response
+omits `request.media`: the action is rendered, but the old modal mount required
+that back-reference. `RequestBlock` now accepts the parent detail identity and
+mounts the edit modal from it. The fix and release fragment are already in the
+published `v3.58.0` tag. A detached pre-fix Vitest reproduction failed because
+the modal was absent; the same regression passes on this source. Matched
+headless Playwright runs against the baseline and fixed revisions used the same
+mocked pending request. At desktop and narrow widths, the baseline stayed at
+one dialog after clicking Edit; the fixed UI opened the second dialog and
+showed “Pending Movie Request”. Automated browser evidence does not record
+John's required human visual acceptance or prove a live provider round trip.
+
+GitHub reports zero open issues and zero open pull requests. Issues #159 and
+#160 are already closed with fix comments linking `v3.52.0`; no duplicate
+comments or closure actions were made. The origin branch audit found no
+unmerged non-PR branch. Historical PR refs include merged/squashed and closed
+unmerged PRs; no open PR requires integration. Sixteen local non-main refs are
+stale recovery or validation snapshots whose feature work is represented in
+newer `main` source/tests; they were assessed and left intact. `gitlab/main` is
+behind `origin/main`; `upstream` and `pr-author` are different repositories,
+not SeerrNG branches. No branch changes were made.
+
+On the exact source state above plus the retained dirty fixture, the requested
+`pnpm validate:development` no-flag command stopped during required
+preparation with `An actual read-only dependency reference is required`. It
+executed zero full-gate suites. Inspection confirms the source's installed
+`node_modules` is writable, and `bin/run-local-validation.mjs` also omits the
+live Docker, Git-history, network-isolation, and reviewed-PR proof callbacks
+required by `createNativeStageContext`; those later prerequisites were not
+reached in this attempt. The separate `pnpm validate:development
+--tests-only` run completed successfully on that source state: Vitest 490/490;
+native TypeScript 3,181 passed and 5 skipped (3,186 total); native JavaScript
+482/482; tooling 874 passed and 6 skipped (880 total). The overall tests-only
+totals are 5,027 passed, 11 skipped, and zero failed. Discovery counts are not
+reported as execution.
+
+The `v3.58.0` to current-HEAD release-note preview contains the later
+person-page request, TLS, destination-folder/season-selection, Sportarr styling,
+and validation documentation changes. No new release was cut because the
+required no-flag gate remains incomplete and human visual acceptance is
+pending. No commit or push was made; the pre-existing local commit and dirty
+fixture remain available for review. This internal ledger entry has no
+user-facing release note (`release-note: none`).
+
+### Native prerequisite proof follow-up — October 11, 2026
+
+The isolated candidate's first no-flag attempt stopped because `node_modules`
+was writable. A second diagnostic ran the same command on `kspls0` inside
+temporary mount and network namespaces: the candidate's app and `gen-docs`
+dependency directories were actual read-only mounts, and the network namespace
+had loopback only with no route. This passed the read-only dependency check and
+completed native tool discovery, but correctly returned incomplete with zero
+full-gate stages executed. Its retained report is
+`/tmp/seerrng-native-validation-BbzMeX`; selected files were 531 Vitest, 0
+TypeScript `node:test`, 58 JavaScript `node:test`, and 78 tooling files. Those
+are discovery counts only.
+
+For this isolated candidate, `gen-docs` dependencies were installed from its
+frozen lockfile, .NET SDK 9.0.318 was installed under the validation scratch
+root, and the existing read-only CodeQL CLI 2.27.1 was added to the diagnostic
+PATH. Preparation then identified two required blockers: no private Docker
+daemon/bind/loopback proof for the disposable Jellyfin fixture, and no complete
+Git history/tag closure proof. The host Docker daemon was not used to run a
+fixture or any test. `bin/run-local-validation.mjs` still passes no Git or
+Docker proof callbacks to `createNativeStageContext`.
+
+The `tools/validation-engine/README.md` marks distributed Mode 3 dormant and
+not an accepted pre-PR gate. No runner code was changed in this follow-up; all
+tool installs and namespace mounts were confined to temporary validation paths
+and ended without altering the main checkout. The no-flag full gate remains
+incomplete, no full suite was executed, and no finalization action is recorded.
+This internal receipt has no user-facing release note (`release-note: none`).
+
+The final no-flag retry after this receipt was synced into the isolated
+candidate stopped earlier in CodeQL preparation with `ENOSPC`. `kspls0`'s
+32-GB `/tmp` tmpfs was 100% full (inode use was 7%). The retained scratch policy
+allows automated deletion only after 48 hours of inactivity and protects live
+or mounted paths; no scratch directory was removed or moved. This exact-source
+attempt produced no native context report and executed zero suites.
+
+### Mode 1 full-gate attempt 21 and browser network isolation — October 12, 2026
+
+Attempt `kspls0-full-20261012-21` sealed candidate commit
+`3df985b134885ee39f48add23e3ea49a27f31e23`, tree
+`56256540cd2bd9f515c731507d1eff194eca6c6c`, and source SHA-256
+`d0efbda9502612447d27f0a5930dc6d2b91c146ad5b744b0958adda920d445a1`. It ran
+on `kspls0` inside the disposable Linux guest. The CodeQL stage evaluated 203
+queries over 2,313 JavaScript/TypeScript files and 28 workflow files and
+produced SARIF. The production build/typecheck, bundle budget, Docusaurus docs
+build, Jellyfin 10.11.11 smoke, and one-chart lint completed successfully.
+Cypress completed 44 specs with 160 passed, 32 pending, and 0 failed; the
+pending tests were the live-authenticated smoke checks without credentials.
+Playwright completed 8/8 tests, including desktop and narrow Edit Request
+regressions. These results do not make attempt 21 a full-gate pass.
+
+The native repository lane failed before admission because engine unit
+`native-repository` did not match the configured proof-parent unit
+`repository-unit`. The same run also showed that the browser lane was not held
+inside the loopback-only lease: the Cypress seed's dummy Plex token `1234`
+caused six read-only watchlist GETs and the Playwright logins caused two device
+GETs to public Plex endpoints; all eight returned 401. No live configuration,
+provider credential, account, or mutable provider operation was used. This is
+recorded as an unintended external test side effect; it is not a live provider
+round-trip result. The retained native result is
+`attempt-21/state/seerrng-native-validation-L04Gde/native-validation-result.json`;
+the stage logs and browser evidence remain under `attempt-21/logs` and
+`attempt-21/state/seerrng-native-validation-L04Gde/browser-fixture` on `kspls0`.
+
+The follow-up closes both runner gaps: Mode 1 maps only the fixed repository
+and browser stage identities to the configured proof-parent lease, and the
+browser stage now runs inside that loopback-only lease. A regression check
+requires both stages to enter and restore isolation. The exact updated source
+must complete a fresh full `pnpm validate:development` run on `kspls0` before
+commit; the integrated tree must complete it again after push. This internal
+validation and evidence update has no user-facing release note
+(`release-note: none`).
+
+### Mode 1 full-gate attempt 22 — October 12, 2026
+
+Attempt `kspls0-full-20261012-22` sealed candidate commit
+`3df985b134885ee39f48add23e3ea49a27f31e23`, tree
+`29a888fac56ba339d661aa0ed811f2a4542a375f`, source SHA-256
+`cabf651b8e08b6c0afc2f6af814cfa553399cc2540dea8befa1c1aecc703cb0a`, and
+lockfile SHA-256
+`a5863631513596eb45e67d31c1e159b1ebf823c80a8a10c36a6e4e47794abe51`. The
+run executed 13/13 units and selected and executed 719 files, but the required
+repository and browser lanes failed. The retained result is
+`attempt-22/state/seerrng-native-validation-VSlDWU/native-validation-result.json`
+on `kspls0`.
+
+The repository lane reported formatting violations in
+`bin/engine-staged-validation.test.mjs`,
+`playwright/request-edit-without-media.spec.ts`,
+`tools/validation-engine/runtime/distributed-linux-host-containment.mjs`, and
+`tools/validation-engine/runtime/staged-validation.mjs`. These four files were
+formatted afterward from a disposable copy with the repository formatter and
+pinned Node 24.21.0 image on `kspls0`; only the formatted outputs were copied
+back. `git diff --check` passed. The attempt itself remains failed and is not
+reclassified by that follow-up. A focused `node bin/run-prettier.mjs --check`
+on the same four-file disposable copy passed.
+
+CodeQL executed 203 queries over 2,313 JavaScript/TypeScript files and 28
+workflow files. Its JavaScript SARIF contains 60 security findings across 31
+files; the Actions SARIF contains 0. None of the 60 finding paths overlap the
+27 changed source paths in this candidate. This is a scan result, not evidence
+that those existing findings are resolved. The production build/typecheck,
+bundle budget (314 chunks, 11.71 MB), Docusaurus docs build, Jellyfin 10.11.11
+smoke, and one-chart Helm lint passed. Lychee reported advisory root-relative
+and unavailable-URL findings under the workflow's non-failing configuration.
+
+Cypress ran 44 specs / 192 tests: 143 passed, 15 failed, 32 pending, and 2
+skipped. Failures were in `discover.cy.ts` (2), `movie-details.cy.ts` (5),
+`providers/tvdb.cy.ts` (1), `settings/discover-customization.cy.ts` (1),
+`tv-details.cy.ts` (4), `user/auto-request-settings.cy.ts` (1), and
+`user/profile.cy.ts` (1). TMDB-dependent page and catalog calls failed at DNS
+with `EAI_AGAIN` inside the intended loopback-only browser lease; no provider
+HTTP round trip occurred. The Plex watchlist tests lacked local title-detail
+responses, the TVDB test attempted an external connection check, and the
+auto-request test attempted to click a disabled permission control. Playwright
+passed 8/8, including the Edit Request regression at desktop and narrow
+widths. Its screenshots are stored with the attempt's browser fixture. The
+app's image-proxy guard rejected Gravatar test URLs before making requests.
+
+The containment ledger recorded loopback leases around both repository and
+browser operations, and the explicit public/private denial probes completed
+with cleanup verified. Because the candidate failed, the proof client refused
+to issue a complete passing restoration receipt; the attempt is not evidence
+of a successful gate or finalized containment lifecycle. The exact failure
+list was raised for maintainer direction before changing unrelated Cypress
+specs. No commit, push, release, issue comment, or issue state change followed
+attempt 22. This internal validation record has no user-facing release note
+(`release-note: none`).
+
+### Mode 1 full-gate attempt 27 — October 12, 2026
+
+Attempt `kspls0-full-20261012-27` ran the unmodified sealed candidate from
+commit `3df985b134885ee39f48add23e3ea49a27f31e23`, tree
+`8ad451de530c3ac22140fe435aa7b7142b116c4f`, source SHA-256
+`c174e1fa26fbb2ed7e455f8407a6e085ba21354ff072d85697849d4a3f8ce750`, and
+lockfile SHA-256
+`a5863631513596eb45e67d31c1e159b1ebf823c80a8a10c36a6e4e47794abe51` on
+`kspls0`. The no-flag `pnpm validate:development` command executed 13/13 units
+and selected and executed 719/719 files. The full gate failed; this attempt is
+not a passing result.
+
+The native Node TAP reader rejected parent `type: 'test'` results that contain
+nested tests. The retained Node 24.21.0 report contains 890 `type: 'test'`
+rows, 14 `type: 'suite'` rows, and matching summary totals of 890 tests and 14
+suites. Node counts a parent test and each nested test as separate test rows.
+The reader's blanket rejection prevented its case ledger from closing against
+the reporter summary. A regression now generates real TAP with a nested Node
+test and checks the parent and child roles and summary counts. The parser now
+counts every `type: 'test'` row independently and verifies `# tests`, `# pass`,
+`# fail`, and `# skipped` against those rows; suites remain counted separately.
+
+The proof-parent fixture configured a 60,000 ms maximum loopback lease. The
+attempt recorded lease intervals of 950.9 seconds and 405.9 seconds, so both
+exceeded that bound and no complete restoration receipt was issued. The next
+candidate uses a 1,800,000 ms lease maximum, within the proof parent's one-hour
+hard limit. The loopback-only repository/browser policy and denied public
+egress probes remain enabled. The next full run must show successful lease
+restoration and a complete proof receipt before the gate can pass.
+
+The attempt's builds, type checks, CodeQL stage, bundle budget, documentation
+build, Jellyfin plugin smoke, Helm lint, Cypress run, and Playwright run
+completed. Cypress reported 44 specs / 192 tests: 160 passed, 32 pending, and
+0 failed or skipped. Playwright passed 8/8 tests, including desktop and narrow
+Edit Request cases. The native Node run reported 890 tests: 868 passed, 16
+failed, and 6 skipped; the parent accounting rejection made native repository
+case closure fail. The helper image also lacked `ssh-keygen`, `sqlite3`, and
+`zip`, which caused tooling cases to fail before execution. A new helper image
+adds those tools; the old image and all attempt-27 evidence remain preserved.
+
+### Mode 1 full-gate attempt 28 preparation — October 12, 2026
+
+The Node 24.21.0 helper image was rebuilt under the new tag
+`seerrng-validation-helper:node24-20261012-r28` from the pinned base image and
+a retained Dockerfile that adds `ssh-keygen`, `sqlite3`, and `zip`. On `kspls0`
+with networking disabled, the real nested-TAP regression passed 1/1 and the
+complete `bin/engine-native-accounting.test.mjs` file passed 12/12. The first
+focused regression attempt exposed Node's inherited `NODE_TEST_CONTEXT` marker;
+the test now removes that marker before starting the child reporter. The test
+was expanded to check a failing child, its failing parent, and a passing child;
+the expanded regression and full file both passed.
+
+Attempt 28 uses an independent `candidate-r28` copy and all current tracked
+and untracked worktree paths. Its private Docker daemon is separate from the
+outer guest daemon, uses only a Unix socket, and has the pinned Caddy fixture
+preloaded before validation. The generated proof configuration retains
+`baseline-public` with loopback-only access during repository/browser stages,
+14 IPv4 and 4 IPv6 denied CIDRs, and a 1,800,000 ms lease ceiling. The first
+daemon start lacked its state socket directory; creating the directory let
+the retained daemon start. The first snapshot generation also hit `EACCES`
+because root ran without `CAP_DAC_OVERRIDE` against a UID-1000-owned state
+mount. Only attempt-28 config/state/log directories were given root ownership,
+after which snapshot generation succeeded. A focused-test container completed
+with exit 0 before its log wrapper hit a host-directory permission error; its
+output was recovered through Docker logs and is retained with the attempt.
+
+The exact corrected source, generated 1,800,000 ms lease config, and renewed
+containment evidence still require a new complete no-flag gate on `kspls0`.
+This internal validation record has no user-facing release note
+(`release-note: none`).
+
+### Mode 1 full-gate attempt 28 preflight and bridge correction — October 12, 2026
+
+The first attempt-28 proof-parent launch failed during preflight before the
+validation engine started. The helper network namespace already contained the
+private nested Docker bridge as `docker0` with the configured
+`198.51.100.0/29` address and connected route. `verify_bridge_not_overlapping`
+treated those expected resources as an overlap with the helper network and
+stopped with `Private Docker bridge overlaps a helper address`; no native
+validation result or application-suite result was produced by that launch.
+
+The proof parent now permits exactly the configured bridge interface when its
+network and gateway match the configured bridge CIDR, and exactly one matching
+connected route. It still rejects any other overlapping interface or route,
+rejects an unexpected bridge address or subnet, and requires both the expected
+interface and route to exist. Regression cases exercise each of those paths.
+
+On `kspls0`, the complete focused
+`bin/engine-distributed-linux-proof-parent.test.py` suite passed 15/15. This is
+focused unit evidence for the bridge fix only; it is not a full-gate result.
+The test ran from an isolated scratch copy under
+`/home/keith/.cache/seerrng-validation-20261012-r29-focused`; the application
+checkout and existing containers were not used as test fixtures.
+
+A fresh exact-source snapshot and complete no-flag `pnpm validate:development`
+run are still required. This internal validation record has no user-facing
+release note (`release-note: none`).
+
+### Mode 1 attempt 30 platform preflight — October 12, 2026, 14:00 UTC
+
+The r30 source snapshot includes all 35 current-checkout dirty paths, with
+candidate source SHA-256
+`b802e232958ccd73cd6fb8d84ed839ba03f6057f7b1c04aeaf69dd0bfadc631f` and
+lockfile SHA-256
+`a5863631513596eb45e67d31c1e159b1ebf823c80a8a10c36a6e4e47794abe51`.
+Prerequisite verification passed and the focused
+`bin/engine-distributed-linux-proof-parent.test.py` suite passed 16/16 on
+`kspls0`. This was focused verification, not the full development gate.
+
+The pinned nested Docker daemon is version 29.8.2. The kspls0 kernel is
+`7.2.4-arch1-2`; neither `/lib/modules/7.2.4-arch1-2` nor
+`/usr/lib/modules/7.2.4-arch1-2` exists, and
+`modprobe -n br_netfilter` reports that the module is unavailable. The daemon
+therefore cannot initialize the exact private bridge required by the gate.
+The gate also requires `--userland-proxy=false`; the diagnostic daemon using
+`--userland-proxy=true` was Unix-socket-only, had no TCP listener, ran no app
+tests, and was stopped with its logs and volumes retained.
+
+Moby documents `DOCKER_IGNORE_BR_NETFILTER_ERROR=1` as an override for hosts
+without `br_netfilter`, with reduced bridge-network behavior. That override is
+not part of the sealed validation manifest and was not used. No repository
+containment assertion was relaxed. The full `pnpm validate:development` gate
+was not started because the pinned bridge containment prerequisite cannot be
+proven on this kernel. No commit, push, release, or issue mutation followed.
+
+The refreshed `origin` remote has 17 named branches, all ancestors of
+`origin/main`. Its additional `refs/pull/*` refs are historical pull-request
+snapshots, not branch heads to merge. Local release-integration refs retain
+older copies of work represented by later commits on `main`; recovery and
+validation-snapshot refs remain preserved. Other pre-existing worktrees contain
+staged and unstaged changes; they remain untouched and are not represented by
+the 35-path r30 source snapshot. This internal validation record has no
+user-facing release note (`release-note: none`).
+
+The local-only `main` commit `3df985b134885ee39f48add23e3ea49a27f31e23`
+changes user-facing comic backend and setup documentation. Added the required
+upcoming release fragment `release-notes/2026-10-11-issuarr-comic-setup.md`.
+The final release-note preview remains pending until the complete integrated
+candidate is assembled.
+
+Read-only GitHub checks at 2026-10-12 14:00 UTC returned no open issues and no
+open pull requests. Issues #159 and #160 are already closed and each has a
+maintainer comment linking its fix to v3.52.0. The latest published repository
+release is v3.58.0 (October 9, 2026); no duplicate issue comments, closures,
+or release were made while the required validation prerequisite is
+unavailable.
+
+### Security and Mode 1 source review — October 12, 2026, 15:34 UTC
+
+Fresh read-only GitHub API checks returned zero open issues, pull requests,
+CodeQL alerts, Dependabot alerts, and secret-scanning alerts. The 13 currently
+listed GitHub branch heads are already ancestors of `origin/main`; no branch
+protection changes were made. The latest published release remains v3.58.0.
+
+The newest CodeQL JavaScript and Actions SARIF analyses are from October 11 at
+commit `e5de8feec8e0f6470b3311f41939210b8debed57`, earlier than the current
+`origin/main` commit `88cfb3c2582dc5e12d70bca571269f5a03942f4e`. The JavaScript
+SARIF contains 60 findings and the Actions SARIF contains 0; all alert objects
+are dismissed (112 false positives, 1 mitigated, 11 used in tests, and 42
+won't fix). Latest Trivy SARIF for both published image architectures on
+`origin/main` contains 0 results. None of this is a CodeQL scan of the current
+dirty candidate.
+
+Two dismissed high Dependabot advisories remain in `gen-docs/pnpm-lock.yaml`:
+`braces@3.0.3` (#285, also present in the root development lockfile) and
+`http-cache-semantics@4.2.0` (#286). GitHub marks both `tolerable_risk`. The
+advisories still list no patched version. The braces upstream security PR #72
+is closed unmerged; the http-cache-semantics report is closed as not planned.
+The existing dependency follow-up prohibits unpublished pins and unreviewed
+forks, so neither dependency was changed. These are recorded as unresolved
+development/build-tooling risks, not fixed findings.
+
+Static review of the 36-path working candidate found two defects in the new
+Mode 1 validation path. Its Git helper checked the configured GitHub origin but
+did not check Git's effective URL after repository-local `insteadOf` rewrites;
+it now checks the resolved origin and has a regression for local redirection.
+The proof parent also injected the Mode 1 request hash into every child, which
+would make ordinary Mode 3 runs require a nonexistent Mode 1 request; injection
+is now conditional, and the tests cover both modes. Both changes are unrun and
+remain subject to the exact-candidate focused and full gates.
+
+The full `pnpm validate:development` gate has not been rerun after these edits.
+Attempt 30 remains blocked before the gate by the `kspls0` kernel's missing
+`br_netfilter` module. Current LAN MCP controls report
+`allow_write=false`, `allow_packages=false`, `allow_filesystem=false`, and
+`allow_reversible=false`; no host files, packages, containers, or units were
+changed. The current Node runtime is 22.23.3 while the repository requires
+Node 24.15 or newer in the 24.x line, so the release-note preview is also
+pending. No commit, push, release, issue comment, or issue state change was
+made. This internal follow-up has `release-note: none`.
+
+A read-only worktree inventory found 36 dirty paths in the root candidate and
+additional uncommitted changes in sibling worktrees, including older
+integration snapshots with up to 106 dirty paths. Several registered worktree
+paths are unavailable. None of those worktrees was edited, staged, stashed,
+or cleaned. Their uncommitted contents are not included in the r30 snapshot or
+in the root candidate's evidence; they remain pending separate ownership,
+source, and validation review before any all-worktree integration claim.
+
+### GitHub security and candidate follow-up — October 12, 2026, 15:47 UTC
+
+The current GitHub API still reports zero open issues, pull requests, CodeQL
+alerts, Dependabot alerts, and secret-scanning alerts. Repository settings
+confirm secret scanning and push protection are enabled. There are 166
+dismissed historical CodeQL alerts; none is open. The latest CodeQL analyses
+are on `e5de8feec8e0f6470b3311f41939210b8debed57`. Its source tree is identical
+to `origin/main` `88cfb3c2582dc5e12d70bca571269f5a03942f4e`; the newer main
+commit is empty. The CI run for `88cf` succeeded, with CodeQL and browser suites
+skipped by the selected validation inventory. The dirty candidate changes
+validation-engine source, so it still needs a fresh exact-candidate CodeQL and
+browser run through the required gate. Latest Trivy analyses of both published
+architectures on `88cf` have zero results.
+
+Two dismissed high Dependabot advisories remain: `braces@3.0.3` and
+`http-cache-semantics@4.2.0`, both confined to development/documentation tools
+per the dependency follow-up above. Current GitHub Advisory Database pages
+still list no patched release for either. The braces report remains disputed
+by its maintainer, and the http-cache-semantics maintainer closed its report as
+not planned. No local fork or unpublished override was added under the
+existing repository policy.
+
+GitHub lists 13 remote branches; each is strictly behind `origin/main` with
+zero unique commits. The branch-protection endpoint confirms `main` is not
+protected. Local release/recovery snapshots and sibling dirty worktrees remain
+preserved; they were not staged, changed, or copied into this candidate.
+
+The root candidate remains at `3df985b134885ee39f48add23e3ea49a27f31e23`, one
+commit ahead of `origin/main`, with 36 dirty paths and nothing staged. The
+current LAN control policy still has writes, package installation, and
+filesystem access disabled. The latest `kspls0` snapshot call returned a
+transport error, and the previously recorded missing `br_netfilter` module
+still blocks the required private-bridge prerequisite. No tests or builds were
+run from this checkout. The full gate, release-note preview, commit, push,
+release, and any issue mutations remain pending. This internal follow-up has
+`release-note: none`.
+
+### Issue #199 and validation-security integration — October 12, 2026
+
+The refreshed GitHub remote has `main` at `da92ba75ff252213d86d3f4a5850af5c29f49b58`, PR #203 at `4045490671b72985b3111d312d29e5595ff539db`, and PR #202 at `b08243c3d0e4fd077c1ce9095a2ccba28de7622f`. The local #203 candidate is `a3c114fa1ab1673b8d73c3839d788afa46efd460`, which already merges the earlier #202 commit `8b23dfd857af7191f9674629e0229dc49eaa9d79`. The latest #202 tip descends from that commit and has been merged into the working candidate without removing the #199 change; the final merge and working-tree fixes are not committed yet. No changes were made to `main` or its branch-protection settings.
+
+The verified issue #199 reproduction remains: on baseline `da92ba75`, the new route regression test returns `404` instead of the expected `204`; on the candidate, the stale `AVAILABLE` status clears after a fresh inventory check and a new request is accepted. The edit-request no-media regression also failed for both movie and book on pre-fix commit `7cfac9071bbd30ce3ac2c947309649148117c769`; the current focused unit coverage passes. Its Playwright desktop/narrow run and visual review remain pending.
+
+Security review of the new disposable validation workspace found that root `.env` files were filtered but nested `.env.local` files were copied into the snapshot. A regression test reproduced that leak before the fix. The path filter now excludes nested environment files while retaining `.env.example`; the isolation test file passes 3/3 with zero skips, including dependency-root containment and loopback/network canaries. The issue/UI/API focused Vitest run passes 77/77 tests. Changed-file Prettier checks and `node bin/check-i18n.js` pass. The whole-tree formatter has not passed on this workstation because it cannot read an unrelated ignored path under `.bookshelf-migration-lab`; the clean-checkout formatting gate remains pending.
+
+GitHub currently reports zero open Dependabot, Code Scanning, and secret-scanning alerts. Direct records show alerts #285 and #287 (`braces`) and #286 (`http-cache-semantics`) fixed; the advisories still list no upstream patched release, and the affected packages are absent from the lockfiles. A filtered dismissed-alert listing still returns #285 while its individual record reports fixed with no dismissal metadata; it is treated as a stale list result. The disposable `kspls0` root/docs installs and audits succeeded with Node 24.20.0 and pnpm 10.24.0, reporting zero vulnerabilities.
+
+The earlier `pnpm validate:development --tests-only` process was stopped after it had run against the earlier `a3c114fa` candidate and PR #202 advanced. It had reached Native TypeScript case 790 without a reported test failure, but it did not complete and is not a passing gate. Complete hosted Mode 2 validation of the final integrated commit, full format/i18n gates, build, Playwright, Cypress, and final visual review remain pending. The active GitHub work is issue #199 and PRs #202/#203; no release or issue state change has been made. At the last remote branch audit, all 27 confirmed stale remote refs had been archived and deleted, leaving only `main` and the two open PR branches. This evidence update is internal-only (`release-note: none`).
+
+## Navigation regrouping PR #253 forward integration — October 13, 2026
+
+PR #253 source head `8d57ee38ce3dd8924fbab8070485882cbead801b` was based on
+`e284420ee3683dd4ba3bfa2facc241c84cdba41e`. Current `main` is
+`868e156d7e40cd676a3c7ca908d0091fd94566e1`, which adds the merged request and
+scanner recovery work from PR #214. Recovery refs were retained for both the
+original PR head and current `main`. Integration used an isolated worktree at
+`/tmp/seerrng-nav-integration-20261013`.
+
+The three-way inventory found shared edits only in
+`src/styles/globals.css` and `docs/maintainers/ui-style-standard.md`. Both
+merged automatically; review confirmed the navigation owners were retained
+alongside current-main request/layout changes. The other main-side request,
+scanner, and entity changes were preserved. The style-standard navigation
+entry was also renumbered to keep its ordered list unique. Integration commit:
+`af5c75380`, `merge: integrate current main into navigation regrouping`.
+
+Before integration, exact head `8d57ee3` completed Mode 2 with a Cypress shard
+failure and a failed native-engine result. Cypress reported 19 of 20 tests
+passing in that shard; `user/auto-request-settings.cy.ts` could not click a
+disabled `#autorequest` checkbox. The spec is unchanged from current `main`.
+The full Cypress matrix passed on the current-main PR #214 run
+`38409023729`, so this failure's cause is not established. The merged candidate
+requires a fresh exact-head Mode 2 run; the earlier failure is not waived.
+
+The original candidate's focused Vitest (18), current-batch contract (41),
+ESLint, client typecheck, current-batch/style check, and release-note preview
+passed. Those focused results do not cover the integrated tree. No local visual
+inspection was performed and no host screenshots were taken. The fresh Mode 2
+plan, Cypress/Playwright, build and native receipt reconciliation remain
+required on the integrated head. The user-facing navigation note remains
+`release-notes/20261013-navigation-regrouping.md`.

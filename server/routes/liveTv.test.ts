@@ -139,6 +139,7 @@ describe('Live TV recording requests', () => {
       deckPort: fake.port,
       tunerPort: fake.port,
       guideUrl: '',
+      sportarrBaseUrl: '',
       username: 'deck',
       password: 'deck-secret',
       guideHours: 24,

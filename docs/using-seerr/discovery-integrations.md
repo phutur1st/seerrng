@@ -148,7 +148,7 @@ private match.
 releases, comic issues, magazine issues, and requested PC games or emulation
 titles. Movies, series, music, and books come from configured Radarr, Sonarr,
 Lidarr, and Readarr-compatible Bookshelf services. Comic issues use dates from
-Mylar3 or Kapowarr. BackIssue does not currently provide release-calendar
+Mylar3, Issuarr, or Kapowarr. BackIssue does not currently provide release-calendar
 issue entries; magazine issues use dates from LazyLibrarian. Issues without an
 exact day are omitted. Software release dates use the configured QuestarrNG
 or ROMarrNG catalog's exact IGDB date for the requested PC operating system or
@@ -173,7 +173,7 @@ backend reads are bounded and briefly cached; narrow the month or media type
 when the result limit is reached.
 
 SeerrNG checks monitored Radarr, Sonarr, Lidarr, Readarr-compatible Bookshelf,
-Mylar3, Kapowarr, and LazyLibrarian releases daily and records date changes
+Mylar3/Issuarr, Kapowarr, and LazyLibrarian releases daily and records date changes
 after the first snapshot. Calendar entries can show the three most recent
 changes from the last 180 days, including the old and new dates or air times.
 The history uses the same **My requests** or shared-calendar visibility as the

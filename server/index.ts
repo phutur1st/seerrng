@@ -71,7 +71,11 @@ import {
   drainForShutdown,
 } from '@server/utils/gracefulShutdown';
 import { getHttpErrorDetails } from '@server/utils/httpError';
-import { configureHttpServer, parseListenPort } from '@server/utils/httpServer';
+import {
+  configureHttpServer,
+  parseListenPort,
+  startLoopbackHttpServer,
+} from '@server/utils/httpServer';
 import restartFlag from '@server/utils/restartFlag';
 import { getRateLimitKey } from '@server/utils/security';
 import { getSessionTransportOptions } from '@server/utils/sessionCookie';
@@ -519,9 +523,23 @@ Promise.resolve()
             https.createServer(tlsConfiguration.httpsOptions, server)
           )
         : undefined;
-      const listeners = secureListener
-        ? [listener, secureListener]
-        : [listener];
+      // Built-in TLS reserves the public HTTP listener for redirects/upgrades.
+      // Next's server-side page loaders still need the Express API, so make
+      // that handler available to this process on loopback only.
+      const internalApiListener =
+        tlsConfiguration.mode === 'disabled'
+          ? undefined
+          : await startLoopbackHttpServer(server);
+      if (internalApiListener) {
+        process.env.SEERR_INTERNAL_API_PORT = String(internalApiListener.port);
+      } else {
+        delete process.env.SEERR_INTERNAL_API_PORT;
+      }
+      const listeners = [
+        listener,
+        ...(internalApiListener ? [internalApiListener.server] : []),
+        ...(secureListener ? [secureListener] : []),
+      ];
 
       const listen = (
         target: typeof listener,

@@ -39,7 +39,7 @@ import { mapWithConcurrency } from '@server/utils/concurrency';
 import { getHostname } from '@server/utils/getHostname';
 import { getHttpErrorDetails } from '@server/utils/httpError';
 import { parsePositiveRouteId } from '@server/utils/routeId';
-import { isUnsafeLocalAddress } from '@server/utils/security';
+import { isSafePlayerConnectionUri } from '@server/utils/security';
 import { Router } from 'express';
 import { In } from 'typeorm';
 
@@ -50,25 +50,6 @@ const CURRENT_SELECTION_PLAYLIST_NAME = 'SeerrNG - Current Selection';
 interface PlexPlaybackTarget extends PlaybackDevice {
   connectionUri: string;
 }
-
-// Player devices are legitimately reported on the LAN (private-address
-// ranges are expected and allowed), but a device can never legitimately be
-// the SeerrNG host itself or a cloud metadata endpoint. Since command
-// routing to these devices intentionally bypasses the app's normal
-// private-address SSRF guard (it must be able to reach real LAN players),
-// this is the one thing still worth refusing before a connectionUri is ever
-// stored as a selectable playback target or dereferenced.
-const isSafePlaybackConnectionUri = (uri: string): boolean => {
-  try {
-    const parsed = new URL(uri);
-    return (
-      ['http:', 'https:'].includes(parsed.protocol) &&
-      !isUnsafeLocalAddress(parsed.hostname)
-    );
-  } catch {
-    return false;
-  }
-};
 
 const getPlexPlaybackTargets = async (
   plexToken: string
@@ -100,7 +81,7 @@ const getPlexPlaybackTargets = async (
         device.presence === true &&
         device.provides.includes('player') &&
         connection &&
-        isSafePlaybackConnectionUri(connection.uri)
+        isSafePlayerConnectionUri(connection.uri)
       ) {
         targets.set(device.clientIdentifier, {
           id: device.clientIdentifier,
@@ -119,7 +100,7 @@ const getPlexPlaybackTargets = async (
   // supplies those LAN players while they are reachable.
   if (clientResult.status === 'fulfilled') {
     for (const client of clientResult.value) {
-      if (!isSafePlaybackConnectionUri(client.connectionUri)) {
+      if (!isSafePlayerConnectionUri(client.connectionUri)) {
         continue;
       }
       targets.set(client.clientIdentifier, {

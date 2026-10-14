@@ -85,6 +85,22 @@ export type BulkMediaRequestResponse = {
   failed: BulkMediaRequestResult[];
 };
 
+export type PersonMovieBulkRequestBody = {
+  movieIds: number[];
+};
+
+export type PersonMovieBulkRequestResult = {
+  movieId: number;
+  reason: string;
+};
+
+export type PersonMovieBulkRequestResponse = {
+  created: number[];
+  skipped: PersonMovieBulkRequestResult[];
+  failed: PersonMovieBulkRequestResult[];
+  stoppedReason?: string;
+};
+
 export interface RequestStatusResultsResponse extends PaginatedResponse {
   results: {
     request: NonFunctionProperties<MediaRequest>;

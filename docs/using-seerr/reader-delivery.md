@@ -139,8 +139,8 @@ signed-in user. For files served from the manager's storage, open
 **Settings > General > Download Copies** and add a library path mapping for
 each relevant service. Map the path reported by the manager to the read-only
 path mounted inside SeerrNG. Use narrow roots so only the intended library is
-available. Mylar3 comic issues are streamed through its API and do not use a
-local path mapping.
+available. Mylar3 and Issuarr comic issues are streamed through their API and
+do not use a local path mapping.
 
 If a download action is missing, open **Request Status** and confirm that the
 request belongs to the signed-in user and is available. Check that the manager

@@ -3,7 +3,10 @@ import Header from '@app/components/Common/Header';
 import ListView from '@app/components/Common/ListView';
 import PageTitle from '@app/components/Common/PageTitle';
 import type { FilterOptions } from '@app/components/Discover/constants';
-import { prepareFilterValues } from '@app/components/Discover/constants';
+import {
+  prepareFilterValues,
+  withDefaultTmdbRatingMinimumVotes,
+} from '@app/components/Discover/constants';
 import MediaDiscoveryControls from '@app/components/Discover/MediaDiscoveryControls';
 import { studios } from '@app/components/Discover/StudioSlider';
 import useDiscover from '@app/hooks/useDiscover';
@@ -39,11 +42,11 @@ const DiscoverMovies = ({
 }: DiscoverMoviesProps = {}) => {
   const intl = useIntl();
   const router = useRouter();
-  const preparedFilters = {
+  const preparedFilters = withDefaultTmdbRatingMinimumVotes({
     ...initialFilters,
     ...prepareFilterValues(router.query),
     ...(studio ? { studio: studio.id.toString() } : {}),
-  };
+  });
   const discover = useDiscover<MovieResult, unknown, FilterOptions>(
     '/api/v1/discover/movies',
     preparedFilters,

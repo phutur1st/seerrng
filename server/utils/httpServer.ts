@@ -1,4 +1,4 @@
-import type { Server } from 'http';
+import http, { type RequestListener, type Server } from 'http';
 
 const DEFAULT_LISTEN_PORT = 5055;
 const MAX_LISTEN_PORT = 65_535;
@@ -46,4 +46,33 @@ export const configureHttpServer = <ServerType extends Server>(
   server.maxRequestsPerSocket = HTTP_SERVER_LIMITS.maxRequestsPerSocket;
 
   return server;
+};
+
+export const startLoopbackHttpServer = async (
+  requestListener: RequestListener
+): Promise<{ server: Server; port: number }> => {
+  const server = configureHttpServer(http.createServer(requestListener));
+
+  await new Promise<void>((resolve, reject) => {
+    const onListening = () => {
+      server.off('error', onError);
+      resolve();
+    };
+    const onError = (error: Error) => {
+      server.off('listening', onListening);
+      reject(error);
+    };
+
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(0, '127.0.0.1');
+  });
+
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    server.close();
+    throw new Error('Internal HTTP listener did not bind to a TCP port.');
+  }
+
+  return { server, port: address.port };
 };

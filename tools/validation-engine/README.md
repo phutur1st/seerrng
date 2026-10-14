@@ -16,14 +16,37 @@ that plan.
 - **Mode 2 — GitHub-hosted orchestration:** active. The internal `--github-*`
   bindings plan, distribute, and reconcile the repository's native GitHub jobs.
 - **Mode 3 — distributed developer fleet:** code and regression coverage are
-  present, but production operation is dormant. Do not install, start, or connect
-  Mode 3 to package scripts, hooks, workflows, or application runtime without
-  explicit maintainer authorization. Its focused tests may use disposable roots
-  and loopback services without activating a production cluster.
+  present, but production operation is dormant. The package entry rejects all
+  distributed-mode flags, and network-facing or test-execution modes are also
+  disabled in the direct Node entry. Focused tests may use disposable roots and
+  loopback services without activating a production cluster. Do not install,
+  start, or connect Mode 3 to hooks, workflows, or application runtime without
+  explicit maintainer authorization.
 
 Mode 3 is not currently an accepted finalization path. Its implementation and
 documentation must be reconciled with the deferred design decisions identified
 below before activation.
+
+### Proof-parent security restriction
+
+The shared-UID proof-parent helper is blocked for both local and distributed
+execution. It runs repository code as UID 0 alongside privileged control
+sockets and infrastructure logs. Dropping Linux capabilities does not prevent
+that code from accessing another process's sockets and files under the same UID.
+The concrete host adapter refuses infrastructure startup, the Python helper
+refuses execution before privileged operations, and the internal Mode 1 request
+entry rejects this topology before reading the requested files.
+
+Use complete GitHub-hosted Mode 2 validation while this restriction is in place.
+Mode 1 cannot use this proof-parent path to satisfy its required containment gate;
+a blocked run is incomplete. Plans and pure protocol regression fixtures remain
+available, and their results do not prove production containment. Restoring this
+helper requires separate OS identities for repository processes, inaccessible
+proof and Docker control sockets, and infrastructure evidence protected from
+repository writes. Environment flags and capability dropping alone are insufficient.
+
+Retained network-lease evidence contains only token digests. Raw bearer tokens
+are excluded and rejected during evidence reconciliation.
 
 ## Developer commands
 
@@ -45,6 +68,42 @@ pnpm validate:development
 - `--tests-only` executes the local repository-test plan through its native
   runners. It does not claim CodeQL, production-build, Cypress, Playwright,
   hosted-job, or pull-request metadata coverage.
+- Test subprocesses run from a disposable source copy inside Linux bubblewrap.
+  The workspace and scratch outputs are the only writable host mounts; installed
+  dependencies remain read-only while preserving package resolution. Dependency
+  roots must be real directories within the candidate checkout; escaping
+  symlinks fail closed. The invoking user's home,
+  temporary files, common service sockets, `/opt`, `/srv`, and the network namespace are
+  isolated, with loopback available for tests that start local
+  servers. The system root remains read-only for runtime tools; keep sensitive
+  data out of other host paths and use a disposable guest for highly untrusted
+  source. The child environment is allowlisted and receives private
+  config/cache paths.
+  This mode fails before starting tests when bubblewrap or the required Linux
+  namespaces are unavailable; use hosted GitHub validation on other platforms.
+- The in-repository CLI imports repository-owned JavaScript before it can start
+  that subprocess boundary. For an unreviewed candidate, first copy
+  `tools/validation-engine/trusted-test-launcher.mjs` from a reviewed revision
+  to a location outside the checkout, then invoke that trusted copy with the
+  candidate path, for example:
+
+  ```sh
+  install -D -m 700 tools/validation-engine/trusted-test-launcher.mjs \
+    "$HOME/.local/lib/seerrng/trusted-test-launcher.mjs"
+  TMPDIR=/dev/shm node "$HOME/.local/lib/seerrng/trusted-test-launcher.mjs" \
+    /path/to/candidate
+  ```
+
+  The external launcher snapshots tracked and non-ignored candidate files,
+  excludes local configuration and credential files while retaining only the
+  exact checked-in TypeScript compiler manifests needed by the test runners,
+  and enters bubblewrap before loading candidate JavaScript. Its dependency
+  roots must be real directories inside the candidate checkout and are mounted
+  read-only at their original workspace paths. It fails closed when bubblewrap
+  isolation is unavailable. Its internal `--inside-sandbox` mode requires a
+  token bound to a marker file mounted by the trusted launcher. A candidate-owned
+  validator can still misreport its own test results, so this boundary protects
+  the host; it does not replace reviewing the validator itself.
 - With no mode flag, the engine admits the complete local staged gate. It runs
   only when the required source, dependency, toolchain, fixture, network, and
   browser-isolation boundaries can be proved. Otherwise it stops incomplete and
@@ -53,29 +112,54 @@ There is no public worker-count option. Internal host overrides exist only for
 reviewed engine integration and tests; ordinary baselines must use automatic
 capacity selection.
 
+Validation progress is written to stderr when each native step starts and
+finishes, with a once-per-minute heartbeat during long steps. The summary
+counts cases from completed native steps and names the active step separately;
+it does not estimate cases still running. GitHub Actions shows these updates
+in the live step log. Its rendered job summary is uploaded after the step
+finishes, as described in the [workflow commands documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#adding-a-job-summary).
+
+For an isolated Mode 1 run, the proof parent may invoke this same no-flag
+entrypoint with an internal `seerrng-mode1-local-run-request/v1` request. The
+request path and SHA-256, run ID, source root, state/log roots, containment
+manifest, proof-parent config and readiness file are bound by the run. It also
+binds the public CodeQL model pack and the exact Playwright browser and Cypress
+cache paths. Those tool caches must be actual read-only mounts; their complete
+content closures are sealed and rechecked at each primary native stage boundary
+and after the full gate. Frozen source snapshots are checked around individual
+commands. The
+request is not a second runner or a public command-line mode, and it cannot
+select tests, replace commands, or reuse prior results.
+
+The contained proof process supplies only fixed network, disposable Docker
+fixture, and complete Git-history callbacks. Repository and browser suites run
+inside the loopback-only lease, which denies public and private provider probes
+for the duration of each suite and restores the baseline before evidence is
+accepted. A no-flag run still executes the existing four-stage gate. Use a
+disposable Linux guest when nested Docker requires a privileged daemon; the
+physical host's Docker socket, application data, accounts, queues, databases,
+and provider credentials must stay outside the guest. Public provider access
+is limited to the documented probes. This internal contract does not make
+Mode 3 active or authorize running the tests against live configuration.
+
 The `--github-*` modes shown by `--help` are internal GitHub Actions bindings,
 not manual replacements for the local commands.
 
-### Dormant Mode 3 reference command
+### Mode 3 security boundary
 
-The current dormant implementation exposes this explicit command for focused
-Mode 3 development only; it is not a normal developer command or an accepted
-pre-PR gate:
+The CLI disables Mode 3 enrollment, listeners, dependency reporting, and
+distributed test execution before reading active configuration paths or opening
+sockets. Listener invocations exit successfully without binding, so an older
+installer-owned service does not enter a restart loop. Other disabled
+operations fail with an explicit message. Controller-local configuration
+listings and dependency plans remain available, but `pnpm validate:development`
+rejects all distributed modes. The enrollment transport itself defaults to
+disabled; its explicit loopback override exists only for focused tests.
 
-```text
-pnpm validate:development --distributed-run --active-config-marker ABSOLUTE_FILE --state-root ABSOLUTE_DIR --log-root ABSOLUTE_DIR --application ENTRY_ID [--json]
-```
-
-The current command attempts to own candidate freezing, host preparation,
-Docker containment, staged execution, reconciliation, timing persistence,
-cleanup proof, and the success-last marker. It requires an exact clean branch
-published through authenticated Git, existing marker/state/log paths, the
-machine-owned host profile described below, and at least one configured remote
-node already serving the exact candidate. Dependency injection and callback
-seams in focused tests are not alternate launchers or authorities. No external
-host-side launcher or wrapper may rediscover tests, choose substitute commands,
-alter planned dependencies, reinterpret results, or decide that an incomplete
-run passed.
+Do not start a previously installed Mode 3 service from an older checkout. Stop
+and disable such a service before replacing its executable. Mode 3 can return
+only after it has authenticated and encrypted enrollment with per-node
+credentials and its deferred design decisions below have been reconciled.
 
 ## Distributed developer-fleet mode (dormant)
 
@@ -113,12 +197,12 @@ local pre-PR gate.
 ### Linux setup and configuration
 
 `tools/validation-engine/setup/install-distributed-test-engine.sh` is the
-menu-driven Linux setup program. It installs or configures a controller or
-node, manages supported applications, and plans application dependencies. An
-installation offers to continue directly into configuration. Controller
-automatic startup uses a managed systemd service; node automatic startup stays
-disabled until explicit application-root provisioning is complete, so the
-current node service is started manually with its bound application root.
+menu-driven Linux setup program retained for focused tests and local
+configuration work. It cannot enable Mode 3 networking: automatic controller
+startup is rejected, and CLI listener commands return without binding. An
+older controller service must be stopped and disabled before replacing its
+executable. Node startup remains disabled pending authenticated enrollment and
+explicit application-root provisioning.
 
 Human-edited Mode 3 fleet configuration uses readable `.cfg` text:
 
@@ -131,12 +215,12 @@ Human-edited Mode 3 fleet configuration uses readable `.cfg` text:
 - Each node has one `test-suite-multi-computer-node-##.cfg`. It records the
   controller address, that node's descriptive name, address, detected CPU and
   available threads, selected applications, and verified dependency versions.
-- The current dormant implementation stores a shared cluster key as the final
-  setting in each enrolled configuration. First contact intentionally trusts the
-  private LAN: the operator supplies the controller address and selected node
-  number, and the controller returns the same cluster key only after accepting
-  the enrollment. Reusing an occupied node number requires an explicit overwrite
-  choice. The key is provisional and must be removed before Mode 3 activation.
+- The dormant prototype stores one shared cluster key in enrolled
+  configurations and formerly returned it over unauthenticated HTTP after a
+  private-LAN source check. That source check did not authenticate a node. The
+  transport now defaults disabled and is restricted to explicit loopback-only
+  regression tests until a reviewed design uses authenticated, encrypted
+  enrollment and per-node credentials.
 - One node means one logical computer at one IP address. A physical computer
   running multiple virtual machines exposes each VM as a separate node with
   its own address. The controller rejects assigning one address to two node
@@ -415,7 +499,14 @@ and process ownership/cleanup evidence. Hosted execution retains GitHub's native
 job logs and, for work that reaches engine admission, case-qualified copies of
 the raw JUnit, native Node, Cypress, and Playwright result files alongside sealed
 admissions, evidence manifests, parsed closure summaries, success receipts, and
-attempt-scoped ledgers.
+attempt-scoped ledgers. On Linux, process groups containing only zombie or dead
+entries count as stopped; any remaining live member keeps cleanup incomplete.
+
+The operator-managed Linux validation host has a separate 48-hour retention
+policy for abandoned top-level `/tmp/seerrng-*` scratch paths. See
+[Local Validation Scratch Retention](../../docs/maintainers/local-validation-scratch-retention.md).
+This host cleanup does not replace the engine's process cleanup proof or alter
+the retained result evidence described above.
 
 The engine does not install development dependencies, provision missing tools,
 apply live migrations, mutate provider accounts, repair source code, or approve

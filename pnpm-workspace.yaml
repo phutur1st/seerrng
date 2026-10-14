@@ -61,5 +61,4 @@ overrides:
   yaml: 1.10.3
 
 patchedDependencies:
-  eslint-plugin-formatjs@6.6.3: patches/eslint-plugin-formatjs@6.6.3.patch
   eslint-plugin-no-relative-import-paths@1.6.1: patches/eslint-plugin-no-relative-import-paths@1.6.1.patch

@@ -57,6 +57,20 @@ type SettingsPageAction = {
   onClick: () => void;
 };
 
+type SettingsSearchDestination = {
+  route: string;
+  query: string;
+  targetId?: string;
+};
+
+const settingsSearchTargets = [
+  {
+    route: '/settings/main',
+    targetId: 'apiKey',
+    terms: ['api', 'api key', 'apikey', 'application api key'],
+  },
+] as const;
+
 const SettingsPageActionContext = createContext<
   (action: SettingsPageAction | null) => void
 >(() => undefined);
@@ -88,6 +102,8 @@ const SettingsLayout = ({ children }: SettingsLayoutProps) => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showUnsavedChanges, setShowUnsavedChanges] = useState(false);
   const [pageAction, setPageAction] = useState<SettingsPageAction | null>(null);
+  const [pendingSettingsSearch, setPendingSettingsSearch] =
+    useState<SettingsSearchDestination | null>(null);
   const registerPageAction = useCallback(
     (action: SettingsPageAction | null) => setPageAction(action),
     []
@@ -261,13 +277,139 @@ const SettingsLayout = ({ children }: SettingsLayoutProps) => {
   const discardAndLeave = () => {
     setDirty(false);
     setShowUnsavedChanges(false);
+    const destination = pendingSettingsSearch;
+    setPendingSettingsSearch(null);
+    if (destination) {
+      void router.push({
+        pathname: destination.route,
+        query: {
+          settingsSearch: destination.query,
+          ...(destination.targetId
+            ? { settingsSearchTarget: destination.targetId }
+            : {}),
+        },
+      });
+      return;
+    }
+
     void router.push('/discover');
   };
 
   const saveAndStay = () => {
     submitSettingsForms();
     setShowUnsavedChanges(false);
+    setPendingSettingsSearch(null);
   };
+
+  const focusSetting = (element: HTMLElement) => {
+    const row =
+      element.closest<HTMLElement>(
+        '.form-row, .settings-group-card, section'
+      ) ?? element;
+    const focusTarget = element.matches(
+      'input, select, textarea, button, [tabindex]'
+    )
+      ? element
+      : (row.querySelector<HTMLElement>(
+          'input, select, textarea, button, [tabindex]'
+        ) ?? element);
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (!focusTarget.matches('input, select, textarea, button, [tabindex]')) {
+      focusTarget.tabIndex = -1;
+    }
+    focusTarget.focus({ preventScroll: true });
+  };
+
+  const handleSettingsSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = keywordSearch.trim();
+    if (!query) return;
+
+    const normalizedQuery = query.toLocaleLowerCase();
+    const matchingLabel = Array.from(
+      contentRef.current?.querySelectorAll<HTMLElement>(
+        '[data-settings-search], label, legend, h2, h3, h4'
+      ) ?? []
+    ).find((element) =>
+      element.textContent?.toLocaleLowerCase().includes(normalizedQuery)
+    );
+
+    if (matchingLabel) {
+      const control =
+        matchingLabel instanceof HTMLLabelElement && matchingLabel.htmlFor
+          ? document.getElementById(matchingLabel.htmlFor)
+          : matchingLabel;
+      if (control instanceof HTMLElement) {
+        focusSetting(control);
+        return;
+      }
+    }
+
+    const indexedTarget = settingsSearchTargets.find((target) =>
+      target.terms.some(
+        (term) =>
+          term.includes(normalizedQuery) || normalizedQuery.includes(term)
+      )
+    );
+    const matchingRoute = settingsRoutes.find((route) =>
+      route.text.toLocaleLowerCase().includes(normalizedQuery)
+    );
+    const destination = indexedTarget
+      ? {
+          route: indexedTarget.route,
+          query,
+          targetId: indexedTarget.targetId,
+        }
+      : matchingRoute
+        ? { route: matchingRoute.route, query }
+        : undefined;
+
+    if (!destination) return;
+    if (dirtyRef.current && destination.route !== router.pathname) {
+      setPendingSettingsSearch(destination);
+      setShowUnsavedChanges(true);
+      return;
+    }
+
+    void router.push({
+      pathname: destination.route,
+      query: {
+        settingsSearch: destination.query,
+        ...(destination.targetId
+          ? { settingsSearchTarget: destination.targetId }
+          : {}),
+      },
+    });
+  };
+
+  useEffect(() => {
+    const targetId = router.query.settingsSearchTarget;
+    if (!router.isReady || typeof targetId !== 'string') return;
+
+    const tryFocusTarget = () => {
+      const target = document.getElementById(targetId);
+      if (
+        !(target instanceof HTMLElement) ||
+        !contentRef.current?.contains(target)
+      ) {
+        return false;
+      }
+      focusSetting(target);
+      return true;
+    };
+
+    if (tryFocusTarget() || !contentRef.current) return;
+    const observer = new MutationObserver(() => {
+      if (tryFocusTarget()) observer.disconnect();
+    });
+    observer.observe(contentRef.current, { childList: true, subtree: true });
+    const timeout = window.setTimeout(() => observer.disconnect(), 5000);
+
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timeout);
+    };
+  }, [router.asPath, router.isReady, router.query.settingsSearchTarget]);
 
   return (
     <SettingsPageActionContext.Provider value={registerPageAction}>
@@ -293,7 +435,7 @@ const SettingsLayout = ({ children }: SettingsLayoutProps) => {
         <SettingsTabs tabType="filter" settingsRoutes={settingsRoutes} />
         <form
           className="discover-filter-control settings-page-search"
-          onSubmit={(event) => event.preventDefault()}
+          onSubmit={handleSettingsSearch}
         >
           <span className="discover-filter-control-label gap-1.5">
             <MagnifyingGlassIcon className="h-4 w-4" aria-hidden="true" />

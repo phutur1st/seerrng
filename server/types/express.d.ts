@@ -11,7 +11,7 @@ declare global {
     }
   }
 
-  export type Middleware = <ParamsDictionary, any, any>(
+  export type Middleware = <TParams, TResBody, TReqBody>(
     req: Request,
     res: Response,
     next: NextFunction

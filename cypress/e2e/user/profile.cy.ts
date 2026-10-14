@@ -1,3 +1,6 @@
+// eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Cypress specs use deterministic local title fixtures.
+import { stubTitleDetails } from '../../support/titleFixtures';
+
 describe('User Profile', () => {
   beforeEach(() => {
     cy.loginAsAdmin();
@@ -31,7 +34,12 @@ describe('User Profile', () => {
       fixture: 'watchlist.json',
     }).as('getWatchlist');
     // Wait for one of the watchlist movies to resolve
-    cy.intercept('/api/v1/movie/361743').as('getTmdbMovie');
+    stubTitleDetails({
+      id: 361743,
+      mediaType: 'movie',
+      title: 'Top Gun: Maverick',
+      date: '2022-05-27',
+    });
 
     cy.visit('/profile');
 
@@ -71,7 +79,9 @@ describe('User Profile', () => {
         ).to.be.lessThan(window.innerHeight);
       });
 
-    cy.wait('@getTmdbMovie').its('response.statusCode').should('eq', 200);
+    cy.wait('@fixtureTitleDetails')
+      .its('response.statusCode')
+      .should('eq', 200);
 
     cy.contains('.slider-header', 'Watchlist')
       .closest('[data-testid=media-slider]')

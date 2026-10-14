@@ -7,6 +7,7 @@ import {
   getRateLimitKey,
   isLocalOrPrivateAddress,
   isSafeHttpUrl,
+  isSafePlayerConnectionUri,
   isUnsafeLocalAddress,
   isValidApplicationUrl,
   isValidHttpUrl,
@@ -528,5 +529,27 @@ describe('getRateLimitKey', () => {
     } as unknown as Request;
 
     assert.equal(getRateLimitKey(malformedSocket), 'unknown');
+  });
+});
+
+describe('isSafePlayerConnectionUri', () => {
+  it('accepts credential-free LAN player endpoints', () => {
+    assert.equal(isSafePlayerConnectionUri('http://192.168.1.20:32500'), true);
+    assert.equal(isSafePlayerConnectionUri('https://player.lan:32500/x'), true);
+  });
+
+  it('rejects loopback, link-local, credentials, and other schemes', () => {
+    for (const uri of [
+      'http://127.0.0.1:32500',
+      'http://localhost:32500',
+      'http://169.254.169.254/latest',
+      'http://[::1]:32500',
+      'http://user:pass@192.168.1.20:32500',
+      'http://user@192.168.1.20:32500',
+      'ftp://192.168.1.20',
+      'file:///etc/passwd',
+      'not a url',
+    ])
+      assert.equal(isSafePlayerConnectionUri(uri), false, uri);
   });
 });
