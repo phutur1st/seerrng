@@ -6,4 +6,4 @@ action: none
 breaking: false
 ---
 
-The Hom3lab fork follows upstream’s native CI checks before publishing its images. Fork publication remains restricted to the owner registry after a successful main-branch validation run.
+The Hom3lab fork follows upstream’s native CI checks before publishing its images. Fork publication remains restricted to the owner registry after a successful main-branch validation run. Inherited upstream chart publication is blocked on this fork.

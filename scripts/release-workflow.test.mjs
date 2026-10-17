@@ -1231,3 +1231,25 @@ test('git-cliff uses stable semantic-version tags as release boundaries', () => 
   assert.equal(matchesTag.test('mobile-v3.63.0-ci.36'), false);
   assert.equal(matchesTag.test('v3.63.0-rc.1'), false);
 });
+
+test('the Hom3lab fork cannot publish inherited upstream Helm charts', () => {
+  const chartRelease = readWorkflow('helm.yml');
+  assert.equal(
+    chartRelease.jobs['package-helm-chart'].if,
+    "github.repository != 'phutur1st/seerrng'"
+  );
+  assert.equal(
+    chartRelease.jobs.publish.if,
+    "github.repository != 'phutur1st/seerrng' && needs.package-helm-chart.outputs.has_artifacts == 'true'"
+  );
+  assert.equal(
+    chartRelease.jobs.verify.if,
+    "github.repository != 'phutur1st/seerrng'"
+  );
+  assert.deepEqual(chartRelease.jobs.publish.needs, ['package-helm-chart']);
+  assert.deepEqual(chartRelease.jobs.verify.needs, ['publish']);
+  assert.equal(
+    readWorkflow('ci.yml').jobs.helm.uses,
+    './.github/workflows/lint-helm-charts.yml'
+  );
+});

@@ -46,8 +46,9 @@ providers. No live requests, provider queues, files or statuses were mutated.
    runner/shard and release dependency assertions follow upstream. The owner image
    workflow still requires successful same-repository main push CI and publishes
    only `ghcr.io/phutur1st/seerrng`. Inherited upstream publication guards remain.
-   Upstream's stable semantic release-tag boundary check is retained alongside
-   fork publication tests. An optional guard-name update was rejected by automatic
+   The inherited Helm release is explicitly blocked on this fork while native
+   chart validation remains enabled. Upstream's stable semantic release-tag
+   boundary check is retained alongside fork publication tests. An optional guard-name update was rejected by automatic
    approval review as publication risk and was not applied.
 2. API schema retains nullable eBook/audiobook availability and adds upstream
    service-status schemas. Public settings retain standalone emulation-catalog
@@ -56,8 +57,8 @@ providers. No live requests, provider queues, files or statuses were mutated.
 3. ROMarr keeps standalone catalog/artwork/provider capability behavior while
    adopting upstream's named DAT timeout and force-refresh cache handling.
 4. The TV metadata fixture keeps the fork's routing fields alongside upstream's
-   test changes. Shared UI style owners and upstream functional/security changes
-   are preserved; no new design or global CSS change was introduced by conflict
+   test changes and upstream's partial-fixture type assertion. Shared UI style
+   owners and upstream functional/security changes are preserved; no new design or global CSS change was introduced by conflict
    resolution. Request cards retain Bookshelf/Sportarr identity and artwork,
    verified book-format availability and upstream failure details.
 5. Existing fork availability migrations, scanner evidence invalidation, format
@@ -75,7 +76,8 @@ Runtime: Node 24.21.0 and pnpm 10.24.0; frozen upstream lockfile installed.
   passed. Lint emits existing warnings; it exits successfully.
 - Focused subscriber regression: 47 passed under Vitest. Native-runner results
   and final cumulative counts are recorded in the completion receipt.
-- Workflow/release guard tests: 37 passed.
+- Workflow/release/chart guard tests: 39 passed. Native workflow boundaries pass
+  for all 31 workflows. Changelog covers all 152 authentic applicable tags.
 - Initial cumulative Vitest: 4188 passed, 1 failed, 5 skipped. The failed test
   replaced a mock twice under the Vitest compatibility shim; it was corrected
   to inspect the original mock. The corrected focused run passed. This initial
@@ -83,13 +85,27 @@ Runtime: Node 24.21.0 and pnpm 10.24.0; frozen upstream lockfile installed.
 - Native tooling on macOS: 272 passed, 14 failed. Missing GNU `stat`, Helm and
   Linux fixture prerequisites prevent a complete native tooling pass here.
   Assertions and test inventory were not weakened or excluded.
-- Final Vitest/native Node and browser results: pending completion receipt.
+- Native Node cumulative run: 3496 passed, 1 test-file compilation failure,
+  5 PostgreSQL skips. The compilation failure came from the conflicted partial
+  TV fixture; upstream's explicit partial-fixture assertion is restored. The
+  corrected media-route and subscriber native rerun passes all 92 tests.
+- A second cumulative Vitest run passed 4188 tests with 5 skips but failed one
+  loopback login before the watchlist assertion. Its response did not match the
+  application's login response schema. An isolated reproduction passed (1 test,
+  145 deliberately unselected). No authentication checks were weakened. A final
+  cumulative rerun passes all 4189 tests across 585 passing files, with
+  5 PostgreSQL skips across 2 files; no Vitest failures remain.
+- Playwright: all 24 browser tests passed against the production build with
+  disposable configuration. Desktop/narrow request editing and Audiobookshelf
+  settings are included. This is automated browser evidence, not manual visual
+  inspection or a live-provider round trip.
 - Linux native CI, CodeQL, Jellyfin container smoke, documentation and Helm:
   unrun on this candidate; required hosted verification remains outstanding.
-- Visual inspection: not yet collected for this candidate. Automated browser
+- Visual inspection: not collected for this candidate. Automated browser
   results are separate evidence and do not prove rendered preservation.
 - Live integration: read-only diagnosis only; no post-fix deployment/provider
   round trip is claimed. HLOS continues running its previously deployed image.
 
-No push, release, image publication or deployment has been performed for this
-candidate. The original root checkout remains at the recovery source.
+The local source checkpoint is merge commit `8ca81532875a8f9ee72f6452e4a0007c0c1c22e1`,
+followed by the chart-publication guard and fixture correction. No push, release,
+image publication or deployment has been performed for this candidate. The original root checkout remains at the recovery source.

@@ -153,7 +153,7 @@ const getTvShowMock = mock.fn(
       keywords: { results: [] },
       seasons: [{ season_number: 1, episode_count: 1 }],
       external_ids: { tvdb_id: 777 },
-    } as Awaited<ReturnType<TheMovieDb['getTvShow']>>;
+    } as unknown as Awaited<ReturnType<TheMovieDb['getTvShow']>>;
   }
 );
 const getMediaWatchStatsMock = mock.method(

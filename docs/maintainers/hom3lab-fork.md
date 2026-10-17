@@ -45,7 +45,8 @@ checks, and lockfile/runtime pins when integrating upstream changes.
 4. Notification title lookup falls back to Bookshelf metadata. Recent-request
    cards preserve Bookshelf identities and support Sportarr metadata/artwork.
 5. Upstream CI image publication and deployment, preview publication, and release
-   entry points have repository guards. Fork images publish exclusively to
+   entry points have repository guards. The inherited Helm release is blocked
+   on this fork; chart linting remains enabled. Fork images publish exclusively to
    `ghcr.io/phutur1st/seerrng` after the fork's successful main push CI run.
    Tags are `hom3lab` and the full `sha-<commit>`; deployment should pin a digest.
 
@@ -58,7 +59,7 @@ across author format directories is outside this SeerrNG change.
 
 ## Verification record
 
-Implementation and review are AI-assisted. Checks use Node 24.15.0, pnpm 10.24.0,
+Implementation and review are AI-assisted. Checks use Node 24.21.0, pnpm 10.24.0,
 and the upstream lockfile. Focused evidence covers availability, author settings,
 request dispatch, format scans, migration SQL, and recent-card identifiers. The
 PostgreSQL migration SQL is also exercised through SQLite for portability; this
