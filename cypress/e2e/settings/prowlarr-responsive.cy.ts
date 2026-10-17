@@ -7,6 +7,7 @@ const categoryMappings = {
   audiobook: [3030],
   comic: [7030],
   magazine: [7010],
+  adult: [6000],
   retro: [4050],
   modern: [4000],
   game: [4050],
@@ -130,12 +131,15 @@ describe('Prowlarr settings on a short mobile screen', () => {
   });
 
   it('keeps save reachable after scrolling the long indexer report', () => {
-    cy.visit('/settings/services');
+    cy.visit('/settings/prowlarr');
     cy.wait('@prowlarrSettings').then(({ response }) => {
       expect(response?.statusCode).to.equal(200);
       expect(response?.body).to.deep.equal(prowlarrSettings);
     });
     cy.get('#prowlarr', { timeout: 10000 }).should('be.visible');
+    cy.contains(
+      'This setting connects to Prowlarr only. NZBHydra2 is not currently supported here.'
+    ).should('be.visible');
     cy.contains('#prowlarr h3', 'Prowlarr indexers', {
       timeout: 10000,
     }).scrollIntoView();
@@ -171,7 +175,7 @@ describe('Prowlarr settings on a short mobile screen', () => {
   });
 
   it('shows setup assistance without horizontal overflow on a narrow screen', () => {
-    cy.visit('/settings/services');
+    cy.visit('/settings/services?serviceCategory=tools-other');
 
     cy.contains('section.app-card-sub', 'Connect your apps')
       .should('be.visible')
@@ -181,7 +185,7 @@ describe('Prowlarr settings on a short mobile screen', () => {
       .should(
         'have.attr',
         'href',
-        'https://github.com/snapetech/seerrng/blob/main/docs/using-seerr/setup-assistant.md'
+        'https://github.com/snapetech-org/seerrng/blob/main/docs/using-seerr/setup-assistant.md'
       );
     cy.document().then((document) => {
       expect(document.documentElement.scrollWidth).to.be.at.most(
@@ -193,7 +197,7 @@ describe('Prowlarr settings on a short mobile screen', () => {
 
   it('shows setup assistance at desktop width', () => {
     cy.viewport(1280, 720);
-    cy.visit('/settings/services');
+    cy.visit('/settings/services?serviceCategory=tools-other');
 
     cy.contains('section.app-card-sub', 'Connect your apps').should(
       'be.visible'
@@ -217,7 +221,7 @@ describe('Prowlarr settings on a short mobile screen', () => {
   });
 
   it('imports a discovered address into the matching add form without importing credentials', () => {
-    cy.visit('/settings/services');
+    cy.visit('/settings/services?serviceCategory=tools-other');
 
     const report = {
       network: 'seerrng-shared',
@@ -242,6 +246,7 @@ describe('Prowlarr settings on a short mobile screen', () => {
     );
 
     cy.contains('Loaded suggestions for 1 app').should('be.visible');
+    cy.contains('button[aria-pressed="false"]', 'TV & Movies').click();
     cy.contains('button', 'Add Radarr Server').scrollIntoView().click();
     cy.get('input[name="hostname"]').should('have.value', 'radarr');
     cy.get('input[name="port"]').should('have.value', '7878');

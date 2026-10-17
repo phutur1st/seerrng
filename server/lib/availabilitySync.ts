@@ -1,4 +1,7 @@
-import type { JellyfinLibraryItem } from '@server/api/jellyfin';
+import type {
+  JellyfinLibraryItem,
+  JellyfinLibraryItemExtended,
+} from '@server/api/jellyfin';
 import JellyfinAPI from '@server/api/jellyfin';
 import type { PlexMetadata } from '@server/api/plexapi';
 import PlexAPI from '@server/api/plexapi';
@@ -9,7 +12,7 @@ import TheMovieDb from '@server/api/themoviedb';
 import type { TmdbTvScanDetails } from '@server/api/themoviedb/interfaces';
 import { MediaStatus } from '@server/constants/media';
 import { MediaServerType } from '@server/constants/server';
-import { getRepository } from '@server/datasource';
+import dataSource, { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
 import type Season from '@server/entity/Season';
 import {
@@ -28,6 +31,12 @@ import {
   runWithMediaServerUserAuthority,
   type MediaServerUserAuthoritySnapshot,
 } from '@server/lib/mediaServerUserAuthority';
+import {
+  externalSeasonNumberFor,
+  findTvdbSeasonMappings,
+  hasTvdbIdentifierForMedia,
+  type SeasonNumberMapping,
+} from '@server/lib/seasonNumberMapping';
 import { runWithServarrServiceSnapshots } from '@server/lib/serviceAdmission';
 import type {
   JellyfinSettings,
@@ -52,6 +61,9 @@ class AvailabilitySync {
   private jellyfinEpisodeExistsCache: Record<string, boolean>;
 
   private sonarrSeasonsCache: Record<string, SonarrSeason[]>;
+  private sonarrTvdbIdCache: Record<string, number>;
+  private sonarrSeasonTypeCache: Record<string, string>;
+  private tvdbSeasonMappingCache = new Map<string, SeasonNumberMapping[]>();
   private radarrServers: RadarrSettings[];
   private sonarrServers: SonarrSettings[];
   private configurationSnapshot: ConfigurationAuthoritySnapshot;
@@ -96,6 +108,9 @@ class AvailabilitySync {
       this.jellyfinSeasonsCache = {};
       this.jellyfinEpisodeExistsCache = {};
       this.sonarrSeasonsCache = {};
+      this.sonarrTvdbIdCache = {};
+      this.sonarrSeasonTypeCache = {};
+      this.tvdbSeasonMappingCache.clear();
 
       logger.info(`Starting availability sync...`, {
         label: 'AvailabilitySync',
@@ -643,7 +658,15 @@ class AvailabilitySync {
           sonarr = await sonarrAPI.getSeriesById(media.externalServiceId4k);
         }
 
-        if (sonarr && media.tvdbId != null && sonarr.tvdbId !== media.tvdbId) {
+        if (
+          sonarr &&
+          sonarr.tvdbId !== media.tvdbId &&
+          !(await hasTvdbIdentifierForMedia(
+            dataSource.manager,
+            media.id,
+            sonarr.tvdbId
+          ))
+        ) {
           continue;
         }
 
@@ -651,8 +674,11 @@ class AvailabilitySync {
           const externalServiceId = is4k
             ? media.externalServiceId4k
             : media.externalServiceId;
-          this.sonarrSeasonsCache[`${server.id}-${externalServiceId}`] =
-            sonarr.seasons;
+          const cacheKey = `${server.id}-${externalServiceId}`;
+          this.sonarrSeasonsCache[cacheKey] = sonarr.seasons;
+          this.sonarrTvdbIdCache[cacheKey + '-' + is4k] = sonarr.tvdbId;
+          this.sonarrSeasonTypeCache[cacheKey] =
+            sonarr.seasonType ?? 'standard';
 
           if (sonarr.statistics.episodeFileCount > 0) {
             existsInSonarr = true;
@@ -730,9 +756,28 @@ class AvailabilitySync {
           this.sonarrSeasonsCache[`${server.id}-${media.externalServiceId4k}`];
       }
 
+      const cacheKey = `${server.id}-${
+        is4k ? media.externalServiceId4k : media.externalServiceId
+      }`;
+      const tvdbId =
+        this.sonarrTvdbIdCache[cacheKey + '-' + is4k] ?? media.tvdbId;
+      const seasonType = this.sonarrSeasonTypeCache[cacheKey] ?? 'standard';
+      const mappings = tvdbId
+        ? await this.getSeasonNumberMappings(
+            media.id,
+            tvdbId,
+            server.id,
+            is4k,
+            seasonType
+          )
+        : [];
+      const externalSeasonNumber = externalSeasonNumberFor(
+        season.seasonNumber,
+        mappings
+      );
       const seasonIsAvailable = sonarrSeasons?.find(
         ({ seasonNumber, statistics }) =>
-          season.seasonNumber === seasonNumber &&
+          externalSeasonNumber === seasonNumber &&
           statistics?.episodeFileCount &&
           statistics?.episodeFileCount > 0
       );
@@ -961,7 +1006,7 @@ class AvailabilitySync {
     // If found, we will assume the media exists and prevent removal
     // We can use the cache we built when we fetched the series with mediaExistsInJellyfin
     try {
-      let jellyfinMedia: JellyfinLibraryItem | undefined;
+      let jellyfinMedia: JellyfinLibraryItemExtended | undefined;
 
       if (ratingKey && !is4k) {
         jellyfinMedia = await this.jellyfinClient?.getItemData(ratingKey);
@@ -1089,6 +1134,29 @@ class AvailabilitySync {
     }
 
     return seasonExistsInJellyfin;
+  }
+
+  private async getSeasonNumberMappings(
+    mediaId: number,
+    tvdbId: number,
+    sonarrServerId: number,
+    is4k: boolean,
+    seasonType: string
+  ): Promise<SeasonNumberMapping[]> {
+    const key = `${mediaId}:${tvdbId}:${sonarrServerId}:${is4k}:${seasonType}`;
+    const cached = this.tvdbSeasonMappingCache.get(key);
+    if (cached) return cached;
+
+    const mappings = await findTvdbSeasonMappings(
+      dataSource.manager,
+      mediaId,
+      tvdbId,
+      sonarrServerId,
+      is4k,
+      seasonType
+    );
+    this.tvdbSeasonMappingCache.set(key, mappings);
+    return mappings;
   }
 }
 

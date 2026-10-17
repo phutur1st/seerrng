@@ -2279,8 +2279,8 @@ const validateCurrentBatchContract = (files) => {
   );
   requireCssRule(
     '.poster-rating-values',
-    ['display: flex;', 'flex-wrap: nowrap;'],
-    'poster hover ratings must remain on one horizontal line'
+    ['display: flex;', 'flex-wrap: wrap;', 'max-width: 100%;'],
+    'poster rating values must wrap within the constrained popover width'
   );
   requireText(
     'src/components/TitleCard/PosterRatingPopover.tsx',
@@ -2746,11 +2746,10 @@ const validateCurrentBatchContract = (files) => {
     )
       errors.push(`package.json: ${reason}`);
   };
-  requirePublicCommand(
-    'validate:development',
-    'node bin/run-local-validation.mjs --package-entry',
-    'the complete validation command must retain the repository engine entry point'
-  );
+  if (Object.hasOwn(publicScripts, 'validate:development'))
+    errors.push(
+      'package.json: the retired validation engine command must stay removed'
+    );
   requirePublicCommand(
     'build',
     'pnpm build:all',
@@ -2824,16 +2823,6 @@ const validateCurrentBatchContract = (files) => {
     "'bin/run-tooling-tests.mjs',",
     'the current-batch check must include the tooling suite as a contract input'
   );
-  for (const check of [
-    'check-current-batch-contract.js',
-    'check-refreshed-ui-style.js',
-  ]) {
-    requireText(
-      'bin/local-validation.mjs',
-      check,
-      'the cumulative runner must discover current-batch and shared-style checks'
-    );
-  }
   requireText(
     'bin/check-refreshed-ui-style-lib.test.mjs',
     'rejects visual inline and embedded styles in refreshed components',
@@ -3771,8 +3760,8 @@ const validateCurrentBatchContract = (files) => {
   requireCount(
     advancedRequester,
     '<RequestListboxControl',
-    5,
-    'Destination Server, Metadata Profile, Quality Profile, Root Folder, and Language must all use the shared request listbox'
+    7,
+    'Destination Server, Metadata Profile, Quality Profile, Root Folder, Language, Metadata Language, and Series Order must all use the shared request listbox'
   );
   requireText(
     advancedRequester,
@@ -4303,6 +4292,17 @@ const validateCurrentBatchContract = (files) => {
       'Movie and Series must keep acquisition search and request in their own opposing shared row'
     );
   }
+  requireText(
+    seriesLayout,
+    'const selectedPlaybackAction = selectedPlaybackIsShared\n    ? undefined\n    : playbackActions?.(',
+    'shared selected seasons must not expose media-server playback actions'
+  );
+  requireCount(
+    seriesLayout,
+    '{selectedPlaybackAction != null && (',
+    2,
+    'media-server playback and device actions must both be suppressed for shared selections'
+  );
   requireOrder(
     seriesLayout,
     [
@@ -4311,7 +4311,9 @@ const validateCurrentBatchContract = (files) => {
       'data-card-part="actions"',
       '<MediaQualitySelect',
       'label={intl.formatMessage(messages.quality)}',
-      '{playbackActions?.(',
+      '{selectedPlaybackAction != null && (',
+      '{selectedPlaybackAction}',
+      '{selectedPlaybackAction != null && (',
       '<PlayOnDeviceButton',
       'data-card-part="saved-item-action"',
       'data-card-part="collection-action"',
@@ -5544,7 +5546,7 @@ const validateCurrentBatchContract = (files) => {
   for (const token of [
     '<span className="settings-plain-value truncate">',
     '<span className="settings-plain-value">{data.appDataPath}</span>',
-    "{data.tz || 'Not available'}",
+    '{data.tz || intl.formatMessage(globalMessages.notavailable)}',
   ]) {
     requireText(
       'src/components/Settings/SettingsAbout/index.tsx',
@@ -5767,8 +5769,13 @@ const validateCurrentBatchContract = (files) => {
   }
   requireText(
     'src/components/IssueModal/CreateIssueModal/index.tsx',
-    'getAvailableIssueQualities(data?.mediaInfo)',
-    'issue quality choices must reflect current HD/4K availability'
+    'getReportableIssueQualities(data?.mediaInfo)',
+    'issue quality choices must include copies that are available or processing'
+  );
+  requireText(
+    'src/components/IssueDetails/issueMediaFormat.ts',
+    'status === MediaStatus.PROCESSING',
+    'processing HD/4K copies must remain eligible for issue reports'
   );
   const issueSummary = 'src/components/IssueDetails/IssueMediaSummary.tsx';
   requireText(
@@ -7219,8 +7226,8 @@ const validateCurrentBatchContract = (files) => {
     ],
     [
       'src/components/IssueDetails/issueMediaFormat.test.ts',
-      'issue quality choices include only qualities currently available',
-      'must test available HD and 4K issue targets',
+      'issue quality choices include available and processing qualities',
+      'must test reportable HD and 4K issue targets, including in-flight copies',
     ],
     [
       'src/components/IssueList/IssueItem/issueAffectedSummary.test.ts',

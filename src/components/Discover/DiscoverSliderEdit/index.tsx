@@ -4,6 +4,7 @@ import Tag from '@app/components/Common/Tag';
 import Tooltip from '@app/components/Common/Tooltip';
 import CompanyTag from '@app/components/CompanyTag';
 import CreateSlider from '@app/components/Discover/CreateSlider';
+import NetworkSliderEditor from '@app/components/Discover/NetworkSlider/Editor';
 import { sliderTitles } from '@app/components/Discover/constants';
 import GenreTag from '@app/components/GenreTag';
 import KeywordTag from '@app/components/KeywordTag';
@@ -29,6 +30,10 @@ const messages = defineMessages('components.Discover.DiscoverSliderEdit', {
   deletesuccess: 'Sucessfully deleted slider.',
   deletefail: 'Failed to delete slider.',
   remove: 'Remove',
+  moveSectionUp: 'Move this Discover section up',
+  moveSectionDown: 'Move this Discover section down',
+  cannotMoveSectionHigher: 'This section cannot be moved any higher.',
+  cannotMoveSectionLower: 'This section cannot be moved any lower.',
   enable: 'Toggle Visibility',
 });
 
@@ -42,6 +47,7 @@ type DiscoverSliderEditProps = {
   slider: Partial<DiscoverSlider>;
   onEnable: () => void;
   onDelete: () => void;
+  onUpdate: (updatedSlider: DiscoverSlider) => void;
   onPositionUpdate: (
     updatedItemId: number,
     position: keyof typeof Position,
@@ -57,6 +63,7 @@ const DiscoverSliderEdit = ({
   children,
   onEnable,
   onDelete,
+  onUpdate,
   onPositionUpdate,
   disableUpButton,
   disableDownButton,
@@ -266,12 +273,14 @@ const DiscoverSliderEdit = ({
           )}
         </div>
         <div className="flex items-center space-x-2">
-          {!slider.isBuiltIn && (
+          {(!slider.isBuiltIn ||
+            slider.type === DiscoverSliderType.NETWORKS) && (
             <>
               {!isEditing ? (
                 <Button
                   buttonType="warning"
                   buttonSize="sm"
+                  data-testid="discover-slider-edit-button"
                   onClick={() => {
                     setIsEditing(true);
                   }}
@@ -291,24 +300,28 @@ const DiscoverSliderEdit = ({
                   <span>{intl.formatMessage(globalMessages.cancel)}</span>
                 </Button>
               )}
-              <Button
-                data-testid="discover-slider-remove-button"
-                buttonType="danger"
-                buttonSize="sm"
-                onClick={() => {
-                  deleteSlider();
-                }}
-              >
-                <XMarkIcon />
-                <span>{intl.formatMessage(messages.remove)}</span>
-              </Button>
+              {!slider.isBuiltIn && (
+                <Button
+                  data-testid="discover-slider-remove-button"
+                  buttonType="danger"
+                  buttonSize="sm"
+                  onClick={() => {
+                    deleteSlider();
+                  }}
+                >
+                  <XMarkIcon />
+                  <span>{intl.formatMessage(messages.remove)}</span>
+                </Button>
+              )}
             </>
           )}
           <div className="absolute top-4 right-14 flex px-2 md:relative md:top-0 md:right-0">
             <button
               data-testid="discover-slider-move-up"
-              aria-label="Move this Discover section up"
-              data-disabled-reason="This section cannot be moved any higher."
+              aria-label={intl.formatMessage(messages.moveSectionUp)}
+              data-disabled-reason={intl.formatMessage(
+                messages.cannotMoveSectionHigher
+              )}
               className={'hover:text-white disabled:text-gray-800'}
               onClick={() =>
                 onPositionUpdate(Number(slider.id), Position.Above, true)
@@ -319,8 +332,10 @@ const DiscoverSliderEdit = ({
             </button>
             <button
               data-testid="discover-slider-move-down"
-              aria-label="Move this Discover section down"
-              data-disabled-reason="This section cannot be moved any lower."
+              aria-label={intl.formatMessage(messages.moveSectionDown)}
+              data-disabled-reason={intl.formatMessage(
+                messages.cannotMoveSectionLower
+              )}
               className={'hover:text-white disabled:text-gray-800'}
               onClick={() =>
                 onPositionUpdate(Number(slider.id), Position.Below, true)
@@ -332,27 +347,36 @@ const DiscoverSliderEdit = ({
           </div>
           <div className="absolute top-4 right-4 flex-1 text-right md:relative md:top-0 md:right-0">
             <Tooltip content={intl.formatMessage(messages.enable)}>
-              <div>
-                <SlideCheckbox
-                  onClick={() => {
-                    onEnable();
-                  }}
-                  checked={slider.enabled}
-                />
-              </div>
+              <SlideCheckbox
+                onClick={() => {
+                  onEnable();
+                }}
+                checked={slider.enabled}
+              />
             </Tooltip>
           </div>
         </div>
       </div>
       {isEditing ? (
         <div className="p-4">
-          <CreateSlider
-            onCreate={() => {
-              onDelete();
-              setIsEditing(false);
-            }}
-            slider={slider}
-          />
+          {slider.type === DiscoverSliderType.NETWORKS ? (
+            <NetworkSliderEditor
+              sliderId={slider.id}
+              data={slider.data}
+              onSaved={(updatedSlider) => {
+                onUpdate(updatedSlider);
+                setIsEditing(false);
+              }}
+            />
+          ) : (
+            <CreateSlider
+              onCreate={() => {
+                onDelete();
+                setIsEditing(false);
+              }}
+              slider={slider}
+            />
+          )}
         </div>
       ) : (
         <div className={`-mt-6 p-4 ${!slider.enabled ? 'opacity-50' : ''}`}>

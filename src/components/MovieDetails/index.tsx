@@ -1,5 +1,6 @@
 import Spinner from '@app/assets/spinner.svg';
 import AssociationBadge from '@app/components/Association/AssociationBadge';
+import AvailabilitySubscriptionButton from '@app/components/AvailabilitySubscriptionButton';
 import Button from '@app/components/Common/Button';
 import IndexerSearchLink from '@app/components/Common/IndexerSearchLink';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
@@ -7,6 +8,8 @@ import MediaServerPlayButton from '@app/components/Common/MediaServerPlayButton'
 import PageTitle from '@app/components/Common/PageTitle';
 import PlayOnDeviceButton from '@app/components/Common/PlayOnDeviceButton';
 import Tooltip from '@app/components/Common/Tooltip';
+import DiscoverDetailNavigation from '@app/components/Discover/DiscoverDetailNavigation';
+import { canReportMovieIssue } from '@app/components/IssueDetails/issueMediaFormat';
 import LiveTvButton from '@app/components/LiveTv/LiveTvButton';
 import MovieDetailsLayout from '@app/components/MovieDetails/MovieDetailsLayout';
 import RequestButton from '@app/components/RequestButton';
@@ -19,8 +22,10 @@ import globalMessages from '@app/i18n/globalMessages';
 import ErrorPage from '@app/pages/_error';
 import { sortCrewPriority } from '@app/utils/creditHelpers';
 import defineMessages from '@app/utils/defineMessages';
+import { isDiscoverNavigationContextId } from '@app/utils/discoverNavigation';
 import { refreshIntervalHelper } from '@app/utils/refreshIntervalHelper';
 import { getSafeHref } from '@app/utils/safeUrl';
+import { getViewerAvailabilityPresentation } from '@app/utils/viewerAvailabilityPresentation';
 import {
   CogIcon,
   ExclamationTriangleIcon,
@@ -132,6 +137,9 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
         pathname: router.pathname,
         query: {
           movieId: router.query.movieId,
+          ...(isDiscoverNavigationContextId(router.query.discoverContext)
+            ? { discoverContext: router.query.discoverContext }
+            : {}),
           ...(router.query.issues === '1' ? { issues: '1' } : {}),
         },
       });
@@ -293,13 +301,15 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
     [Permission.CREATE_ISSUES, Permission.MANAGE_ISSUES],
     { type: 'or' }
   );
-  const isReportIssueAvailable =
-    data.mediaInfo?.status === MediaStatus.AVAILABLE ||
-    (settings.currentSettings.movie4kEnabled &&
-      hasPermission([Permission.REQUEST_4K, Permission.REQUEST_4K_MOVIE], {
-        type: 'or',
-      }) &&
-      data.mediaInfo?.status4k === MediaStatus.AVAILABLE);
+  const canReport4kIssue =
+    settings.currentSettings.movie4kEnabled &&
+    hasPermission([Permission.REQUEST_4K, Permission.REQUEST_4K_MOVIE], {
+      type: 'or',
+    });
+  const isReportIssueAvailable = canReportMovieIssue(
+    data.mediaInfo,
+    canReport4kIssue
+  );
   const canUseManage = hasPermission(Permission.MANAGE_REQUESTS);
   const isManageAvailable = Boolean(
     data.mediaInfo &&
@@ -314,6 +324,13 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
   );
   const playbackActions = canPlayMedia
     ? (is4k: boolean) => {
+        const availability = getViewerAvailabilityPresentation(
+          is4k ? data.mediaInfo?.status4k : data.mediaInfo?.status,
+          settings.currentSettings.otherUsersAvailability,
+          data.mediaInfo?.viewerRequestCoverage?.[is4k ? 'fourK' : 'standard']
+        );
+        if (availability.hidePlayback) return null;
+
         const selectedCatalog = is4k ? playbackCatalog4k : playbackCatalog;
         const selectedItem = selectedCatalog?.rootItem;
 
@@ -421,6 +438,7 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
 
   const primaryActions = (
     <>
+      <DiscoverDetailNavigation id={Number(movieId)} mediaType="movie" />
       {safeTrailerUrl && (
         <Button
           as="a"
@@ -461,6 +479,7 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
         mediaType="movie"
         tmdbId={data.id}
       />
+      <AvailabilitySubscriptionButton mediaType="movie" tmdbId={data.id} />
       {data.mediaInfo?.status !== MediaStatus.BLOCKLISTED &&
         user?.userType !== UserType.PLEX && (
           <Tooltip
@@ -516,7 +535,12 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
             setShowManager(false);
             void router.replace({
               pathname: router.pathname,
-              query: { movieId: router.query.movieId },
+              query: {
+                movieId: router.query.movieId,
+                ...(isDiscoverNavigationContextId(router.query.discoverContext)
+                  ? { discoverContext: router.query.discoverContext }
+                  : {}),
+              },
             });
           }}
           revalidate={() => revalidate()}

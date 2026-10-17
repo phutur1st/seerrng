@@ -5,6 +5,7 @@ import PlexTvAPI, {
   plexUserHasServerAccess,
 } from '@server/api/plextv';
 import TautulliAPI from '@server/api/tautulli';
+import { OtherUserAvailabilityMode } from '@server/constants/availability';
 import {
   MAX_BLOCKLISTED_TAG_IDS,
   MAX_BLOCKLISTED_TAG_PAGES,
@@ -73,6 +74,7 @@ import {
   authorizedMutation,
   authorizedRouteAccess,
 } from '@server/middleware/authorizedMutation';
+import connectionHostsRoutes from '@server/routes/settings/connectionHosts';
 import discoverSettingRoutes from '@server/routes/settings/discover';
 import loginLinkRoutes from '@server/routes/settings/loginLinks';
 import { ApiError } from '@server/types/error';
@@ -83,6 +85,7 @@ import { mapWithConcurrency } from '@server/utils/concurrency';
 import { dnsCache } from '@server/utils/dnsCache';
 import { getHostname } from '@server/utils/getHostname';
 import { parseListenPort } from '@server/utils/httpServer';
+import { normalizeJellyfinGuid } from '@server/utils/jellyfin';
 import { parsePageParams } from '@server/utils/pagination';
 import { parsePositiveRouteId } from '@server/utils/routeId';
 import {
@@ -134,6 +137,7 @@ import sonarrRoutes from './sonarr';
 import sportarrRoutes from './sportarr';
 import swipeSettingsRoutes from './swipe';
 import tunerrRoutes from './tunerr';
+import whisparrRoutes from './whisparr';
 
 const settingsRoutes = Router();
 settingsRoutes.use(authorizedRouteAccess(Permission.ADMIN));
@@ -773,6 +777,7 @@ export const parseTlsSettingsBody = (
 
   for (const [key, fieldName] of [
     ['redirectHttpToHttps', 'tls.redirectHttpToHttps'],
+    ['showProvidedCertificateNotice', 'tls.showProvidedCertificateNotice'],
     ['allowHttpAuth', 'tls.allowHttpAuth'],
     ['httpAuthAcknowledged', 'tls.httpAuthAcknowledged'],
   ] as const) {
@@ -1092,6 +1097,19 @@ const parseMainSettingsBody = (
     value.enabledMediaCategories = parsedCategories;
   }
 
+  if (body.otherUsersAvailability !== undefined) {
+    if (
+      !Object.values(OtherUserAvailabilityMode).includes(
+        body.otherUsersAvailability as OtherUserAvailabilityMode
+      )
+    ) {
+      return {
+        error: 'otherUsersAvailability must be show, distinguish, or hide.',
+      };
+    }
+    value.otherUsersAvailability = body.otherUsersAvailability;
+  }
+
   for (const [key, fieldName] of [
     ['hideAvailable', 'hideAvailable'],
     ['hideBlocklisted', 'hideBlocklisted'],
@@ -1100,6 +1118,7 @@ const parseMainSettingsBody = (
     ['oidcLogin', 'oidcLogin'],
     ['newPlexLogin', 'newPlexLogin'],
     ['partialRequestsEnabled', 'partialRequestsEnabled'],
+    ['tvSeasonWatchGateEnabled', 'tvSeasonWatchGateEnabled'],
     ['personMovieBulkRequestsEnabled', 'personMovieBulkRequestsEnabled'],
     ['enableSpecialEpisodes', 'enableSpecialEpisodes'],
     ['cacheImages', 'cacheImages'],
@@ -1161,6 +1180,7 @@ const parseMainSettingsBody = (
       'book',
       'comic',
       'magazine',
+      'adult',
       'software',
     ] as const) {
       if (incomingDefaultQuotas[mediaType] === undefined) {
@@ -1216,7 +1236,7 @@ const parseMainSettingsBody = (
     if ('error' in parsed) {
       return parsed;
     }
-    if (parsed.value?.endsWith('/')) {
+    if (key === 'applicationUrl' && parsed.value?.endsWith('/')) {
       return { error: `${fieldName} must not end with a slash.` };
     }
     value[key] = parsed.value ?? '';
@@ -1429,6 +1449,7 @@ export const parseLogMessages = (
 
 settingsRoutes.use('/notifications', notificationRoutes);
 settingsRoutes.use('/radarr', radarrRoutes);
+settingsRoutes.use('/whisparr', whisparrRoutes);
 settingsRoutes.use('/sonarr', sonarrRoutes);
 settingsRoutes.use('/sportarr', sportarrRoutes);
 settingsRoutes.use('/lidarr', lidarrRoutes);
@@ -1451,6 +1472,7 @@ settingsRoutes.use('/slskdn', slskdnRoutes);
 settingsRoutes.use('/readmeabook', readMeABookRoutes);
 settingsRoutes.use('/login-links', loginLinkRoutes);
 settingsRoutes.use('/swipe', swipeSettingsRoutes);
+settingsRoutes.use('/connection-hosts', connectionHostsRoutes);
 
 export const filteredMainSettings = (
   user: User,
@@ -2099,12 +2121,28 @@ settingsRoutes.get('/jellyfin/users', async (req, res) =>
 
     jellyfinClient.setUserId(admin.jellyfinUserId ?? '');
     const resp = await jellyfinClient.getUsers();
-    const jellyfinUsers = resp.users.map((user) => ({
-      username: user.Name,
-      id: user.Id,
-      thumb: `/avatarproxy/${user.Id}`,
-      email: user.Name,
-    }));
+    const importedUserRows = await userRepository.find({
+      select: { jellyfinUserId: true },
+    });
+    const importedUserIds = new Set(
+      importedUserRows
+        .map((user) => normalizeJellyfinGuid(user.jellyfinUserId))
+        .filter((userId): userId is string => Boolean(userId))
+    );
+    const jellyfinUsers = resp.users.flatMap((user) => {
+      const id = normalizeJellyfinGuid(user.Id);
+      if (!id) return [];
+
+      return [
+        {
+          username: user.Name,
+          id,
+          thumb: `/avatarproxy/${id}`,
+          email: user.Name,
+          isImported: importedUserIds.has(id),
+        },
+      ];
+    });
 
     return res.status(200).json(jellyfinUsers);
   })

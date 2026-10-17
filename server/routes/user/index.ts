@@ -4,12 +4,18 @@ import PlexTvAPI, {
   plexUserHasServerAccess,
 } from '@server/api/plextv';
 import TautulliAPI, { isTautulliNoDataError } from '@server/api/tautulli';
-import { MediaType } from '@server/constants/media';
+import TheMovieDb from '@server/api/themoviedb';
+import {
+  MediaRequestStatus,
+  MediaStatus,
+  MediaType,
+} from '@server/constants/media';
 import { MediaServerType } from '@server/constants/server';
 import { UserType } from '@server/constants/user';
 import { USER_SETTINGS_LIMITS } from '@server/constants/userSettings';
 import dataSource, { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import MediaAvailabilitySubscription from '@server/entity/MediaAvailabilitySubscription';
 import { MediaRequest } from '@server/entity/MediaRequest';
 import { User } from '@server/entity/User';
 import { UserPushSubscription } from '@server/entity/UserPushSubscription';
@@ -17,6 +23,7 @@ import { UserSettings } from '@server/entity/UserSettings';
 import type { WatchlistResponse } from '@server/interfaces/api/discoverInterfaces';
 import type {
   QuotaResponse,
+  UserAvailabilitySubscriptionResponse,
   UserBulkUpdateRequest,
   UserBulkUpdateSettings,
   UserRequestsResponse,
@@ -40,6 +47,7 @@ import {
   removeLocalAvatarFiles,
   storeLocalAvatar,
 } from '@server/lib/localAvatar';
+import { runMediaEntityMutation } from '@server/lib/mediaMutation';
 import { hydrateMediaRequestRelations } from '@server/lib/mediaRequestHydration';
 import {
   MediaServerUserAuthorityChangedError,
@@ -60,10 +68,13 @@ import {
   runUserSecurityMutationWithActor,
   runUserSecurityReadWithActor,
 } from '@server/lib/userSecurityMutation';
+import { filterVideoItemsForUser } from '@server/lib/videoMaturityPolicy';
 import { getCombinedWatchlist } from '@server/lib/watchlist';
+import { watchlistFiltersSchema } from '@server/lib/watchlistFilters';
 import logger from '@server/logger';
 import { isAuthenticated } from '@server/middleware/auth';
 import { authorizedRouteAccess } from '@server/middleware/authorizedMutation';
+import { checkAvatarChanged } from '@server/routes/avatarproxy';
 import AsyncLock from '@server/utils/asyncLock';
 import { isUniqueConstraintError } from '@server/utils/databaseError';
 import { filterEntityResponse } from '@server/utils/entityResponse';
@@ -103,6 +114,15 @@ import userSettingsRoutes from './usersettings';
 const router = Router();
 const MAX_USER_SEARCH_QUERY_LENGTH = 200;
 const MAX_USER_SORT_LENGTH = 40;
+
+class UnsupportedMediaServerUserImportError extends Error {
+  constructor() {
+    super(
+      'Jellyfin user import is unavailable for the configured media server.'
+    );
+    this.name = 'UnsupportedMediaServerUserImportError';
+  }
+}
 
 const parseOptionalUserQueryString = (
   value: unknown,
@@ -145,6 +165,7 @@ export const PUSH_SUBSCRIPTION_REGISTRATION_LIMIT = 30;
 const MAX_USER_AGENT_LENGTH = 512;
 const MAX_USER_ID_VALUE = 1_000_000_000;
 const MAX_WATCHLIST_PAGE = 500;
+const AVAILABILITY_SUBSCRIPTION_MEDIA_TYPES = [MediaType.MOVIE, MediaType.TV];
 const pushSubscriptionMutationLock = new AsyncLock();
 const pushSubscriptionRegistrationRateLimit = rateLimit({
   windowMs: 60 * 1000,
@@ -162,6 +183,67 @@ const localAvatarUploadRateLimit = rateLimit({
   keyGenerator: (req) =>
     req.user?.id ? `user:${req.user.id}` : getRateLimitKey(req),
 });
+const MAX_AVAILABILITY_SUBSCRIPTIONS_PER_USER = 200;
+
+const availabilitySubscriptionMutationRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) =>
+    req.user?.id ? `user:${req.user.id}` : getRateLimitKey(req),
+});
+
+const parseAvailabilitySubscriptionMediaType = (
+  value: unknown
+): MediaType.MOVIE | MediaType.TV | undefined =>
+  AVAILABILITY_SUBSCRIPTION_MEDIA_TYPES.includes(value as MediaType)
+    ? (value as MediaType.MOVIE | MediaType.TV)
+    : undefined;
+
+const getAvailabilitySubscriptionState = async (
+  userId: number,
+  mediaType: MediaType.MOVIE | MediaType.TV,
+  tmdbId: number
+): Promise<{
+  response: UserAvailabilitySubscriptionResponse;
+  mediaId?: number;
+}> => {
+  const media = await getRepository(Media).findOne({
+    where: { mediaType, tmdbId },
+    select: { id: true, status: true, status4k: true },
+  });
+
+  if (!media) {
+    return { response: { subscribed: false, canSubscribe: false } };
+  }
+
+  const [subscription, otherActiveRequest] = await Promise.all([
+    getRepository(MediaAvailabilitySubscription).findOneBy({
+      media: { id: media.id },
+      user: { id: userId },
+    }),
+    getRepository(MediaRequest).exists({
+      where: {
+        media: { id: media.id },
+        requestedBy: { id: Not(userId) },
+        status: In([MediaRequestStatus.PENDING, MediaRequestStatus.APPROVED]),
+      },
+    }),
+  ]);
+
+  const alreadyAvailable =
+    media.status === MediaStatus.AVAILABLE ||
+    media.status4k === MediaStatus.AVAILABLE;
+
+  return {
+    mediaId: media.id,
+    response: {
+      subscribed: Boolean(subscription),
+      canSubscribe: otherActiveRequest && !alreadyAvailable,
+    },
+  };
+};
 
 export const runPushSubscriptionMutation = <T>(
   userId: number,
@@ -1007,13 +1089,14 @@ router.post<
             const transactionalRepo =
               transactionalEntityManager.getRepository(UserPushSubscription);
 
-            // Check for existing subscription by auth or endpoint within transaction
+            // An endpoint identifies the browser subscription record. Keep auth
+            // out of this lookup so a rotated endpoint reaches stale cleanup.
             const existingSubscription = await transactionalRepo.findOne({
               relations: { user: true },
-              where: [
-                { auth: body.auth, user: { id: req.user?.id } },
-                { endpoint: body.endpoint, user: { id: req.user?.id } },
-              ],
+              where: {
+                endpoint: body.endpoint,
+                user: { id: req.user?.id },
+              },
             });
 
             if (existingSubscription) {
@@ -1042,17 +1125,15 @@ router.post<
               return;
             }
 
-            // Clean up old subscriptions from the same device (userAgent) for this user
-            // iOS can silently refresh endpoints, leaving stale subscriptions in the database
-            // Only clean up if we're creating a new subscription (not updating an existing one)
-            if (body.userAgent) {
+            // Remove only a stale endpoint for this push subscription identity.
+            // User-agent strings are shared by distinct devices and can change
+            // across endpoint rotations, so auth is the reliable match here.
+            if (body.auth) {
               const staleSubscriptions = await transactionalRepo.find({
                 relations: { user: true },
                 where: {
-                  userAgent: body.userAgent,
+                  auth: body.auth,
                   user: { id: req.user?.id },
-                  // Only remove subscriptions with different endpoints (stale ones)
-                  // Keep subscriptions that might be from different browsers/tabs
                   endpoint: Not(body.endpoint),
                 },
               });
@@ -1463,6 +1544,190 @@ router.get<{ jellyfinUserId: string }>(
 );
 
 router.use('/:id/settings', userSettingsRoutes);
+
+router.get<
+  { id: string; mediaType: string; tmdbId: string },
+  UserAvailabilitySubscriptionResponse
+>(
+  '/:id/availability-subscriptions/:mediaType/:tmdbId',
+  isAuthenticated(),
+  isOwnProfile(),
+  async (req, res, next) => {
+    const userId = parseUserRouteId(req.params.id);
+    const mediaType = parseAvailabilitySubscriptionMediaType(
+      req.params.mediaType
+    );
+    const tmdbId = parsePositiveRouteId(req.params.tmdbId, MAX_USER_ID_VALUE);
+    if (!userId || !mediaType || !tmdbId) {
+      return next({ status: 404, message: 'Media not found.' });
+    }
+
+    try {
+      const { response } = await getAvailabilitySubscriptionState(
+        userId,
+        mediaType,
+        tmdbId
+      );
+      return res.status(200).json(response);
+    } catch (error) {
+      logger.error('Failed to load media availability subscription state', {
+        label: 'Media Availability Subscription',
+        mediaType,
+        tmdbId,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return next({
+        status: 500,
+        message: 'Unable to load availability notification settings.',
+      });
+    }
+  }
+);
+
+router.post(
+  '/:id/availability-subscriptions/:mediaType/:tmdbId',
+  isAuthenticated(),
+  isOwnProfile(),
+  availabilitySubscriptionMutationRateLimit,
+  async (req, res, next) => {
+    const userId = parseUserRouteId(req.params.id);
+    const mediaType = parseAvailabilitySubscriptionMediaType(
+      req.params.mediaType
+    );
+    const tmdbId = parsePositiveRouteId(req.params.tmdbId, MAX_USER_ID_VALUE);
+    if (!userId || !mediaType || !tmdbId) {
+      return next({ status: 404, message: 'Media not found.' });
+    }
+
+    try {
+      let limitReached = false;
+      const accepted = await runUserSecurityMutation(userId, async () => {
+        const media = await getRepository(Media).findOne({
+          where: { mediaType, tmdbId },
+          relations: { identifiers: true },
+        });
+        if (!media) {
+          return false;
+        }
+
+        return runMediaEntityMutation(media, async () => {
+          const state = await getAvailabilitySubscriptionState(
+            userId,
+            mediaType,
+            tmdbId
+          );
+          if (state.response.subscribed) {
+            return true;
+          }
+          if (!state.response.canSubscribe || !state.mediaId) {
+            return false;
+          }
+
+          if (
+            (await getRepository(MediaAvailabilitySubscription).countBy({
+              user: { id: userId },
+            })) >= MAX_AVAILABILITY_SUBSCRIPTIONS_PER_USER
+          ) {
+            limitReached = true;
+            return false;
+          }
+
+          try {
+            await getRepository(MediaAvailabilitySubscription).insert({
+              user: { id: userId },
+              media: { id: state.mediaId },
+            });
+          } catch (error) {
+            if (!isUniqueConstraintError(error)) {
+              throw error;
+            }
+          }
+
+          return true;
+        });
+      });
+
+      if (!accepted) {
+        return next({
+          status: 409,
+          message: limitReached
+            ? 'You have reached the maximum number of availability subscriptions.'
+            : 'This title no longer has an active request from another user.',
+        });
+      }
+
+      const { response } = await getAvailabilitySubscriptionState(
+        userId,
+        mediaType,
+        tmdbId
+      );
+      return res.status(200).json(response);
+    } catch (error) {
+      logger.error('Failed to subscribe to media availability notification', {
+        label: 'Media Availability Subscription',
+        userId,
+        mediaType,
+        tmdbId,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return next({
+        status: 500,
+        message: 'Unable to enable availability notifications.',
+      });
+    }
+  }
+);
+
+router.delete(
+  '/:id/availability-subscriptions/:mediaType/:tmdbId',
+  isAuthenticated(),
+  isOwnProfile(),
+  availabilitySubscriptionMutationRateLimit,
+  async (req, res, next) => {
+    const userId = parseUserRouteId(req.params.id);
+    const mediaType = parseAvailabilitySubscriptionMediaType(
+      req.params.mediaType
+    );
+    const tmdbId = parsePositiveRouteId(req.params.tmdbId, MAX_USER_ID_VALUE);
+    if (!userId || !mediaType || !tmdbId) {
+      return next({ status: 404, message: 'Media not found.' });
+    }
+
+    try {
+      await runUserSecurityMutation(userId, async () => {
+        const media = await getRepository(Media).findOne({
+          where: { mediaType, tmdbId },
+          relations: { identifiers: true },
+        });
+        if (media) {
+          await runMediaEntityMutation(media, async () => {
+            await getRepository(MediaAvailabilitySubscription).delete({
+              user: { id: userId },
+              media: { id: media.id },
+            });
+          });
+        }
+      });
+      return res.status(204).send();
+    } catch (error) {
+      logger.error(
+        'Failed to unsubscribe from media availability notification',
+        {
+          label: 'Media Availability Subscription',
+          userId,
+          mediaType,
+          tmdbId,
+          errorMessage:
+            error instanceof Error ? error.message : 'Unknown error',
+        }
+      );
+      return next({
+        status: 500,
+        message: 'Unable to disable availability notifications.',
+      });
+    }
+  }
+);
 
 router.get<{ id: string }, UserRequestsResponse>(
   '/:id/requests',
@@ -2084,6 +2349,7 @@ router.post(
 router.post(
   '/import-from-jellyfin',
   isAuthenticated(Permission.MANAGE_USERS),
+  authorizedRouteAccess(Permission.MANAGE_USERS),
   async (req, res, next) => {
     const parsedBody = parseOptionalUserBodyObject(req.body);
     if ('error' in parsedBody) {
@@ -2103,6 +2369,15 @@ router.post(
       return next({ status: 400, message: parsedJellyfinUserIds.error });
     }
 
+    const parsedSyncExisting = parseOptionalBodyBoolean(
+      parsedBody.value.syncExisting,
+      'syncExisting'
+    );
+    if ('error' in parsedSyncExisting) {
+      return next({ status: 400, message: parsedSyncExisting.error });
+    }
+    const syncExisting = parsedSyncExisting.value === true;
+
     const jellyfinUserIds = new Set<string>();
     for (const rawJellyfinUserId of parsedJellyfinUserIds.value) {
       const jellyfinUserId = normalizeJellyfinGuid(rawJellyfinUserId);
@@ -2115,6 +2390,7 @@ router.post(
     try {
       const userRepository = getRepository(User);
       const createdUsers: User[] = [];
+      let refreshedUsers = 0;
       const importAuthority = await runAuthorizedUserSecurityMutation(
         req.user!.id,
         [req.user!.id, 1],
@@ -2126,6 +2402,12 @@ router.post(
               !canMakePermissionsChange(settings.main.defaultPermissions, actor)
             ) {
               throw new UserMutationActorUnauthorizedError();
+            }
+            if (
+              settings.main.mediaServerType !== MediaServerType.JELLYFIN &&
+              settings.main.mediaServerType !== MediaServerType.EMBY
+            ) {
+              throw new UnsupportedMediaServerUserImportError();
             }
 
             const admin = await userRepository.findOneOrFail({
@@ -2161,11 +2443,12 @@ router.post(
       jellyfinClient.setUserId(importAuthority.owner.jellyfinUserId ?? '');
       const jellyfinUsers = await jellyfinClient.getUsers();
       const runWithImportAuthority = <Result>(
+        targetUserIds: number[],
         callback: (actor: User) => Promise<Result>
       ): Promise<Result> =>
         runAuthorizedUserSecurityMutation(
           req.user!.id,
-          [1],
+          [...targetUserIds, 1],
           Permission.MANAGE_USERS,
           (actor) =>
             runWithConfigurationSnapshot(
@@ -2214,46 +2497,102 @@ router.post(
             getAuthAccountAdmissionResource('jellyfin', jellyfinUserId),
           ],
           async () => {
-            const user = await userRepository.findOne({
+            const linkedUser = await userRepository.findOne({
               select: { id: true, jellyfinUserId: true },
-              where: [
-                { jellyfinUserId },
-                { email: jellyfinUser.Name.toLowerCase() },
-              ],
+              where: { jellyfinUserId },
             });
 
-            if (!user) {
-              await runWithImportAuthority(async (actor) => {
-                const settings = getSettings();
-                if (
-                  !canMakePermissionsChange(
-                    settings.main.defaultPermissions,
-                    actor
-                  )
-                ) {
-                  throw new UserMutationActorUnauthorizedError();
+            if (linkedUser) {
+              await runWithImportAuthority([linkedUser.id], async (actor) => {
+                if (!syncExisting) {
+                  return;
                 }
-                const newUser = new User({
-                  jellyfinUsername: jellyfinUser.Name,
-                  jellyfinUserId: jellyfinUser.Id,
-                  jellyfinDeviceId: Buffer.from(
-                    `BOT_seerr_${jellyfinUser.Name}`
-                  ).toString('base64'),
-                  email: jellyfinUser.Name,
-                  permissions: settings.main.defaultPermissions,
-                  avatar: `/avatarproxy/${jellyfinUser.Id}`,
-                  userType:
-                    settings.main.mediaServerType === MediaServerType.JELLYFIN
-                      ? UserType.JELLYFIN
-                      : UserType.EMBY,
+                const activeUser = await userRepository.findOneBy({
+                  id: linkedUser.id,
                 });
+                if (
+                  !activeUser ||
+                  normalizeJellyfinGuid(activeUser.jellyfinUserId) !==
+                    jellyfinUserId
+                ) {
+                  return;
+                }
 
-                await userRepository.save(newUser);
-                createdUsers.push(newUser);
+                const isOtherProtectedAdministrator =
+                  activeUser.hasPermission(Permission.ADMIN) &&
+                  actor.id !== 1 &&
+                  actor.id !== activeUser.id;
+                const mayModifyExistingUser =
+                  actor.id === 1 ||
+                  actor.id === activeUser.id ||
+                  canMakePermissionsChange(activeUser.permissions, actor);
+                if (isOtherProtectedAdministrator || !mayModifyExistingUser) {
+                  return;
+                }
+
+                await checkAvatarChanged(activeUser);
+                const avatar = activeUser.avatarVersion
+                  ? `/avatarproxy/${jellyfinUserId}?v=${encodeURIComponent(activeUser.avatarVersion)}`
+                  : `/avatarproxy/${jellyfinUserId}`;
+                const updates: Partial<
+                  Pick<User, 'jellyfinUsername' | 'avatar'>
+                > = {};
+                if (activeUser.jellyfinUsername !== jellyfinUser.Name) {
+                  updates.jellyfinUsername = jellyfinUser.Name;
+                }
+                if (activeUser.avatar !== avatar) {
+                  updates.avatar = avatar;
+                }
+                if (Object.keys(updates).length > 0) {
+                  await userRepository.update(activeUser.id, updates);
+                }
+                refreshedUsers += 1;
               });
+            } else {
+              const existingEmailUser = await userRepository.findOne({
+                select: { id: true },
+                where: { email: jellyfinUser.Name.toLowerCase() },
+              });
+
+              if (!existingEmailUser) {
+                await runWithImportAuthority([], async (actor) => {
+                  const settings = getSettings();
+                  if (
+                    !canMakePermissionsChange(
+                      settings.main.defaultPermissions,
+                      actor
+                    )
+                  ) {
+                    throw new UserMutationActorUnauthorizedError();
+                  }
+                  const newUser = new User({
+                    jellyfinUsername: jellyfinUser.Name,
+                    jellyfinUserId: jellyfinUser.Id,
+                    jellyfinDeviceId: Buffer.from(
+                      `BOT_seerr_${jellyfinUser.Name}`
+                    ).toString('base64'),
+                    email: jellyfinUser.Name,
+                    permissions: settings.main.defaultPermissions,
+                    avatar: `/avatarproxy/${jellyfinUserId}`,
+                    userType:
+                      settings.main.mediaServerType === MediaServerType.JELLYFIN
+                        ? UserType.JELLYFIN
+                        : UserType.EMBY,
+                  });
+
+                  await userRepository.save(newUser);
+                  createdUsers.push(newUser);
+                });
+              }
             }
           }
         );
+      }
+      if (syncExisting) {
+        return res.status(201).json({
+          createdUsers: User.filterMany(createdUsers),
+          refreshedUsers,
+        });
       }
       return res.status(201).json(User.filterMany(createdUsers));
     } catch (e) {
@@ -2262,6 +2601,9 @@ router.post(
           status: 403,
           message: 'You do not have permission to import users',
         });
+      }
+      if (e instanceof UnsupportedMediaServerUserImportError) {
+        return next({ status: 409, message: e.message });
       }
       if (
         e instanceof ConfigurationAuthorityChangedError ||
@@ -2452,6 +2794,10 @@ router.get<{ id: string }, WatchlistResponse>(
 
     const itemsPerPage = 20;
     const page = parsePositiveInt(req.query.page, 1, MAX_WATCHLIST_PAGE);
+    const filters = watchlistFiltersSchema.safeParse(req.query);
+    if (!filters.success) {
+      return next({ status: 400, message: 'Invalid watchlist filters.' });
+    }
 
     try {
       return await runUserSecurityReadWithActor(
@@ -2464,14 +2810,42 @@ router.get<{ id: string }, WatchlistResponse>(
             select: { id: true, plexToken: true },
           });
 
-          return res.json(
-            await getCombinedWatchlist({
-              userId: user.id,
-              plexToken: user.plexToken,
-              page,
-              itemsPerPage,
-            })
+          const watchlist = await getCombinedWatchlist({
+            userId: user.id,
+            plexToken: user.plexToken,
+            page,
+            itemsPerPage,
+            filters: filters.data,
+          });
+          const videoItems = watchlist.results.flatMap((item) =>
+            item.mediaType === MediaType.MOVIE ||
+            item.mediaType === MediaType.TV
+              ? [
+                  {
+                    id: item.tmdbId ?? item.id,
+                    mediaType: item.mediaType as MediaType.MOVIE | MediaType.TV,
+                  },
+                ]
+              : []
           );
+          const allowedVideoItems = await filterVideoItemsForUser(
+            new TheMovieDb(),
+            userId,
+            videoItems
+          );
+          const allowedVideoKeys = new Set(
+            allowedVideoItems.map((item) => `${item.mediaType}:${item.id}`)
+          );
+          watchlist.results = watchlist.results.filter(
+            (item) =>
+              (item.mediaType !== MediaType.MOVIE &&
+                item.mediaType !== MediaType.TV) ||
+              allowedVideoKeys.has(
+                `${item.mediaType}:${item.tmdbId ?? item.id}`
+              )
+          );
+
+          return res.json(watchlist);
         }
       );
     } catch (error) {

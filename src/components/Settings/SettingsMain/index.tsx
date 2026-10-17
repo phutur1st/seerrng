@@ -20,6 +20,7 @@ import defineMessages from '@app/utils/defineMessages';
 import { isValidURL } from '@app/utils/urlValidationHelper';
 import { ArrowDownOnSquareIcon } from '@heroicons/react/24/outline';
 import { ArrowPathIcon } from '@heroicons/react/24/solid';
+import { OtherUserAvailabilityMode } from '@server/constants/availability';
 import type { UserSettingsGeneralResponse } from '@server/interfaces/api/userSettingsInterfaces';
 import type { MainSettings } from '@server/lib/settings';
 import type { AvailableLocale } from '@server/types/languages';
@@ -28,6 +29,15 @@ import { Form, Formik } from 'formik';
 import { useIntl } from 'react-intl';
 import useSWR, { mutate } from 'swr';
 import * as Yup from 'yup';
+
+const downloadPathMappingsExample = `[
+  {
+    "serviceType": "radarr",
+    "serviceId": 1,
+    "remoteRoot": "/movies",
+    "localRoot": "/mnt/media/movies"
+  }
+]`;
 
 const messages = defineMessages('components.Settings.SettingsMain', {
   general: 'General',
@@ -68,6 +78,12 @@ const messages = defineMessages('components.Settings.SettingsMain', {
   hideAvailable: 'Hide Available Media',
   hideAvailableTip:
     'Hide available media from the discover pages but not search results',
+  otherUsersAvailability: "Other Users' Availability",
+  otherUsersAvailabilityTip:
+    'Choose how movie and TV availability appears when the current viewer has no approved or completed request for that copy. This changes SeerrNG display only; media-server access is controlled by your media server.',
+  otherUsersAvailabilityShow: 'Show Availability for Everyone',
+  otherUsersAvailabilityDistinguish: 'Mark Shared Availability',
+  otherUsersAvailabilityHide: 'Hide Shared Availability',
   hideRequested: 'Hide Requested Media',
   hideRequestedTip:
     'Hide media that has been requested from the discover pages but not search results',
@@ -81,6 +97,9 @@ const messages = defineMessages('components.Settings.SettingsMain', {
   validationApplicationUrl: 'You must provide a valid URL',
   validationApplicationUrlTrailingSlash: 'URL must not end in a trailing slash',
   partialRequestsEnabled: 'Allow Partial Series Requests',
+  tvSeasonWatchGateEnabled: 'Require the Previous Season to Be Watched',
+  tvSeasonWatchGateEnabledTip:
+    'When enabled, users must watch every episode of the previous regular season before requesting a later season. Specials are excluded. Requests need playback progress from the user’s linked Plex, Jellyfin, or Emby account. Administrators and request managers can override this rule.',
   personMovieBulkRequestsEnabled:
     'Allow Requesting All Movies From a Person Page',
   personMovieBulkRequestsEnabledTip:
@@ -93,7 +112,6 @@ const messages = defineMessages('components.Settings.SettingsMain', {
   versionCheck: 'Version Check',
   versionCheckTip: 'Automatically check for new versions on GitHub.',
   validationUrl: 'You must provide a valid URL',
-  validationUrlTrailingSlash: 'URL must not end in a trailing slash',
   playlistIntegrations: 'Playlist Integrations',
   playlistIntegrationsDescription:
     'Configure the provider credentials used when users import playlists into SeerrNG.',
@@ -121,8 +139,9 @@ const messages = defineMessages('components.Settings.SettingsMain', {
   downloadPathMappings: 'Library Path Mappings',
   downloadPathMappingsTip:
     'Enter a JSON array. Each mapping has serviceType, optional serviceId, remoteRoot, and localRoot. Use narrow library roots; SeerrNG only offers files that resolve inside a mapped root.',
+  // Escape the JSON braces so ICU renders the sample literally.
   downloadPathMappingsExample:
-    '[\n  {\n    "serviceType": "radarr",\n    "serviceId": 1,\n    "remoteRoot": "/movies",\n    "localRoot": "/mnt/media/movies"\n  }\n]',
+    '[\n  \'{\'\n    "serviceType": "radarr",\n    "serviceId": 1,\n    "remoteRoot": "/movies",\n    "localRoot": "/mnt/media/movies"\n  \'}\'\n]',
   downloadPathMappingsJsonError:
     'Enter a JSON array with at most 100 path mappings.',
   validationDownloadPathMappingsJson:
@@ -175,13 +194,7 @@ const SettingsMain = () => {
         'Number must be less than or equal to 250.',
         (value) => (value ?? 0) <= 250
       ),
-    youtubeUrl: Yup.string()
-      .url(intl.formatMessage(messages.validationUrl))
-      .test(
-        'no-trailing-slash',
-        intl.formatMessage(messages.validationUrlTrailingSlash),
-        (value) => !value || !value.endsWith('/')
-      ),
+    youtubeUrl: Yup.string().url(intl.formatMessage(messages.validationUrl)),
     downloadPathMappingsJson: Yup.string().test(
       'download-path-mappings-json',
       intl.formatMessage(messages.validationDownloadPathMappingsJson),
@@ -230,6 +243,8 @@ const SettingsMain = () => {
           applicationTitle: data?.applicationTitle,
           applicationUrl: data?.applicationUrl,
           hideAvailable: data?.hideAvailable,
+          otherUsersAvailability:
+            data?.otherUsersAvailability ?? OtherUserAvailabilityMode.SHOW,
           hideBlocklisted: data?.hideBlocklisted,
           locale: data?.locale ?? 'en',
           discoverRegion: data?.discoverRegion,
@@ -240,6 +255,7 @@ const SettingsMain = () => {
           blocklistedTags: data?.blocklistedTags,
           blocklistedTagsLimit: data?.blocklistedTagsLimit || 50,
           partialRequestsEnabled: data?.partialRequestsEnabled,
+          tvSeasonWatchGateEnabled: data?.tvSeasonWatchGateEnabled ?? false,
           personMovieBulkRequestsEnabled:
             data?.personMovieBulkRequestsEnabled ?? false,
           enableSpecialEpisodes: data?.enableSpecialEpisodes,
@@ -267,6 +283,7 @@ const SettingsMain = () => {
               applicationTitle: values.applicationTitle,
               applicationUrl: values.applicationUrl,
               hideAvailable: values.hideAvailable,
+              otherUsersAvailability: values.otherUsersAvailability,
               hideBlocklisted: values.hideBlocklisted,
               locale: values.locale,
               discoverRegion: values.discoverRegion,
@@ -277,6 +294,7 @@ const SettingsMain = () => {
               blocklistedTags: values.blocklistedTags,
               blocklistedTagsLimit: values.blocklistedTagsLimit,
               partialRequestsEnabled: values.partialRequestsEnabled,
+              tvSeasonWatchGateEnabled: values.tvSeasonWatchGateEnabled,
               personMovieBulkRequestsEnabled:
                 values.personMovieBulkRequestsEnabled,
               enableSpecialEpisodes: values.enableSpecialEpisodes,
@@ -350,7 +368,7 @@ const SettingsMain = () => {
                           <SensitiveInput
                             type="text"
                             id="apiKey"
-                            className="rounded-l-only"
+                            className="rounded-s-only"
                             value={data?.apiKey}
                             readOnly
                           />
@@ -576,7 +594,7 @@ const SettingsMain = () => {
                       type="text"
                       inputMode="numeric"
                       className="short"
-                      placeholder={50}
+                      placeholder="50"
                     />
                     {errors.blocklistedTagsLimit &&
                       touched.blocklistedTagsLimit &&
@@ -601,6 +619,38 @@ const SettingsMain = () => {
                         setFieldValue('hideAvailable', !values.hideAvailable);
                       }}
                     />
+                  </SettingsFormRow>
+                  <SettingsFormRow
+                    htmlFor="otherUsersAvailability"
+                    label={intl.formatMessage(messages.otherUsersAvailability)}
+                    description={intl.formatMessage(
+                      messages.otherUsersAvailabilityTip
+                    )}
+                  >
+                    <div className="form-input-field">
+                      <Field
+                        as="select"
+                        id="otherUsersAvailability"
+                        name="otherUsersAvailability"
+                        data-testid="other-users-availability-setting"
+                      >
+                        <option value={OtherUserAvailabilityMode.SHOW}>
+                          {intl.formatMessage(
+                            messages.otherUsersAvailabilityShow
+                          )}
+                        </option>
+                        <option value={OtherUserAvailabilityMode.DISTINGUISH}>
+                          {intl.formatMessage(
+                            messages.otherUsersAvailabilityDistinguish
+                          )}
+                        </option>
+                        <option value={OtherUserAvailabilityMode.HIDE}>
+                          {intl.formatMessage(
+                            messages.otherUsersAvailabilityHide
+                          )}
+                        </option>
+                      </Field>
+                    </div>
                   </SettingsFormRow>
                   <SettingsFormRow
                     htmlFor="hideBlocklisted"
@@ -645,6 +695,28 @@ const SettingsMain = () => {
                       />
                     </div>
                   </div>
+                  <SettingsFormRow
+                    htmlFor="tvSeasonWatchGateEnabled"
+                    label={intl.formatMessage(
+                      messages.tvSeasonWatchGateEnabled
+                    )}
+                    description={intl.formatMessage(
+                      messages.tvSeasonWatchGateEnabledTip
+                    )}
+                    labelClassName="checkbox-label"
+                  >
+                    <SettingsField
+                      type="checkbox"
+                      id="tvSeasonWatchGateEnabled"
+                      name="tvSeasonWatchGateEnabled"
+                      onChange={() => {
+                        setFieldValue(
+                          'tvSeasonWatchGateEnabled',
+                          !values.tvSeasonWatchGateEnabled
+                        );
+                      }}
+                    />
+                  </SettingsFormRow>
                   <SettingsFormRow
                     htmlFor="personMovieBulkRequestsEnabled"
                     label={intl.formatMessage(
@@ -898,9 +970,7 @@ const SettingsMain = () => {
                         name="downloadPathMappingsJson"
                         rows={8}
                         spellCheck={false}
-                        placeholder={intl.formatMessage(
-                          messages.downloadPathMappingsExample
-                        )}
+                        placeholder={downloadPathMappingsExample}
                         className="w-full font-mono text-xs"
                       />
                     </div>

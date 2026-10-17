@@ -8,6 +8,7 @@ import { sliderTitles } from '@app/components/Discover/constants';
 import ReadMeABookHomeSection from '@app/components/Discover/ReadMeABookHomeSection';
 import discoveryMessages from '@app/components/DiscoveryIntegrations/messages';
 import MediaSlider from '@app/components/MediaSlider';
+import { DiscoverSliderScrollRestorationContext } from '@app/components/Slider';
 import { encodeURIExtraParams } from '@app/hooks/useDiscover';
 import useSettings from '@app/hooks/useSettings';
 import useToasts from '@app/hooks/useToasts';
@@ -235,8 +236,11 @@ const Discover = ({ initialSliders }: DiscoverProps) => {
     );
   }
 
-  return (
-    <div>
+  const discoverContent = (
+    <div
+      className="discover-page-content"
+      data-discover-editor-open={isEditing ? 'true' : 'false'}
+    >
       <PageTitle title={intl.formatMessage(messages.discover)} />
       <Header>{intl.formatMessage(messages.discover)}</Header>
       <Link
@@ -452,7 +456,7 @@ const Discover = ({ initialSliders }: DiscoverProps) => {
             );
             break;
           case DiscoverSliderType.NETWORKS:
-            sliderComponent = <NetworkSlider />;
+            sliderComponent = <NetworkSlider data={slider.data} />;
             break;
           case DiscoverSliderType.TMDB_MOVIE_KEYWORD:
             sliderComponent = (
@@ -648,6 +652,15 @@ const Discover = ({ initialSliders }: DiscoverProps) => {
                 await mutate(newSliders as DiscoverSlider[], false);
                 setSliders(newSliders);
               }}
+              onUpdate={async (updatedSlider) => {
+                const newSliders = sliders.map((currentSlider) =>
+                  currentSlider.id === updatedSlider.id
+                    ? updatedSlider
+                    : currentSlider
+                );
+                await mutate(newSliders as DiscoverSlider[], false);
+                setSliders(newSliders);
+              }}
               onEnable={() => {
                 const tempSliders = sliders.slice();
                 tempSliders[index].enabled = !tempSliders[index].enabled;
@@ -737,6 +750,11 @@ const Discover = ({ initialSliders }: DiscoverProps) => {
             );
           })}
     </div>
+  );
+  return (
+    <DiscoverSliderScrollRestorationContext.Provider value>
+      {discoverContent}
+    </DiscoverSliderScrollRestorationContext.Provider>
   );
 };
 

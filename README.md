@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <img src="https://github.com/snapetech/seerrng/actions/workflows/ci.yml/badge.svg" alt="SeerrNG CI" />
-  <a href="https://github.com/snapetech/seerrng/blob/main/LICENSE"><img src="https://img.shields.io/github/license/snapetech/seerrng" alt="License" /></a>
+  <img src="https://github.com/snapetech-org/seerrng/actions/workflows/ci.yml/badge.svg" alt="SeerrNG CI" />
+  <a href="https://github.com/snapetech-org/seerrng/blob/main/LICENSE"><img src="https://img.shields.io/github/license/snapetech-org/seerrng" alt="License" /></a>
   <a href="https://discord.gg/5PyXBfvS6T"><img src="https://img.shields.io/badge/support-Discord-5865F2?logo=discord&logoColor=white" alt="Support on Discord" /></a>
 </p>
 
@@ -24,6 +24,7 @@ SeerrNG is maintained by snapetech as a separate fork so we can move quickly on 
 - [What SeerrNG Does](#what-seerrng-does)
 - [Project Status](#project-status)
 - [Documentation and feature guides](#documentation)
+  - [SeerrNG Android app](./docs/getting-started/android-app.md)
   - [Choose available media categories](./docs/using-seerr/settings/media-categories.md)
   - [Software requests: ROMs and PC games](./docs/using-seerr/software-acquisition.md)
   - [Request Status and Download copy](./docs/using-seerr/request-status.md)
@@ -33,17 +34,29 @@ SeerrNG is maintained by snapetech as a separate fork so we can move quickly on 
   - [Move Bookshelf media paths](./docs/using-seerr/bookshelf-media-path-migration.md)
   - [Configure comics](./docs/using-seerr/comics-backend.md)
   - [Configure magazines](./docs/using-seerr/magazines-backend.md)
+  - [Movie and series Discover filters](./docs/using-seerr/movie-series-discovery-filters.md)
+  - [Choose request destinations](./docs/using-seerr/settings/services.md#request-destination-label-optional)
+  - [Require previous-season watch progress](./docs/using-seerr/settings/general.md#require-the-previous-season-to-be-watched)
+  - [Hide subject tags](./docs/using-seerr/media-details-and-playback.md#hide-subject-tags)
+  - [Filter and sort local watchlists](./docs/using-seerr/plex/watchlist-auto-request.md#find-items-in-your-watchlist)
+  - [Follow another user's request](./docs/using-seerr/notifications/index.mdx#follow-a-movie-or-series-request)
   - [Companion services and SeerrNG NG forks](./docs/using-seerr/companion-services.md)
+  - [Add and import users](./docs/using-seerr/users/adding-users.mdx)
   - [Why SeerrNG is a fork and what could retire it](./docs/fork-rationale.md)
   - [Cross-platform setup assistant](./docs/using-seerr/setup-assistant.md)
   - [Indexer searches by media category](./docs/using-seerr/indexer-searches.md)
   - [Configure services](./docs/using-seerr/settings/services.md)
+  - [Manage users and request preferences](./docs/using-seerr/users/editing-users.md)
+  - [Slack notifications](./docs/using-seerr/notifications/slack.md)
+  - [Telegram notifications](./docs/using-seerr/notifications/telegram.md)
+  - [Configure notifications and follow request availability](./docs/using-seerr/notifications/index.mdx)
 - [Screenshots](#screenshots)
 - [Install](#install)
   - [Docker](#docker)
   - [Docker Compose](#docker-compose)
   - [Unraid](#unraid)
   - [Linux packages](#linux-packages)
+- [Android APK](#android-apk)
 - [Required Setup](#required-setup)
 - [Bookshelf and Hardcover](#bookshelf-and-hardcover)
 - [Environment Variables](#environment-variables)
@@ -58,10 +71,18 @@ SeerrNG is maintained by snapetech as a separate fork so we can move quickly on 
 ## What SeerrNG Does
 
 - Requests and approvals for movies, shows, music, ebooks, audiobooks, comics, magazines, emulation ROMs, and PC games.
+- A companion Android APK client for connecting to one or more self-hosted SeerrNG servers.
+- Movie and series Discover filters with 0.1-point TMDB rating thresholds and streaming-service availability filters by region.
 - Media-server integration with Plex, Jellyfin, and Emby, including watch-state-aware My Library views scoped to each linked account.
+- Optional Jellyfin and Emby profile sync during user imports, refreshing linked provider names and avatars while preserving SeerrNG email addresses, local passwords, and permissions.
+- Labeled movie and TV request destinations across multiple Radarr and Sonarr instances, with per-user access and availability tracked for each destination.
+- Managers can approve a one-time movie or TV request exception when a user's quota is full; optional Slack actions use a mapped account and the same request permissions as the web app.
 - Automation service integration with Radarr, Sonarr, Lidarr, and Bookshelf/Readarr-compatible APIs.
+- Sonarr v5 support alongside v3/v4, including metadata-language and season-order options with explicit season mapping for recovery.
+- An optional TV request gate that checks whether the previous regular season was watched through a linked Plex, Jellyfin, or Emby account.
 - Admin-configured Prowlarr connection, per-indexer diagnostics, category coverage, and format-aware manual search across movies, TV, music, books, comics, magazines, ROMs, and PC games, with title-prefilled search links from media details; approved requests still go through their configured acquisition providers.
 - Music discovery and metadata through MusicBrainz, ListenBrainz, Cover Art Archive, TheAudioDB, and archive-backed artwork sources.
+- Administrators can test MusicBrainz and Cover Art Archive connectivity and set bounded Cover Art Archive request limits.
 - Book discovery and identity matching through Open Library, ISBN-10/ISBN-13 normalization, foreign book IDs, and edition IDs.
 - Audiobook discovery from connected audiobook catalogs, with author and narrator filtering and no ebook-only search results.
 - Comic discovery through ComicVine and magazine discovery through Google Books or LazyLibrarian. For new comic automation setups, SeerrNG recommends [Issuarr](https://github.com/issuarr/issuarr), the actively developed successor to [Mylar3](https://github.com/MylarComics/mylar3); existing Mylar3 connections remain supported through the same service type. Kapowarr and BackIssue are also supported comic backends, and LazyLibrarian handles magazines.
@@ -78,8 +99,8 @@ SeerrNG is maintained by snapetech as a separate fork so we can move quickly on 
   complete enhanced feature set, populated-data conversion, and each old
   installation channel. The later ChaptarrNG-to-upstream gate also includes
   every ChaptarrNG feature it maintains or is actively adding, including
-  unpublished work. See the [BookshelfNG consolidation report](https://github.com/snapetech/bookshelfng/blob/main/docs/maintainers/chaptarr-consolidation.md)
-  and [ChaptarrNG's itemized retirement matrix](https://github.com/snapetech/chaptarrng/blob/main/docs/FORK_FEATURES.md#itemized-active-and-unreleased-chaptarrng-blockers).
+  unpublished work. See the [BookshelfNG consolidation report](https://github.com/snapetech-org/bookshelfng/blob/main/docs/maintainers/chaptarr-consolidation.md)
+  and [ChaptarrNG's itemized retirement matrix](https://github.com/snapetech-org/chaptarrng/blob/main/docs/FORK_FEATURES.md#itemized-active-and-unreleased-chaptarrng-blockers).
 - Optional read-only Audiobookshelf library scanning marks ISBN-matched items
   as available audiobooks without sending acquisition requests or changing
   Audiobookshelf data.
@@ -87,26 +108,50 @@ SeerrNG is maintained by snapetech as a separate fork so we can move quickly on 
 - Administrator-controlled availability switches for each supported category, including separate ebook, audiobook, Retro, Modern, and PC Games controls.
 - Bookshelf backend diagnostics that classify Hardcover, softcover/Goodreads, and unknown metadata providers.
 - Hardcover-first Bookshelf deployment and migration tooling for existing Readarr or softcover libraries.
+- A [preview-first BookshelfNG-to-ChaptarrNG database migration helper](./docs/using-seerr/bookshelf-backend.md#installer-script) for single-database installations, with an independent backup before applying the conversion.
 - Admin-only Bookshelf path moves with a conflict and disk-space preview, confirmation, API access, and a dry-run-first CLI. The mover works inside one BookshelfNG database; consolidate an old split deployment before using it.
 - Resumable, layered Readarr/softcover-to-Hardcover migration with strict matching, softcover metadata recovery, validation, cutover checks, and an opt-in deterministic local-record fallback for books Hardcover cannot import.
-- Watchlists, blocklists, request quotas, override rules, permissions, notifications, issue reporting, and request management.
+- Per-user cross-media watchlists; local-only lists support title search, media-type filters, and stable sorting, while combined Plex lists preserve Plex ordering. The request workflow also includes blocklists, quotas, override rules, permissions, notifications, issue reporting, and request management.
+- Users can choose whether movie and TV copies requested by someone else appear as shared or stay hidden; this changes the availability display, not media-server access.
+- Discover shelves can be reordered and customized; movie and series filters include fractional ratings, streaming-service inclusion or exclusion, and category exclusions. Discover detail navigation keeps the selected result context, and rating details work on touch screens.
+- Movie and Series Subject Tags can be hidden with a browser-saved preference shared across both detail pages.
 - Authenticated **Download copy** links in Request Status for verified movie, TV, book, comic, magazine, ROM, and PC game files.
 - Request lifecycle tracking and availability notifications link users back to the matching Request Status item, where available files can be selected and saved.
+- Signed-in household members can follow another user's active movie or series request for a one-time availability notice through their own configured notification channels.
 - Browser, service-worker, API, DNS, avatar, and image-proxy caching tuned for faster refreshes and tab restores.
 
 ## Project Status
 
 SeerrNG is active fork work. Movie and TV behavior is inherited and generally stable. Music and book support is usable but should still be treated as evolving, especially around provider matching and real-world Bookshelf/Readarr edge cases.
 
-Current focus:
+Recent repository updates include:
 
-- Stabilizing Lidarr request, scan, retry, and removal flows.
-- Stabilizing Bookshelf ebook, audiobook, and both-format request flows.
-- Making the Bookshelf Hardcover migration path safe, repeatable, and visible to administrators.
-- Keeping image/API caching fast without blocking the visible page during refreshes.
-- Replacing upstream branding and docs with SeerrNG-owned assets and guidance.
-- Hardening request validation, notification settings, permission bounds, and service inputs.
-- Supporting ROM and PC game catalog, acquisition, status tracking, notifications, and download delivery through QuestarrNG and ROMarrNG. SeerrNG does not install, launch, or play games; general desktop applications remain outside the supported catalog.
+- **Discover:** editable shared shelves; more precise rating and streaming
+  filters; category exclusions; detail navigation through the current result
+  list; and restored carousel position when returning from a title.
+- **Requests:** per-user access to labeled Radarr/Sonarr destinations, quota
+  exception approvals, optional Slack approval actions, an optional
+  previous-season watch gate, and Sonarr monitoring for future seasons when
+  the latest regular season was requested. Failed TV requests retain their
+  context and support verified season mapping; bounded failure explanations
+  and request history are localized.
+- **User workflows:** local watchlist filters, a browser-saved Subject Tags
+  visibility preference, private one-time availability notices for followed
+  requests, per-user shared-availability display choices, and opt-in
+  Jellyfin/Emby profile refresh during imports.
+- **Sonarr:** v5 API support alongside v3/v4, metadata-language and season-order
+  choices, and request recovery scoped to the selected service, quality, and
+  season order.
+- **Integrations:** MusicBrainz and Cover Art Archive connectivity checks with
+  bounded artwork traffic controls, plus a preview-first BookshelfNG to
+  ChaptarrNG database migration helper for single-database setups.
+
+These changes are in the repository; use the [release notes](./CHANGELOG.md)
+to confirm which ones are included in a published build. SeerrNG continues to
+adapt selected upstream work in attributed, reviewable changes. The
+[fork-retirement matrix](./docs/fork-rationale.md) describes the behavior and
+upgrade evidence a supported replacement would need before the core fork could
+be retired.
 
 Release notes are maintained in [`CHANGELOG.md`](./CHANGELOG.md). User-facing
 pull requests add a concise release-note fragment under
@@ -122,15 +167,22 @@ SeerrNG fork, not the upstream Seerr repository.
 
 ## Documentation
 
-SeerrNG documentation is maintained in the [docs folder](https://github.com/snapetech/seerrng/tree/main/docs). The links below open the corresponding guides directly:
+SeerrNG documentation is maintained in the [docs folder](https://github.com/snapetech-org/seerrng/tree/main/docs). The links below open the corresponding guides directly:
 
 - [Install SeerrNG](./docs/getting-started/index.mdx)
 - [Install on Unraid](./docs/getting-started/third-parties/unraid.mdx)
 - [Find books, authors, and series](./docs/using-seerr/books-and-series.md)
 - [Create custom Discover sliders](./docs/using-seerr/custom-discover-sliders.md)
+- [Filter movie and series Discover results](./docs/using-seerr/movie-series-discovery-filters.md)
+- [Configure Sonarr v5 and season orders](./docs/using-seerr/settings/services.md)
+- [Require previous-season watch progress](./docs/using-seerr/settings/general.md#require-the-previous-season-to-be-watched)
+- [Choose movie and TV request destinations](./docs/using-seerr/settings/services.md#request-destination-label-optional)
+- [Filter and sort local watchlists](./docs/using-seerr/plex/watchlist-auto-request.md#find-items-in-your-watchlist)
+- [Follow another user's request](./docs/using-seerr/notifications/index.mdx#follow-a-movie-or-series-request)
+- [Hide Subject Tags](./docs/using-seerr/media-details-and-playback.md#hide-subject-tags)
 - [Why SeerrNG maintains companion forks](./docs/using-seerr/dependency-forks.md)
 - [Why SeerrNG is a fork and what could retire it](./docs/fork-rationale.md)
-- [ChaptarrNG fork changes and capabilities](https://github.com/snapetech/chaptarrng/blob/main/docs/FORK_FEATURES.md)
+- [ChaptarrNG fork changes and capabilities](https://github.com/snapetech-org/chaptarrng/blob/main/docs/FORK_FEATURES.md)
 - [Discover and request comics](./docs/using-seerr/comics-backend.md)
 - [Discover and request magazines](./docs/using-seerr/magazines-backend.md)
 - [Track requests and status history](./docs/using-seerr/request-status.md)
@@ -140,6 +192,8 @@ SeerrNG documentation is maintained in the [docs folder](https://github.com/snap
 - [Configure media-server libraries, including Plex Music and Audiobooks](./docs/using-seerr/settings/mediaserver.mdx)
 - [Enable built-in HTTPS](./docs/using-seerr/advanced/built-in-tls.mdx)
 - [Configure notifications](./docs/using-seerr/notifications/index.mdx)
+- [Slack notification settings](./docs/using-seerr/notifications/slack.md)
+- [Telegram notification settings](./docs/using-seerr/notifications/telegram.md)
 - [Hide requested or available media](./docs/using-seerr/settings/general.md)
 - [Choose which media categories are available](./docs/using-seerr/settings/media-categories.md)
 - [Configure Bookshelf](./docs/using-seerr/bookshelf-backend.md)
@@ -177,7 +231,7 @@ docker run -d \
   -p 5055:5055 \
   -v /path/to/seerrng/config:/app/config \
   --restart unless-stopped \
-  ghcr.io/snapetech/seerrng:main
+  ghcr.io/snapetech-org/seerrng:main
 ```
 
 Open `http://localhost:5055` and complete setup.
@@ -187,7 +241,7 @@ Open `http://localhost:5055` and complete setup.
 ```yaml
 services:
   seerrng:
-    image: ghcr.io/snapetech/seerrng:main
+    image: ghcr.io/snapetech-org/seerrng:main
     container_name: seerrng
     environment:
       LOG_LEVEL: info
@@ -207,11 +261,32 @@ macOS, or Linux, use the [cross-platform setup assistant](./docs/using-seerr/set
 
 ### Unraid
 
-Install SeerrNG from Community Applications with the [Unraid template](https://raw.githubusercontent.com/snapetech/seerrng/main/packaging/unraid/seerrng.xml). It uses the stable `latest` image, maps HTTP port `5055` and optional HTTPS port `5056`, and persists `/app/config`. The image runs as UID/GID `1000:1000`, so make the selected appdata directory writable by that user before the first start. Optional BookshelfNG, ChaptarrNG, ROMarrNG, and QuestarrNG templates live in each fork's own repository; the [Unraid guide](docs/getting-started/third-parties/unraid.mdx) links to their templates and to the existing Community Apps listings for LazyLibrarian, Mylar3, and Kapowarr, plus Issuarr's own Unraid guide. BackIssue has its own Docker image and Unraid template; see its [getting-started guide](https://backissue.app/getting-started).
+Install SeerrNG from Community Applications with the [Unraid template](https://raw.githubusercontent.com/snapetech-org/seerrng/main/packaging/unraid/seerrng.xml). It uses the stable `latest` image, maps HTTP port `5055` and optional HTTPS port `5056`, and persists `/app/config`. The image runs as UID/GID `1000:1000`, so make the selected appdata directory writable by that user before the first start. Optional BookshelfNG, ChaptarrNG, ROMarrNG, and QuestarrNG templates live in each fork's own repository; the [Unraid guide](docs/getting-started/third-parties/unraid.mdx) links to their templates and to the existing Community Apps listings for LazyLibrarian, Mylar3, and Kapowarr, plus Issuarr's own Unraid guide. BackIssue has its own Docker image and Unraid template; see its [getting-started guide](https://backissue.app/getting-started).
 
 ### Linux Packages
 
 This repo includes release workflows and packaging metadata for tarball, Debian, RPM, AppImage, Flatpak, Snap, AUR, PPA, and COPR style distribution. These packages install SeerrNG as a standalone service; Lidarr, Bookshelf, and other automation/media servers are optional external services configured inside SeerrNG. Use the GitHub releases for generated artifacts when available.
+
+### Android APK
+
+The Android app is a client for servers you already run. Add one or more server
+URLs in the app; see the [Android app guide](./docs/getting-started/android-app.md)
+for setup and connection details. The Play build uses a 20-session free preview
+and a one-time lifetime unlock at a recommended US price of $2.99. It contains
+no advertising SDKs. See the [pricing and monetization decision](./android/MONETIZATION.md).
+
+The current tested mobile packages are attached to the
+[SeerrNG mobile prerelease](https://github.com/snapetech-org/seerrng/releases/tag/mobile-v3.63.0-ci.35):
+
+| Package | Download | SHA-256 |
+| --- | --- | --- |
+| Android APK for direct install (stable project signing key) | [APK](https://github.com/snapetech-org/seerrng/releases/download/mobile-v3.63.0-ci.35/seerrng-v3.63.0-ci.35-android.apk) | [checksum](https://github.com/snapetech-org/seerrng/releases/download/mobile-v3.63.0-ci.35/seerrng-v3.63.0-ci.35-android.sha256) |
+| Android App Bundle signed with the upload key | [AAB](https://github.com/snapetech-org/seerrng/releases/download/mobile-v3.63.0-ci.35/seerrng-v3.63.0-ci.35-android.aab) | [checksum](https://github.com/snapetech-org/seerrng/releases/download/mobile-v3.63.0-ci.35/seerrng-v3.63.0-ci.35-android-aab.sha256) |
+| iOS Simulator build (not an iPhone/iPad installable IPA) | [Simulator ZIP](https://github.com/snapetech-org/seerrng/releases/download/mobile-v3.63.0-ci.35/seerrng-v3.63.0-ci.20-ios-simulator.zip) | [checksum](https://github.com/snapetech-org/seerrng/releases/download/mobile-v3.63.0-ci.35/seerrng-v3.63.0-ci.20-ios-simulator.sha256) |
+
+The GitHub Android packages have Play Billing disabled, so they remain unlimited evaluation builds; the 20-session cap and lifetime purchase UI are only enabled in a configured Play build. These are prerelease test builds, not store-approved releases. See the
+[mobile release readiness guide](./docs/mobile-release-readiness.md) for
+signing details, test results, store status, and remaining release work.
 
 ## Required Setup
 
@@ -256,10 +331,10 @@ Media servers and acquisition tools run as separate optional services; they
 are not bundled into the SeerrNG container. Use only the providers for the
 categories you enable. For book and software workflows that depend on
 SeerrNG-specific API behavior, the recommended Snapetech NG forks are
-[BookshelfNG](https://github.com/snapetech/bookshelfng),
-[ChaptarrNG](https://github.com/snapetech/chaptarrng),
-[QuestarrNG](https://github.com/snapetech/QuestarrNG), and
-[ROMarrNG](https://github.com/snapetech/ROMarrNG). BookshelfNG or ChaptarrNG
+[BookshelfNG](https://github.com/snapetech-org/bookshelfng),
+[ChaptarrNG](https://github.com/snapetech-org/chaptarrng),
+[QuestarrNG](https://github.com/snapetech-org/QuestarrNG), and
+[ROMarrNG](https://github.com/snapetech-org/ROMarrNG). BookshelfNG or ChaptarrNG
 can each handle Book and Audiobook formats; one BookshelfNG instance can serve
 both. QuestarrNG handles PC game acquisition, while ROMarrNG handles emulation
 systems and ROM acquisition.
@@ -274,7 +349,7 @@ over. That complete union blocks ChaptarrNG retirement as a whole. Each
 feature, sub-feature, data path, and distribution channel remains an individual
 blocker; active ChaptarrNG branches and open feature PRs count before release.
 See the
-[combined feature snapshot](https://github.com/snapetech/chaptarrng/blob/main/docs/FORK_FEATURES.md#chaptarrng-retirement-blockers)
+[combined feature snapshot](https://github.com/snapetech-org/chaptarrng/blob/main/docs/FORK_FEATURES.md#chaptarrng-retirement-blockers)
 and the [fork transition criteria](./docs/using-seerr/dependency-forks.md).
 
 Radarr, Sonarr, Lidarr, LazyLibrarian, Mylar3, Issuarr, Kapowarr, and BackIssue are
@@ -662,22 +737,22 @@ pnpm dev
 Useful commands:
 
 ```bash
-pnpm validate:development
 pnpm typecheck
 pnpm typecheck:client
 pnpm typecheck:server
 pnpm lint
 pnpm test
+pnpm test:node
+pnpm test:tooling
 pnpm test:playwright
 pnpm build
 pnpm --dir gen-docs build
 ```
 
-`pnpm validate:development` is the complete active local validation path. Its
-current stages, prerequisites, worker policy, and evidence contract are defined
-in the [validation-engine guide](./tools/validation-engine/README.md). `pnpm test`
-is Vitest-only, and focused commands such as `pnpm test:playwright` do not replace
-the complete applicable engine gate.
+The test scripts use the project’s native runners: `pnpm test` runs Vitest,
+`pnpm test:node` runs the native TypeScript server tests, and
+`pnpm test:tooling` runs the JavaScript tooling checks. CI also runs the browser,
+documentation, plugin, chart, and security checks directly.
 
 Migration-specific checks:
 
@@ -715,8 +790,8 @@ SeerrNG is intended for lawful personal media management. The project does not p
 ## Support
 
 - Discord: https://discord.gg/5PyXBfvS6T
-- Issues: https://github.com/snapetech/seerrng/issues
-- Discussions: https://github.com/snapetech/seerrng/discussions
+- Issues: https://github.com/snapetech-org/seerrng/issues
+- Discussions: https://github.com/snapetech-org/seerrng/discussions
 
 Use upstream Seerr documentation when you need background on inherited deployment or video-library behavior, but report SeerrNG-specific music, book, cache, packaging, and branding issues in this repository.
 

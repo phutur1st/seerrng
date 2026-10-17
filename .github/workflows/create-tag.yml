@@ -9,14 +9,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.run_id }}-${{ github.run_attempt }}
+  cancel-in-progress: false
 
 jobs:
   determine-tag-version:
     name: Determine tag version
     if: github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, Linux, X64, seerrng]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
@@ -25,12 +25,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ssh-key: ${{ secrets.COMMIT_KEY }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Install git-cliff
-        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: git-cliff
 
@@ -52,27 +51,33 @@ jobs:
   create-tag:
     name: Create tag
     if: github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, Linux, X64, seerrng]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     needs: determine-tag-version
+    outputs:
+      tag_version: ${{ needs.determine-tag-version.outputs.tag_version }}
+      base_sha: ${{ steps.package-release.outputs.base_sha }}
+      release_sha: ${{ steps.package-release.outputs.release_sha }}
     env:
       TAG_VERSION: ${{ needs.determine-tag-version.outputs.tag_version }}
     steps:
       - name: Install git-cliff
-        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: git-cliff
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ssh-key: ${{ secrets.COMMIT_KEY }}
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Prepare release branch
+        run: git switch --force-create release-candidate "$GITHUB_SHA"
+
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: 'package.json'
           # For workflows with elevated privileges we recommend disabling automatic caching.
@@ -87,7 +92,14 @@ jobs:
           git config user.email "$GIT_ACTOR@users.noreply.github.com"
 
       - name: Bump package.json
-        run: npm version "$TAG_VERSION" --ignore-scripts --no-commit-hooks --no-git-tag-version
+        run: |
+          current_version="$(node -p 'require("./package.json").version')"
+          target_version="${TAG_VERSION#v}"
+          if [[ "$current_version" == "$target_version" ]]; then
+            echo "package.json is already at $TAG_VERSION; skipping version bump"
+          else
+            npm version "$TAG_VERSION" --ignore-scripts --no-commit-hooks --no-git-tag-version
+          fi
 
       - name: Sync Helm chart release metadata
         run: |
@@ -127,9 +139,116 @@ jobs:
           git commit \
             -m "chore(release): prepare ${TAG_VERSION}" \
             -m "release-note: none"
-          git push
 
-      - name: Create git tag
+      - name: Create git tag and package release candidate
+        id: package-release
         run: |
+          set -euo pipefail
+          git tag --delete "$TAG_VERSION" >/dev/null 2>&1 || true
           git tag -- "$TAG_VERSION"
-          git push origin "refs/tags/$TAG_VERSION:refs/tags/$TAG_VERSION"
+          base_sha="$(git rev-parse HEAD^)"
+          release_sha="$(git rev-parse HEAD)"
+          bundle_path="${RUNNER_TEMP}/seerrng-release.bundle"
+          git bundle create "$bundle_path" \
+            refs/heads/release-candidate \
+            "refs/tags/$TAG_VERSION"
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v4.6.2
+        with:
+          name: seerrng-release-candidate-${{ github.run_id }}
+          path: ${{ runner.temp }}/seerrng-release.bundle
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Clean release candidate
+        if: always()
+        run: rm -f -- "${RUNNER_TEMP}/seerrng-release.bundle"
+
+  publish-tag:
+    name: Publish tag
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    needs: create-tag
+    outputs:
+      tag_version: ${{ needs.create-tag.outputs.tag_version }}
+    env:
+      TAG_VERSION: ${{ needs.create-tag.outputs.tag_version }}
+      BASE_SHA: ${{ needs.create-tag.outputs.base_sha }}
+      RELEASE_SHA: ${{ needs.create-tag.outputs.release_sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download release candidate
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: seerrng-release-candidate-${{ github.run_id }}
+          path: ${{ runner.temp }}/seerrng-release-candidate
+
+      - name: Push release commit and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$BASE_SHA" ]] || {
+            echo "main advanced while the release candidate was being prepared" >&2
+            exit 2
+          }
+          bundle_path="${RUNNER_TEMP}/seerrng-release-candidate/seerrng-release.bundle"
+          git tag --delete "$TAG_VERSION" >/dev/null 2>&1 || true
+          candidate_ref="refs/seerrng/release-candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git fetch "$bundle_path" \
+            "refs/heads/release-candidate:$candidate_ref" \
+            "refs/tags/$TAG_VERSION:refs/tags/$TAG_VERSION"
+          [[ "$(git rev-parse "$candidate_ref^")" == "$BASE_SHA" ]] || {
+            echo "release candidate does not extend the prepared main revision" >&2
+            exit 2
+          }
+          [[ "$(git rev-parse "$candidate_ref")" == "$RELEASE_SHA" ]] || {
+            echo "release candidate commit does not match the prepared revision" >&2
+            exit 2
+          }
+          askpass="${RUNNER_TEMP}/seerrng-release-git-askpass.sh"
+          trap 'rm -f "$askpass"' EXIT
+          cat > "$askpass" <<'EOF'
+          #!/usr/bin/env bash
+          case "$1" in
+            *Username*) printf '%s\n' x-access-token ;;
+            *Password*) printf '%s\n' "$GH_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          EOF
+          chmod 700 "$askpass"
+          GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0 git push --atomic origin \
+            "$candidate_ref:refs/heads/main" \
+            "refs/tags/$TAG_VERSION:refs/tags/$TAG_VERSION"
+
+      - name: Clean release candidate
+        if: always()
+        run: rm -rf -- "${RUNNER_TEMP}/seerrng-release-candidate"
+
+  dispatch-release:
+    name: Dispatch release workflow
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    needs: publish-tag
+    env:
+      TAG_VERSION: ${{ needs.publish-tag.outputs.tag_version }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Dispatch release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --repo "$REPO" --ref main -f "tag=$TAG_VERSION"

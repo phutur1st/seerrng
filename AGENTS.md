@@ -50,9 +50,9 @@ files:
    `docs/maintainers/ui-forward-merge-guide.md`.
 
 Non-UI work does not trigger UI Fix-It. A complete validation gate does not by
-itself authorize or require a whole-application UI audit. For validation-engine
-usage, behavior, or changes, read the authoritative
-`tools/validation-engine/README.md`.
+itself authorize or require a whole-application UI audit. For verification, use the native package scripts and `.github/workflows/ci.yml`.
+The maintainer selected upstream native CI on October 17, 2026; the retired
+validation engine is not part of this fork’s current verification path.
 
 Read applicable existing task/security/contribution instructions too. These
 instructions supplement existing functional, security, migration, and release
@@ -80,27 +80,20 @@ do not choose a new design merely to make a check pass.
 
 ## Required verification
 
-During editing, run affected focused checks. Test discovery, scheduling, input
-freshness, isolation, stage ownership, and result accounting belong to the
-repository's bound validation engine, not a separate agent execution procedure.
-Follow the applicable mode exactly as defined in the engine README. Inspect its
-plan/inventory and report actual execution, counts, skips and exclusions
-separately from discovery. Before a cumulative run, verify a complete pinned
-repository/snapshot and the native tooling required by its current inventory. An
-app source volume, Linux platform or discovery plan alone does not prove that
-workflow/release fixtures and native tools are available.
-
-Mode 1 is the active complete local validation path. Mode 2 is the active
-complete GitHub-hosted validation path. Mode 3 production operation remains
-dormant; its regression tests remain active only as test coverage, and Mode 3 is
-not an accepted finalization path. Do not install, start, or connect Mode 3 to
-package scripts, hooks, workflows, or application runtime without explicit
-maintainer authorization.
+During editing, run affected focused checks with the pinned runtime and lockfile.
+The native package scripts and `.github/workflows/ci.yml` own the final check
+inventory: release notes, i18n/security/tooling, format/lint/typecheck/build,
+Vitest, native Node tests, Jellyfin integration, CodeQL, browser suites,
+documentation and Helm. Report actual execution, counts, skips and platform
+exclusions separately from discovery. Local checks do not prove hosted checks
+passed. Keep test configuration and databases isolated from live services.
+Do not restore or connect the retired validation engine to hooks, scripts,
+workflows or runtime.
 
 When work changes UI or visual assets, use scoped page/asset batches, follow UI
 Fix-It for the changed pages/roles and affected shared consumers, and record a
 preview as iteration evidence rather than a release candidate. Non-UI work and a
-complete engine gate do not trigger Fix-It or a whole-application visual audit.
+complete native CI gate do not trigger Fix-It or a whole-application visual audit.
 Prose instructions are not executable tests.
 Do not treat unrun suites as passing, or partial failure output as success.
 
@@ -127,12 +120,10 @@ failure blocks only when the requested complete gate includes it; otherwise reco
 it without expanding scope. A maintainer may defer work, but a deferred required
 failure is not a passing gate or permission to claim the final candidate complete.
 
-Use the applicable complete engine mode to build and check the exact final
-source with the pinned repository runtime and lockfile. During iteration, run
-focused affected integration/e2e checks in disposable environments where
-available. Outside the engine, collect only applicable live or visual evidence
-that its plan does not own; do not add a second build/browser gate after a
-passing complete mode. Never aim tests at live configuration, accounts, queues,
+Use the native CI checks to build and check the exact final source with the
+pinned repository runtime and lockfile. During iteration, run focused affected
+integration/e2e checks in disposable environments where available. Collect live
+or visual evidence separately from automated verification. Never aim tests at live configuration, accounts, queues,
 playlists, collections, watchlists, or databases. A mocked provider pass is not
 a live round-trip pass. When visual inspection is available, inspect changed
 roles at desktop and narrow widths and record that evidence separately from

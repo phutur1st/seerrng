@@ -52,7 +52,7 @@ this when a post-tag publishing step fails; it checks out the requested tag,
 reuses its changelog and image version, and does not move the tag:
 
 ```bash
-gh workflow run release.yml --repo snapetech/seerrng --ref main -f tag=v3.12.8
+gh workflow run release.yml --repo snapetech-org/seerrng --ref main -f tag=v3.12.8
 ```
 
 The tag must already point to a commit contained in `main`. After dispatching,
@@ -74,7 +74,7 @@ database, settings, and logs under `%ProgramData%\SeerrNG\config`; package
 removal preserves this directory. The release workflow submits each stable
 package to Chocolatey Community Repository moderation and requires the
 `CHOCOLATEY_API_KEY` repository secret. This is a required release gate; set
-the secret with `gh secret set CHOCOLATEY_API_KEY --repo snapetech/seerrng`.
+the secret with `gh secret set CHOCOLATEY_API_KEY --repo snapetech-org/seerrng`.
 Use the **Publish Chocolatey** workflow to submit or retry a stable tag created
 from a commit that includes `packaging/chocolatey` and its Windows release
 archive.
@@ -83,34 +83,17 @@ archive.
 
 `request.snape.tech` is not connected to a developer's local checkout or local
 `pnpm dev` process. It is served by the container running on `seerr.home`
-(`kspls0` in CI), and that container is replaced only when the deployment path
+on the deployment host, and that container is replaced only when the deployment path
 pulls and starts a new image.
 
-The authoritative live deployment path is GitHub Actions:
+Main CI builds and publishes `ghcr.io/snapetech-org/seerrng:main`. It no longer
+preflights or deploys to `seerr.home`, because those operations required direct
+access to the deployment host. Live deployment must be performed manually on
+that host until a remote deployment channel is configured. The published image
+may be newer than the live service until deployment is complete.
 
-1. Push the desired commit to `snapetech/seerrng` `main`.
-2. Wait for `.github/workflows/ci.yml` (`SeerrNG CI`) to build and push
-   `ghcr.io/snapetech/seerrng:main`.
-3. Wait for the `Deploy main to seerr.home` job to pass. That job pulls the
-   fresh `:main` image on the host, replaces the running container, and verifies
-   `/api/v1/status` locally on the host.
-4. Only after that deploy job passes should `request.snape.tech` be expected to
-   serve the new code. If a browser tab was already open, hard refresh so the
-   client downloads the new Next.js bundle.
-
-Main CI now performs a deployment-host preflight before publishing `:main`: the
-config filesystem must be mounted read-write, below 99% usage, and must accept
-a temporary write. A read-only or full storage volume is a real deployment
-blocker and intentionally fails the run instead of producing a green build that
-cannot go live.
-
-Local changes, local commits, and a local dev server do not affect
-`request.snape.tech`. A fix is live only after it is committed, pushed to the
-deploying remote, built into the image, and deployed by the workflow above.
-
-The image publish job retries transient base-image registry failures and retries
-the Docker build/push. If the workflow still fails before `Deploy main to
-seerr.home`, the live container remains on the last successful image.
+`scripts/verify-live-deployment.sh` checks that the running container and image
+report the expected commit after a manual deployment.
 
 To verify the live host from a maintainer workstation:
 
@@ -136,9 +119,9 @@ manual test deployments or isolated validation, not as an implicit public
 release.
 
 Do not run GitHub and GitLab as competing live deployers to the same host. If
-GitLab is ever promoted to deploy `request.snape.tech`, first remove or disable
-the GitHub `Deploy main to seerr.home` job, then document GitLab as the single
-authoritative deployment path.
+GitLab is configured to deploy `request.snape.tech`, document it as the single
+authoritative deployment path and keep the hosted image publication step
+separate from deployment.
 
 ## Manual Test Build Options
 
@@ -165,7 +148,7 @@ The current exported credential is also stored in OpenBao at
 Generate a `seerrng`-scoped credential with:
 
 ```bash
-/snap/bin/snapcraft export-login --snaps seerrng --acls package_upload,package_release --expires 2026-06-13T00:00:00Z - | gh secret set SNAPCRAFT_STORE_CREDENTIALS --repo snapetech/seerrng
+/snap/bin/snapcraft export-login --snaps seerrng --acls package_upload,package_release --expires 2026-06-13T00:00:00Z - | gh secret set SNAPCRAFT_STORE_CREDENTIALS --repo snapetech-org/seerrng
 ```
 
 Do not write exported Snapcraft credentials into tracked files.

@@ -19,6 +19,7 @@ import type {
 } from '@server/lib/downloadtracker';
 import downloadTracker from '@server/lib/downloadtracker';
 import { getExternalRuntimeConfig } from '@server/lib/externalRuntimeConfig';
+import { hydrateMediaRequestRelations } from '@server/lib/mediaRequestHydration';
 import {
   getRequestedMusicSearchTime,
   reconcileRequestedMusicAvailability,
@@ -67,6 +68,37 @@ export const REQUEST_STATUS_TERMINAL_STAGES: readonly RequestStatusStage[] = [
   RequestStatusStage.CANCELLED,
 ];
 
+export type RequestStatusMessageKey =
+  | 'bookUnavailable'
+  | 'bookQueueFailed'
+  | 'bookCouldNotAccept'
+  | 'comicUnavailable'
+  | 'comicQueueFailed'
+  | 'comicCouldNotAccept'
+  | 'adultUnavailable'
+  | 'adultQueueFailed'
+  | 'adultCouldNotAccept'
+  | 'waitingForApproval'
+  | 'approvedWaitingDispatch'
+  | 'searching'
+  | 'downloading'
+  | 'importing'
+  | 'addingToLibrary'
+  | 'available'
+  | 'unavailable'
+  | 'downloadImportFailed'
+  | 'couldNotComplete'
+  | 'declined'
+  | 'cancelled'
+  | 'noReleaseFound'
+  | 'waitingForUsableRelease'
+  | 'preparingEbook'
+  | 'preparingAudiobook'
+  | 'waitingForBookshelf'
+  | 'preparingBookshelfSearch'
+  | 'requestRetried'
+  | 'approvedForProcessing';
+
 export interface RequestStatusSnapshot {
   stage: RequestStatusStage;
   attempt: number;
@@ -78,6 +110,7 @@ export interface RequestStatusSnapshot {
   downloadId: string | null;
   service: string | null;
   message: string;
+  messageKey?: RequestStatusMessageKey;
   observedAt: Date;
   isTerminal: boolean;
   needsAttention: boolean;
@@ -106,6 +139,7 @@ export interface RequestStatusHistoryItem {
   format: string | null;
   service: string | null;
   message: string | null;
+  messageKey?: RequestStatusMessageKey;
   percent: number | null;
   size: number | null;
   sizeLeft: number | null;
@@ -295,6 +329,26 @@ const getMusicTarget = (
     : undefined;
 };
 
+const getAdultTarget = (
+  request: RequestLike
+): MediaRequestServiceTarget | undefined => {
+  const savedTarget = getTarget(request, 'whisparr', 'adult');
+  if (savedTarget) return savedTarget;
+
+  const serverId = request.serverId ?? request.media.serviceId;
+  return serverId != null &&
+    request.media.serviceId === serverId &&
+    request.media.externalServiceId != null
+    ? {
+        serviceType: 'whisparr',
+        format: 'adult',
+        serverId,
+        externalServiceId: request.media.externalServiceId,
+        status: request.media.status,
+      }
+    : undefined;
+};
+
 const hasRequestedServiceLink = (request: RequestLike): boolean => {
   if (request.type === MediaType.BOOK) {
     if (request.bookFormat === 'audiobook') {
@@ -319,18 +373,25 @@ const hasRequestedServiceLink = (request: RequestLike): boolean => {
       : hasLink(request.media.serviceId, request.media.externalServiceId);
   }
 
+  if (request.type === MediaType.ADULT) {
+    const target = getAdultTarget(request);
+    return hasLink(target?.serverId, target?.externalServiceId);
+  }
+
   const musicTarget = getMusicTarget(request);
   return hasLink(musicTarget?.serverId, musicTarget?.externalServiceId);
 };
 
-const getRequestedMediaStatus = (request: RequestLike): MediaStatus =>
-  request.type === MediaType.MUSIC
-    ? (getMusicTarget(request)?.status ?? request.media.status)
-    : request.type === MediaType.BOOK
-      ? request.media.status
-      : request.is4k
-        ? request.media.status4k
-        : request.media.status;
+const getRequestedMediaStatus = (request: RequestLike): MediaStatus => {
+  if (request.type === MediaType.MUSIC) {
+    return getMusicTarget(request)?.status ?? request.media.status;
+  }
+  if (request.type === MediaType.ADULT) {
+    return getAdultTarget(request)?.status ?? request.media.status;
+  }
+  if (request.type === MediaType.BOOK) return request.media.status;
+  return request.is4k ? request.media.status4k : request.media.status;
+};
 
 const isRequestSatisfied = (request: RequestLike): boolean => {
   const mediaStatus = getRequestedMediaStatus(request);
@@ -552,6 +613,15 @@ const getDownloadItems = (request: RequestLike): DownloadingItem[] => {
         )
       : [];
   }
+  if (request.type === MediaType.ADULT) {
+    const target = getAdultTarget(request);
+    return target?.serverId != null && target.externalServiceId != null
+      ? downloadTracker.getAdultProgress(
+          target.serverId,
+          target.externalServiceId
+        )
+      : [];
+  }
 
   const ebookDownloads =
     media.serviceId !== null &&
@@ -587,6 +657,16 @@ const getServarrHistoryEvidence = (
   request: RequestLike
 ): ServarrHistoryEvidence | undefined => {
   const { media } = request;
+  if (request.type === MediaType.ADULT) {
+    const target = getAdultTarget(request);
+    return target?.serverId != null && target.externalServiceId != null
+      ? downloadTracker.getAdultHistoryEvidence(
+          target.serverId,
+          target.externalServiceId,
+          request.createdAt
+        )
+      : undefined;
+  }
   const musicTarget =
     request.type === MediaType.MUSIC ? getMusicTarget(request) : undefined;
   const serverId =
@@ -673,6 +753,12 @@ const getServiceName = (request: RequestLike): string | null => {
       comicServices.find((server) => server.id === request.media.serviceId)
         ?.name
     );
+  } else if (request.type === MediaType.ADULT) {
+    add(
+      settings.whisparr.find(
+        (server) => server.id === getAdultTarget(request)?.serverId
+      )?.name
+    );
   } else {
     const formats =
       request.bookFormat === 'both'
@@ -726,6 +812,17 @@ const getMessage = (
     }
   }
 
+  if (mediaType === MediaType.ADULT) {
+    if (stage === RequestStatusStage.UNAVAILABLE) {
+      return 'Whisparr has not found a usable release for this adult scene yet. Check its indexer categories and acquisition settings, then retry.';
+    }
+    if (stage === RequestStatusStage.FAILED) {
+      return queueFailure
+        ? 'Whisparr reported a download or import failure. Check its queue and logs, fix the issue there, then retry.'
+        : 'Whisparr could not accept this scene request. Check the connection and scene metadata, then retry.';
+    }
+  }
+
   switch (stage) {
     case RequestStatusStage.REQUESTED:
       return 'Your request is waiting for approval.';
@@ -753,6 +850,91 @@ const getMessage = (
       return 'This request was cancelled.';
   }
 };
+
+const REQUEST_STATUS_MESSAGE_KEYS = new Map<string, RequestStatusMessageKey>([
+  [
+    'No usable edition is available from the connected book service. Check the requested edition and the service catalog or acquisition sources, then retry when they are ready.',
+    'bookUnavailable',
+  ],
+  [
+    'The connected book service reported a download or import failure. Check its queue or logs for the cause, fix it there, then retry here.',
+    'bookQueueFailed',
+  ],
+  [
+    'The connected book service could not accept this request. Check its connection and metadata provider settings, then retry.',
+    'bookCouldNotAccept',
+  ],
+  [
+    'No usable release is available from the connected comics service. Check the requested comic and the service catalog or acquisition sources, then retry when they are ready.',
+    'comicUnavailable',
+  ],
+  [
+    'The connected comics service reported a download or import failure. Check its queue or logs for the cause, fix it there, then retry here.',
+    'comicQueueFailed',
+  ],
+  [
+    'The connected comics service could not accept this request. Check its connection and ComicVine metadata settings, then retry.',
+    'comicCouldNotAccept',
+  ],
+  [
+    'Whisparr has not found a usable release for this adult scene yet. Check its indexer categories and acquisition settings, then retry.',
+    'adultUnavailable',
+  ],
+  [
+    'Whisparr reported a download or import failure. Check its queue and logs, fix the issue there, then retry.',
+    'adultQueueFailed',
+  ],
+  [
+    'Whisparr could not accept this scene request. Check the connection and scene metadata, then retry.',
+    'adultCouldNotAccept',
+  ],
+  ['Your request is waiting for approval.', 'waitingForApproval'],
+  [
+    'Your request was approved and is waiting to be dispatched.',
+    'approvedWaitingDispatch',
+  ],
+  ['Searching for a usable release.', 'searching'],
+  ['A usable release is downloading.', 'downloading'],
+  ['The download is being imported.', 'importing'],
+  ['The media is being added to your library.', 'addingToLibrary'],
+  ['The requested media is available.', 'available'],
+  ['No usable release is currently available.', 'unavailable'],
+  ['The download or import failed.', 'downloadImportFailed'],
+  ['The request could not be completed.', 'couldNotComplete'],
+  ['This request was declined.', 'declined'],
+  ['This request was cancelled.', 'cancelled'],
+  ['No release found. Use an interactive search in Lidarr.', 'noReleaseFound'],
+  [
+    'Waiting for a usable release. No active download or import is currently reported.',
+    'waitingForUsableRelease',
+  ],
+  [
+    'ChaptarrNG is preparing the requested ebook while it imports the author.',
+    'preparingEbook',
+  ],
+  [
+    'ChaptarrNG is preparing the requested audiobook while it imports the author.',
+    'preparingAudiobook',
+  ],
+  [
+    'Waiting for Bookshelf to prepare the requested book.',
+    'waitingForBookshelf',
+  ],
+  [
+    'SeerrNG is preparing a Bookshelf search for this title. Availability will update after a library scan finds the book.',
+    'preparingBookshelfSearch',
+  ],
+  [
+    'The request was retried and is waiting to be dispatched.',
+    'requestRetried',
+  ],
+  ['Approved for processing.', 'approvedForProcessing'],
+]);
+
+export const getRequestStatusMessageKey = (
+  message: string | null | undefined
+): RequestStatusMessageKey | undefined =>
+  message ? REQUEST_STATUS_MESSAGE_KEYS.get(message) : undefined;
 
 const getStageFromRequest = (
   request: RequestLike,
@@ -1041,6 +1223,7 @@ export const getRequestStatus = (
     !hasGenericBookFailureMessage
       ? latestEvent.message
       : getMessage(stage, result.queueFailure, request.type));
+  const messageKey = getRequestStatusMessageKey(message);
 
   return {
     stage,
@@ -1053,6 +1236,7 @@ export const getRequestStatus = (
     downloadId: metrics.downloadId,
     service: getServiceName(request) ?? latestEvent?.service ?? null,
     message,
+    ...(messageKey ? { messageKey } : {}),
     observedAt: new Date(),
     isTerminal: (REQUEST_STATUS_TERMINAL_STAGES as readonly string[]).includes(
       stage
@@ -1156,25 +1340,30 @@ const getBookSearchSnapshot = async (
 
 const eventToHistoryItem = (
   event: MediaRequestStatusEvent
-): RequestStatusHistoryItem => ({
-  id: event.id,
-  requestId: event.requestId,
-  requestedById: event.requestedById,
-  mediaId: event.mediaId,
-  mediaType: event.mediaType,
-  stage: event.stage as RequestStatusStage,
-  attempt: event.attempt,
-  format: event.format ?? null,
-  service: event.service ?? null,
-  message: event.message ?? null,
-  percent: event.percent ?? null,
-  size: event.size ?? null,
-  sizeLeft: event.sizeLeft ?? null,
-  estimatedCompletionTime: event.estimatedCompletionTime ?? null,
-  downloadCount: event.downloadCount,
-  downloadId: event.downloadId ?? null,
-  createdAt: event.createdAt,
-});
+): RequestStatusHistoryItem => {
+  const message = event.message ?? null;
+  const messageKey = getRequestStatusMessageKey(message);
+  return {
+    id: event.id,
+    requestId: event.requestId,
+    requestedById: event.requestedById,
+    mediaId: event.mediaId,
+    mediaType: event.mediaType,
+    stage: event.stage as RequestStatusStage,
+    attempt: event.attempt,
+    format: event.format ?? null,
+    service: event.service ?? null,
+    message,
+    ...(messageKey ? { messageKey } : {}),
+    percent: event.percent ?? null,
+    size: event.size ?? null,
+    sizeLeft: event.sizeLeft ?? null,
+    estimatedCompletionTime: event.estimatedCompletionTime ?? null,
+    downloadCount: event.downloadCount,
+    downloadId: event.downloadId ?? null,
+    createdAt: event.createdAt,
+  };
+};
 
 const makeFingerprint = (status: RequestStatusSnapshot): string =>
   [
@@ -1261,10 +1450,12 @@ const loadRequest = async (
     {
       where: { id: requestId },
       relations: {
-        media: true,
+        media: { seasons: true },
         seasons: true,
         requestedBy: true,
       },
+      relationLoadStrategy: 'query',
+      loadEagerRelations: false,
     }
   );
 
@@ -1647,6 +1838,7 @@ export const getRequestStatusCounts = async (
     ownerId?: number;
     mediaId?: number;
     mediaType?: MediaType;
+    excludeAdult?: boolean;
     bookFormat?: 'ebook' | 'audiobook';
     since?: Date;
   },
@@ -1699,6 +1891,11 @@ export const getRequestStatusCounts = async (
   if (options.mediaType) {
     query.andWhere('requestCount.type = :countMediaType', {
       countMediaType: options.mediaType,
+    });
+  }
+  if (options.excludeAdult) {
+    query.andWhere('requestCount.type != :hiddenAdultType', {
+      hiddenAdultType: MediaType.ADULT,
     });
   }
   if (options.bookFormat) {
@@ -1777,6 +1974,7 @@ const getRequestStatusOlderCount = async (options: {
   ownerId?: number;
   mediaId?: number;
   mediaType?: MediaType;
+  excludeAdult?: boolean;
   bookFormat?: 'ebook' | 'audiobook';
   since: Date;
 }): Promise<number> => {
@@ -1804,6 +2002,11 @@ const getRequestStatusOlderCount = async (options: {
       olderMediaType: options.mediaType,
     });
   }
+  if (options.excludeAdult) {
+    query.andWhere('requestOlder.type != :hiddenAdultType', {
+      hiddenAdultType: MediaType.ADULT,
+    });
+  }
   if (options.bookFormat) {
     query.andWhere(
       options.bookFormat === 'ebook'
@@ -1828,6 +2031,7 @@ export const getRequestStatusPage = async (options: {
   bookFormat?: 'ebook' | 'audiobook';
   search?: string;
   since?: Date;
+  excludeAdult?: boolean;
   filter?: string;
   sort?: RequestStatusSortField;
   sortDirection?: RequestStatusSortDirection;
@@ -1836,11 +2040,8 @@ export const getRequestStatusPage = async (options: {
   const query = requestRepository
     .createQueryBuilder('request')
     .leftJoinAndSelect('request.media', 'media')
-    .leftJoinAndSelect('media.seasons', 'mediaSeasons')
-    .leftJoinAndSelect('media.identifiers', 'identifiers')
     .leftJoinAndSelect('request.requestedBy', 'requestedBy')
-    .leftJoinAndSelect('request.modifiedBy', 'modifiedBy')
-    .leftJoinAndSelect('request.seasons', 'seasons');
+    .leftJoinAndSelect('request.modifiedBy', 'modifiedBy');
 
   if (options.requestId) {
     query.andWhere('request.id = :requestId', {
@@ -1855,6 +2056,11 @@ export const getRequestStatusPage = async (options: {
   }
   if (options.since) {
     query.andWhere('request.createdAt >= :since', { since: options.since });
+  }
+  if (options.excludeAdult) {
+    query.andWhere('request.type != :hiddenAdultType', {
+      hiddenAdultType: MediaType.ADULT,
+    });
   }
   if (options.mediaType) {
     query.andWhere('request.type = :mediaType', {
@@ -1909,6 +2115,10 @@ export const getRequestStatusPage = async (options: {
       .skip(skip)
       .getManyAndCount();
   }
+
+  requests = await hydrateMediaRequestRelations(requests, {
+    includeMediaIdentifiers: true,
+  });
 
   const requestIds = requests.map((request) => request.id);
   const [latestEvents, pendingRequestIds, bookSearchStates] = await Promise.all(
@@ -1977,6 +2187,7 @@ export const getRequestStatusPage = async (options: {
       ownerId: options.ownerId,
       mediaId: options.mediaId,
       mediaType: options.mediaType,
+      excludeAdult: options.excludeAdult,
       bookFormat: options.bookFormat,
       since: options.since,
     }),
@@ -1985,6 +2196,7 @@ export const getRequestStatusPage = async (options: {
           ownerId: options.ownerId,
           mediaId: options.mediaId,
           mediaType: options.mediaType,
+          excludeAdult: options.excludeAdult,
           bookFormat: options.bookFormat,
           since: options.since,
         })

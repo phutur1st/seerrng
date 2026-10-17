@@ -3,6 +3,12 @@ const targetIndex = 74;
 const pageSize = 20;
 const resultCount = 120;
 
+const comparableHref = (href: string): string => {
+  const url = new URL(href, Cypress.config('baseUrl') ?? 'http://localhost');
+  url.searchParams.delete('discoverContext');
+  return `${url.pathname}${url.search}`;
+};
+
 const mockDiscovery = (tab: string, mediaType: string) => {
   const results = Array.from({ length: resultCount }, (_, index) => ({
     id: mediaType === 'book' ? `OLSCROLL${index + 1}W` : 900000 + index,
@@ -88,6 +94,11 @@ describe('Discover Back navigation geometry', () => {
       // the rendered <a href> for books includes the query string.
       const detailHref =
         mediaType === 'book' ? `${detailPath}?format=ebook` : detailPath;
+      // Video detail links add an ephemeral per-list discoverContext query.
+      const detailLinkSelector =
+        mediaType === 'book'
+          ? `a[href="${detailHref}"]`
+          : `a[href^="${detailPath}?discoverContext="]`;
       let beforeTop = 0;
       let beforeOrder: string[] = [];
 
@@ -133,11 +144,11 @@ describe('Discover Back navigation geometry', () => {
 
       browseToTarget();
 
-      cy.get(`${listItems} a[href="${detailHref}"]`).should('be.visible');
+      cy.get(`${listItems} ${detailLinkSelector}`).should('be.visible');
       cy.get(`${listItems} a`).then(($links) => {
         beforeOrder = $links
           .toArray()
-          .map((link) => link.getAttribute('href') ?? '');
+          .map((link) => comparableHref(link.getAttribute('href') ?? ''));
       });
       // Measure the outer li: the inner card can scale when hovered. Disable
       // Cypress's automatic click scrolling so the measurement is unchanged.
@@ -146,7 +157,7 @@ describe('Discover Back navigation geometry', () => {
         .then(($item) => {
           beforeTop = $item[0].getBoundingClientRect().top;
         });
-      cy.get(`${listItems} a[href="${detailHref}"]`).click({
+      cy.get(`${listItems} ${detailLinkSelector}`).click({
         scrollBehavior: false,
       });
       cy.wait('@details');
@@ -158,14 +169,14 @@ describe('Discover Back navigation geometry', () => {
       cy.get(`${listItems} a`).should(($links) => {
         const afterOrder = $links
           .toArray()
-          .map((link) => link.getAttribute('href') ?? '');
+          .map((link) => comparableHref(link.getAttribute('href') ?? ''));
         expect(afterOrder.slice(0, beforeOrder.length)).to.deep.eq(beforeOrder);
       });
       // Do not scroll the target into view here: Back must restore it itself.
       cy.get(listItems)
         .eq(targetIndex)
         .should(($item) => {
-          expect($item.find(`a[href="${detailHref}"]`)).to.have.length(1);
+          expect($item.find(detailLinkSelector)).to.have.length(1);
           expect($item[0].getBoundingClientRect().top).to.be.closeTo(
             beforeTop,
             2

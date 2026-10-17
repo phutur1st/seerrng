@@ -575,6 +575,19 @@ describe('GET /media', () => {
         jellyfinMediaId: 'private-jellyfin-id',
       })
     );
+    const requester = await getRepository(User).findOneByOrFail({
+      email: 'admin@seerr.dev',
+    });
+    await getRepository(MediaRequest).save(
+      new MediaRequest({
+        type: MediaType.MOVIE,
+        status: MediaRequestStatus.COMPLETED,
+        media,
+        requestedBy: requester,
+        modifiedBy: requester,
+        is4k: false,
+      })
+    );
 
     try {
       const agent = await loginAs('friend@seerr.dev', 'test1234');
@@ -594,7 +607,12 @@ describe('GET /media', () => {
         'status',
         'status4k',
         'tmdbId',
+        'viewerRequestCoverage',
       ]);
+      assert.deepStrictEqual(item.viewerRequestCoverage, {
+        standard: false,
+        fourK: false,
+      });
 
       const denied = await agent.get('/media?filter=pending&sort=modified');
       assert.strictEqual(denied.status, 403);

@@ -5,17 +5,24 @@ import ExternalAPI from '@server/api/externalapi';
 import OpenLibraryAPI from '@server/api/openlibrary';
 import type { LidarrAlbumOptions } from '@server/api/servarr/lidarr';
 import LidarrAPI from '@server/api/servarr/lidarr';
+import type RadarrAPI from '@server/api/servarr/radarr';
 import type {
   ReadarrBookLookupResult,
   ReadarrBookOptions,
 } from '@server/api/servarr/readarr';
 import ReadarrAPI from '@server/api/servarr/readarr';
-import type { AddSeriesOptions } from '@server/api/servarr/sonarr';
+import type {
+  AddSeriesOptions,
+  SonarrSeries,
+} from '@server/api/servarr/sonarr';
 import SonarrAPI from '@server/api/servarr/sonarr';
 import type { SportarrLeague } from '@server/api/servarr/sportarr';
 import SportarrAPI from '@server/api/servarr/sportarr';
+import { ANIME_KEYWORD_ID } from '@server/api/themoviedb/constants';
+import Tvdb from '@server/api/tvdb';
 import WikidataAPI from '@server/api/wikidata';
 import {
+  MediaRequestFailureReason,
   MediaRequestStatus,
   MediaStatus,
   MediaType,
@@ -23,6 +30,7 @@ import {
 import dataSource, { getRepository } from '@server/datasource';
 import { BookRequestSearch } from '@server/entity/BookRequestSearch';
 import Media from '@server/entity/Media';
+import MediaAvailabilitySubscription from '@server/entity/MediaAvailabilitySubscription';
 import MediaIdentifier, {
   MediaIdentifierProvider,
 } from '@server/entity/MediaIdentifier';
@@ -31,6 +39,7 @@ import {
   getRequestMutationAdmissionKey,
   runWithRequestAdmission,
 } from '@server/entity/MediaRequest';
+import { MediaRequestStatusEvent } from '@server/entity/MediaRequestStatusEvent';
 import { MediaSearchMetadata } from '@server/entity/MediaSearchMetadata';
 import { RequestDispatchOutbox } from '@server/entity/RequestDispatchOutbox';
 import Season from '@server/entity/Season';
@@ -40,8 +49,9 @@ import { getExternalRuntimeConfig } from '@server/lib/externalRuntimeConfig';
 import { runMediaEntityMutation } from '@server/lib/mediaMutation';
 import notificationManager, { Notification } from '@server/lib/notifications';
 import requestDispatchManager from '@server/lib/requestDispatch';
+import { recordRequestStatus } from '@server/lib/requestStatus';
 import { runWithServarrServiceMutationAdmission } from '@server/lib/serviceAdmission';
-import { getSettings } from '@server/lib/settings';
+import { getSettings, type SonarrSettings } from '@server/lib/settings';
 import {
   MediaRequestSubscriber,
   READARR_FAILED_RETRY_DELAY_MS,
@@ -102,6 +112,157 @@ const waitForSavedMedia = async (
   return getRepository(Media).findOneByOrFail({ id: mediaId });
 };
 
+function configureFallbackSonarr() {
+  getSettings().sonarr = [
+    {
+      id: 31,
+      name: 'Sonarr',
+      hostname: 'sonarr.local',
+      port: 8989,
+      apiKey: 'test-key',
+      useSsl: false,
+      activeProfileId: 6,
+      activeProfileName: 'HD',
+      activeLanguageProfileId: 1,
+      activeDirectory: '/tv',
+      tags: [],
+      is4k: false,
+      isDefault: true,
+      syncEnabled: true,
+      preventSearch: false,
+      tagRequests: false,
+      seriesType: 'standard',
+      animeSeriesType: 'anime',
+      enableSeasonFolders: true,
+      monitorNewItems: 'all',
+      overrideRule: [],
+    },
+  ];
+}
+
+function mockAnimeTvShow(tmdbId: number, tvdbId: number) {
+  (
+    mock.method as (
+      object: object,
+      methodName: string,
+      implementation: (endpoint: string) => Promise<unknown>
+    ) => unknown
+  )(ExternalAPI.prototype, 'get', async () => ({
+    id: tmdbId,
+    name: `Anime ${tmdbId}`,
+    external_ids: { tvdb_id: tvdbId },
+    keywords: { results: [{ id: ANIME_KEYWORD_ID }] },
+  }));
+}
+
+function makeSonarrSettings(
+  id: number,
+  hostname: string,
+  activeProfileId: number,
+  activeAnimeProfileId: number,
+  isDefault: boolean
+): SonarrSettings {
+  return {
+    id,
+    name: `Sonarr ${id}`,
+    hostname,
+    port: 8989,
+    apiKey: `test-key-${id}`,
+    useSsl: false,
+    activeProfileId,
+    activeProfileName: `Profile ${activeProfileId}`,
+    activeAnimeProfileId,
+    activeAnimeProfileName: `Anime Profile ${activeAnimeProfileId}`,
+    activeLanguageProfileId: 1,
+    activeDirectory: '/tv',
+    tags: [],
+    is4k: false,
+    isDefault,
+    syncEnabled: true,
+    preventSearch: false,
+    tagRequests: false,
+    seriesType: 'standard',
+    animeSeriesType: 'anime',
+    enableSeasonFolders: true,
+    monitorNewItems: 'all',
+    overrideRule: [],
+  };
+}
+
+async function createApprovedTvRequest(
+  tmdbId: number,
+  seasonNumbers: number[],
+  tvdbId?: number,
+  options: { profileId?: number; serverId?: number } = {}
+) {
+  const requestedBy = await getRequester();
+  const media = await getRepository(Media).save(
+    new Media({
+      mediaType: MediaType.TV,
+      tmdbId,
+      tvdbId,
+      status: MediaStatus.PENDING,
+      status4k: MediaStatus.UNKNOWN,
+    })
+  );
+  const request = new MediaRequest({
+    type: MediaType.TV,
+    status: MediaRequestStatus.APPROVED,
+    media,
+    requestedBy,
+    is4k: false,
+    seasons: seasonNumbers.map(
+      (seasonNumber) =>
+        new SeasonRequest({
+          seasonNumber,
+          status: MediaRequestStatus.APPROVED,
+        })
+    ),
+  });
+  if (options.profileId !== undefined) {
+    request.profileId = options.profileId;
+  }
+  if (options.serverId !== undefined) {
+    request.serverId = options.serverId;
+  }
+  const savedRequest = await getRepository(MediaRequest).save(request);
+
+  return { media, request: savedRequest };
+}
+
+function stubTvdbShow(
+  tmdbId: number,
+  seasons: { season_number: number; air_date: string }[],
+  tvdbId?: number
+) {
+  (
+    mock.method as (
+      object: object,
+      methodName: string,
+      implementation: () => Promise<unknown>
+    ) => unknown
+  )(ExternalAPI.prototype, 'get', async () => ({
+    id: tmdbId,
+    name: 'Test Show',
+    external_ids: tvdbId ? { tvdb_id: tvdbId } : {},
+    keywords: { results: [] },
+    seasons,
+  }));
+}
+
+function stubSonarrAddSeries() {
+  return mock.method(
+    SonarrAPI.prototype,
+    'addSeries',
+    async () =>
+      ({
+        id: 88,
+        title: 'Test Show',
+        titleSlug: 'test-show',
+      }) as SonarrSeries
+  );
+}
+
 let startedBookSearches = 0;
 
 describe('MediaRequestSubscriber service dispatch', () => {
@@ -144,6 +305,241 @@ describe('MediaRequestSubscriber service dispatch', () => {
     assert.strictEqual(
       clampReadarrProviderRetryDelay(Number.MAX_SAFE_INTEGER),
       3_600_000
+    );
+  });
+
+  it('continues Radarr dispatch when requester tag lookup fails', async () => {
+    const settings = getSettings();
+    settings.radarr = [
+      {
+        id: 30,
+        name: 'Radarr',
+        hostname: 'radarr.local',
+        port: 7878,
+        apiKey: 'test-key',
+        useSsl: false,
+        activeProfileId: 5,
+        activeProfileName: 'HD',
+        activeDirectory: '/movies',
+        minimumAvailability: 'released',
+        tags: [12],
+        is4k: false,
+        isDefault: true,
+        syncEnabled: true,
+        preventSearch: false,
+        tagRequests: true,
+        overrideRule: [],
+      },
+    ];
+
+    const requestedBy = await getRequester();
+    const media = await getRepository(Media).save(
+      new Media({
+        mediaType: MediaType.MOVIE,
+        tmdbId: 550,
+        status: MediaStatus.PENDING,
+        status4k: MediaStatus.UNKNOWN,
+      })
+    );
+    (
+      mock.method as (
+        object: object,
+        methodName: string,
+        implementation: () => Promise<unknown>
+      ) => unknown
+    )(ExternalAPI.prototype, 'get', async () => ({
+      id: 550,
+      title: 'Fight Club',
+      release_date: '1999-10-15',
+    }));
+    let movieOptions: Parameters<RadarrAPI['addMovie']>[0] | undefined;
+    const originalCreate = axios.create;
+    mock.method(
+      axios,
+      'create',
+      (config: { params?: { api_key?: string } }) => {
+        if (config?.params?.api_key) {
+          return originalCreate.call(axios, config);
+        }
+
+        return {
+          interceptors: { request: { use: () => undefined } },
+          get: async (endpoint: string) => {
+            if (endpoint.endsWith('/tag')) {
+              throw new Error('Temporary tag service outage');
+            }
+            if (endpoint.endsWith('/movie/lookup')) {
+              return {
+                data: [
+                  {
+                    title: 'Fight Club',
+                    tmdbId: 550,
+                    year: 1999,
+                    hasFile: false,
+                    monitored: false,
+                    tags: [],
+                  },
+                ],
+              };
+            }
+
+            throw new Error(`Unexpected GET ${endpoint}`);
+          },
+          post: async (
+            endpoint: string,
+            payload: Parameters<RadarrAPI['addMovie']>[0]
+          ) => {
+            assert.ok(endpoint.endsWith('/movie'));
+            movieOptions = payload;
+            return {
+              data: {
+                id: 77,
+                title: 'Fight Club',
+                titleSlug: 'fight-club-1999',
+              },
+            };
+          },
+        };
+      }
+    );
+
+    const request = await createApprovedRequest(media, requestedBy);
+    await getRepository(MediaRequest).save(request);
+
+    const delivered = await new MediaRequestSubscriber().sendToRadarr(request);
+
+    assert.equal(delivered, true);
+    assert.deepEqual(movieOptions?.tags, [12]);
+    const savedMedia = await getRepository(Media).findOneByOrFail({
+      id: media.id,
+    });
+    assert.equal(savedMedia.externalServiceId, 77);
+    assert.equal(savedMedia.serviceId, 30);
+  });
+
+  it('queues one private availability intent per follower and consumes subscriptions', async () => {
+    const requester = await getRequester();
+    const follower = await getRepository(User).findOneOrFail({
+      where: { email: 'admin@seerr.dev' },
+    });
+    const media = await getRepository(Media).save(
+      new Media({
+        mediaType: MediaType.MOVIE,
+        tmdbId: 891236,
+        status: MediaStatus.PENDING,
+        status4k: MediaStatus.UNKNOWN,
+      })
+    );
+    const subscriptionRepository = getRepository(MediaAvailabilitySubscription);
+    await subscriptionRepository.save([
+      new MediaAvailabilitySubscription({ user: requester, media }),
+      new MediaAvailabilitySubscription({ user: follower, media }),
+    ]);
+
+    const queued: {
+      type: Notification;
+      intent: Parameters<typeof notificationManager.sendNotificationIntent>[1];
+    }[] = [];
+    mock.method(
+      notificationManager,
+      'sendNotificationIntent',
+      async (
+        type: Notification,
+        intent: Parameters<typeof notificationManager.sendNotificationIntent>[1]
+      ) => {
+        queued.push({ type, intent });
+      }
+    );
+
+    const request = await getRepository(MediaRequest).save(
+      new MediaRequest({
+        type: MediaType.MOVIE,
+        status: MediaRequestStatus.APPROVED,
+        media,
+        requestedBy: requester,
+        is4k: false,
+      })
+    );
+    const firstAvailable = await getRepository(Media).findOneByOrFail({
+      id: media.id,
+    });
+    firstAvailable.status = MediaStatus.AVAILABLE;
+    await getRepository(Media).save(firstAvailable);
+
+    const availableIntents = queued.filter(
+      ({ type }) => type === Notification.MEDIA_AVAILABLE
+    );
+    assert.deepStrictEqual(
+      availableIntents.map(({ intent }) => intent),
+      [
+        { kind: 'media-request', requestId: request.id },
+        {
+          kind: 'media-availability-subscription',
+          mediaId: media.id,
+          userId: follower.id,
+        },
+      ]
+    );
+    assert.strictEqual(
+      await subscriptionRepository.countBy({ media: { id: media.id } }),
+      0
+    );
+  });
+
+  it('keeps follows while another request is active and removes them when all requests end', async () => {
+    const requester = await getRequester();
+    const otherRequester = await getRepository(User).findOneOrFail({
+      where: { email: 'demo@seerr.dev' },
+    });
+    const follower = await getRepository(User).findOneOrFail({
+      where: { email: 'admin@seerr.dev' },
+    });
+    const media = await getRepository(Media).save(
+      new Media({
+        mediaType: MediaType.TV,
+        tmdbId: 891237,
+        status: MediaStatus.PENDING,
+        status4k: MediaStatus.UNKNOWN,
+      })
+    );
+    const requestRepository = getRepository(MediaRequest);
+    const firstRequest = await requestRepository.save(
+      new MediaRequest({
+        type: MediaType.TV,
+        status: MediaRequestStatus.PENDING,
+        media,
+        requestedBy: requester,
+        is4k: false,
+        seasons: [],
+      })
+    );
+    const secondRequest = await requestRepository.save(
+      new MediaRequest({
+        type: MediaType.TV,
+        status: MediaRequestStatus.PENDING,
+        media,
+        requestedBy: otherRequester,
+        is4k: false,
+        seasons: [],
+      })
+    );
+    const subscriptionRepository = getRepository(MediaAvailabilitySubscription);
+    await subscriptionRepository.save(
+      new MediaAvailabilitySubscription({ user: follower, media })
+    );
+
+    firstRequest.status = MediaRequestStatus.DECLINED;
+    await requestRepository.save(firstRequest);
+    assert.strictEqual(
+      await subscriptionRepository.countBy({ media: { id: media.id } }),
+      1
+    );
+
+    secondRequest.status = MediaRequestStatus.DECLINED;
+    await requestRepository.save(secondRequest);
+    assert.strictEqual(
+      await subscriptionRepository.countBy({ media: { id: media.id } }),
+      0
     );
   });
 
@@ -677,6 +1073,289 @@ describe('MediaRequestSubscriber service dispatch', () => {
     assert.equal(savedMedia.serviceId, 31);
   });
 
+  it('resolves missing TVDB IDs and ignores specials during season verification', async () => {
+    configureFallbackSonarr();
+    stubTvdbShow(87012, [
+      { season_number: 0, air_date: '2020-12-25' },
+      { season_number: 1, air_date: '2024-09-24' },
+    ]);
+    const tvdb = {
+      resolveTvdbId: async () => 184871,
+      getOfficialSeasons: async () => [{ seasonNumber: 1, year: 2024 }],
+    };
+    mock.method(Tvdb, 'getInstance', async () => tvdb as unknown as Tvdb);
+    const addSeries = stubSonarrAddSeries();
+    const { request } = await createApprovedTvRequest(87012, [0, 1]);
+
+    await new MediaRequestSubscriber().sendToSonarr(request);
+
+    assert.equal(addSeries.mock.callCount(), 1);
+    const sentOptions = addSeries.mock.calls[0]?.arguments[0];
+    assert.ok(sentOptions);
+    assert.equal(sentOptions.tvdbid, 184871);
+    assert.deepEqual(sentOptions.seasons, [0, 1]);
+  });
+
+  it('falls back to the selected Sonarr server TMDB lookup', async () => {
+    configureFallbackSonarr();
+    stubTvdbShow(87013, [{ season_number: 1, air_date: '2024-09-24' }]);
+    const tvdb = {
+      resolveTvdbId: async () => undefined,
+      getOfficialSeasons: async () => [{ seasonNumber: 1, year: 2024 }],
+    };
+    mock.method(Tvdb, 'getInstance', async () => tvdb as unknown as Tvdb);
+    const lookup = mock.method(
+      SonarrAPI.prototype,
+      'getSeriesByTmdbId',
+      async () => ({ tvdbId: 184872 }) as SonarrSeries
+    );
+    const addSeries = stubSonarrAddSeries();
+    const { request } = await createApprovedTvRequest(87013, [1]);
+
+    await new MediaRequestSubscriber().sendToSonarr(request);
+
+    assert.equal(lookup.mock.callCount(), 1);
+    assert.equal(lookup.mock.calls[0].arguments[0], 87013);
+    const sentOptions = addSeries.mock.calls[0]?.arguments[0];
+    assert.ok(sentOptions);
+    assert.equal(sentOptions.tvdbid, 184872);
+  });
+
+  it('keeps unresolved TV requests and media available for retry', async () => {
+    configureFallbackSonarr();
+    stubTvdbShow(87014, [{ season_number: 1, air_date: '2024-09-24' }]);
+    const tvdb = {
+      resolveTvdbId: async () => undefined,
+      getOfficialSeasons: async () => null,
+    };
+    mock.method(Tvdb, 'getInstance', async () => tvdb as unknown as Tvdb);
+    mock.method(SonarrAPI.prototype, 'getSeriesByTmdbId', async () => null);
+    const addSeries = stubSonarrAddSeries();
+    const notification = mock.method(
+      MediaRequest,
+      'sendNotification',
+      async () => undefined
+    );
+    const { media, request } = await createApprovedTvRequest(87014, [1]);
+
+    await new MediaRequestSubscriber().sendToSonarr(request);
+
+    const savedMedia = await getRepository(Media).findOneBy({ id: media.id });
+    const savedRequest = await getRepository(MediaRequest).findOne({
+      where: { id: request.id },
+      relations: { seasons: true },
+    });
+    assert.ok(savedMedia);
+    assert.equal(savedRequest?.status, MediaRequestStatus.FAILED);
+    assert.equal(
+      savedRequest?.failureReason,
+      MediaRequestFailureReason.TVDB_ID_UNRESOLVED
+    );
+    assert.equal(savedRequest?.seasons.length, 1);
+    assert.equal(addSeries.mock.callCount(), 0);
+    assert.equal(notification.mock.callCount(), 1);
+  });
+
+  it('fails safely when fallback identity has a different season numbering', async () => {
+    configureFallbackSonarr();
+    stubTvdbShow(87015, [{ season_number: 8, air_date: '2024-09-24' }]);
+    const tvdb = {
+      resolveTvdbId: async () => 184873,
+      getOfficialSeasons: async () => [{ seasonNumber: 15, year: 2024 }],
+    };
+    mock.method(Tvdb, 'getInstance', async () => tvdb as unknown as Tvdb);
+    const addSeries = stubSonarrAddSeries();
+    const notification = mock.method(
+      MediaRequest,
+      'sendNotification',
+      async () => undefined
+    );
+    const { media, request } = await createApprovedTvRequest(87015, [8]);
+
+    await new MediaRequestSubscriber().sendToSonarr(request);
+
+    const savedMedia = await getRepository(Media).findOneBy({ id: media.id });
+    const savedRequest = await getRepository(MediaRequest).findOne({
+      where: { id: request.id },
+      relations: { seasons: true },
+    });
+    assert.ok(savedMedia);
+    assert.equal(savedRequest?.status, MediaRequestStatus.FAILED);
+    assert.equal(
+      savedRequest?.failureReason,
+      MediaRequestFailureReason.TVDB_SEASON_MISMATCH
+    );
+    assert.equal(savedRequest?.seasons.length, 1);
+    assert.equal(addSeries.mock.callCount(), 0);
+    assert.equal(notification.mock.callCount(), 1);
+  });
+
+  it('classifies unavailable official TVDB season data without dispatching', async () => {
+    configureFallbackSonarr();
+    stubTvdbShow(87016, [{ season_number: 1, air_date: '2024-09-24' }]);
+    const tvdb = {
+      resolveTvdbId: async () => 184874,
+      getOfficialSeasons: async () => null,
+    };
+    mock.method(Tvdb, 'getInstance', async () => tvdb as unknown as Tvdb);
+    const addSeries = stubSonarrAddSeries();
+    const { request } = await createApprovedTvRequest(87016, [1]);
+
+    await new MediaRequestSubscriber().sendToSonarr(request);
+
+    const savedRequest = await getRepository(MediaRequest).findOneByOrFail({
+      id: request.id,
+    });
+    assert.equal(savedRequest.status, MediaRequestStatus.FAILED);
+    assert.equal(
+      savedRequest.failureReason,
+      MediaRequestFailureReason.TVDB_SEASON_DATA_UNVERIFIED
+    );
+    assert.equal(addSeries.mock.callCount(), 0);
+  });
+
+  it('stores a bounded dispatch category instead of provider error text', async () => {
+    configureFallbackSonarr();
+    stubTvdbShow(87017, [{ season_number: 1, air_date: '2024-09-24' }]);
+    const tvdb = {
+      resolveTvdbId: async () => undefined,
+      getOfficialSeasons: async () => null,
+    };
+    mock.method(Tvdb, 'getInstance', async () => tvdb as unknown as Tvdb);
+    mock.method(SonarrAPI.prototype, 'getSeriesByTmdbId', async () => {
+      throw new Error('provider said an internal detail');
+    });
+    const { request } = await createApprovedTvRequest(87017, [1]);
+
+    await new MediaRequestSubscriber().sendToSonarr(request);
+
+    const savedRequest = await getRepository(MediaRequest).findOneByOrFail({
+      id: request.id,
+    });
+    assert.equal(savedRequest.status, MediaRequestStatus.FAILED);
+    assert.equal(
+      savedRequest.failureReason,
+      MediaRequestFailureReason.DISPATCH_FAILED
+    );
+    assert.notEqual(
+      savedRequest.failureReason,
+      'provider said an internal detail'
+    );
+  });
+
+  it('falls back to the selected Sonarr service default for a missing anime profile', async () => {
+    const settings = getSettings();
+    settings.sonarr = [
+      makeSonarrSettings(31, 'primary-sonarr.local', 4, 5, true),
+      makeSonarrSettings(32, 'anime-sonarr.local', 7, 8, false),
+    ];
+    mockAnimeTvShow(7001, 17001);
+
+    let profileLookupUrl: string | undefined;
+    let addSeriesUrl: string | undefined;
+    let receivedOptions: AddSeriesOptions | undefined;
+    mock.method(
+      SonarrAPI.prototype,
+      'getProfiles',
+      async function (this: SonarrAPI, options?: { forceRefresh?: boolean }) {
+        profileLookupUrl = Reflect.get(this, 'baseUrl') as string;
+        assert.strictEqual(options?.forceRefresh, true);
+        return [{ id: 7, name: 'Anime Sonarr Default' }];
+      }
+    );
+    mock.method(
+      SonarrAPI.prototype,
+      'addSeries',
+      async function (this: SonarrAPI, options: AddSeriesOptions) {
+        addSeriesUrl = Reflect.get(this, 'baseUrl') as string;
+        receivedOptions = options;
+        return {
+          id: 88,
+          title: 'Anime 7001',
+          titleSlug: 'anime-7001',
+        } as Awaited<ReturnType<SonarrAPI['addSeries']>>;
+      }
+    );
+    mock.method(MediaRequest, 'sendNotification', async () => undefined);
+
+    const { request } = await createApprovedTvRequest(7001, [1], 17001, {
+      profileId: 8,
+      serverId: 32,
+    });
+    await new MediaRequestSubscriber().sendToSonarr(request);
+
+    assert.strictEqual(receivedOptions?.profileId, 7);
+    assert.match(profileLookupUrl ?? '', /anime-sonarr\.local/);
+    assert.strictEqual(addSeriesUrl, profileLookupUrl);
+    const savedMedia = await getRepository(Media).findOneByOrFail({
+      id: request.media.id,
+    });
+    assert.strictEqual(savedMedia.serviceId, 32);
+  });
+
+  it('falls back to the standard profile when Sonarr profile verification is unavailable', async () => {
+    const settings = getSettings();
+    settings.sonarr = [makeSonarrSettings(33, 'sonarr.local', 7, 8, true)];
+    mockAnimeTvShow(7002, 17002);
+
+    let receivedOptions: AddSeriesOptions | undefined;
+    mock.method(SonarrAPI.prototype, 'getProfiles', async () => {
+      throw new Error('Sonarr is temporarily unavailable');
+    });
+    mock.method(
+      SonarrAPI.prototype,
+      'addSeries',
+      async (options: AddSeriesOptions) => {
+        receivedOptions = options;
+        return {
+          id: 89,
+          title: 'Anime 7002',
+          titleSlug: 'anime-7002',
+        } as Awaited<ReturnType<SonarrAPI['addSeries']>>;
+      }
+    );
+    mock.method(MediaRequest, 'sendNotification', async () => undefined);
+
+    const { request } = await createApprovedTvRequest(7002, [1], 17002, {
+      profileId: 8,
+    });
+    await new MediaRequestSubscriber().sendToSonarr(request);
+
+    assert.strictEqual(receivedOptions?.profileId, 7);
+  });
+
+  it('keeps a valid anime profile for approved series requests', async () => {
+    const settings = getSettings();
+    settings.sonarr = [makeSonarrSettings(34, 'sonarr.local', 7, 8, true)];
+    mockAnimeTvShow(7003, 17003);
+
+    let receivedOptions: AddSeriesOptions | undefined;
+    mock.method(SonarrAPI.prototype, 'getProfiles', async () => [
+      { id: 7, name: 'Default' },
+      { id: 8, name: 'Anime' },
+    ]);
+    mock.method(
+      SonarrAPI.prototype,
+      'addSeries',
+      async (options: AddSeriesOptions) => {
+        receivedOptions = options;
+        return {
+          id: 90,
+          title: 'Anime 7003',
+          titleSlug: 'anime-7003',
+        } as Awaited<ReturnType<SonarrAPI['addSeries']>>;
+      }
+    );
+    mock.method(MediaRequest, 'sendNotification', async () => undefined);
+
+    const { request } = await createApprovedTvRequest(7003, [1], 17003, {
+      profileId: 8,
+    });
+    await new MediaRequestSubscriber().sendToSonarr(request);
+
+    assert.strictEqual(receivedOptions?.profileId, 8);
+  });
+
   it('passes exact multi-season episode selections to Sonarr', async () => {
     const settings = getSettings();
     settings.sonarr = [
@@ -695,12 +1374,12 @@ describe('MediaRequestSubscriber service dispatch', () => {
         is4k: false,
         isDefault: true,
         syncEnabled: true,
-        preventSearch: false,
+        preventSearch: true,
         tagRequests: false,
         seriesType: 'standard',
         animeSeriesType: 'anime',
         enableSeasonFolders: true,
-        monitorNewItems: 'all',
+        monitorNewItems: 'latest',
         overrideRule: [],
       },
     ];
@@ -726,6 +1405,7 @@ describe('MediaRequestSubscriber service dispatch', () => {
       name: 'Episode Selection Test',
       external_ids: { tvdb_id: 121362 },
       keywords: { results: [] },
+      seasons: [0, 1, 3, 4, 5].map((season_number) => ({ season_number })),
     }));
 
     let receivedOptions: AddSeriesOptions | undefined;
@@ -777,7 +1457,8 @@ describe('MediaRequestSubscriber service dispatch', () => {
       { seasonNumber: 3 },
       { seasonNumber: 5, episodeNumbers: [7, 8] },
     ]);
-    assert.strictEqual(receivedOptions?.searchNow, true);
+    assert.strictEqual(receivedOptions?.monitorNewItems, 'all');
+    assert.strictEqual(receivedOptions?.searchNow, false);
   });
 
   it('fails a movie request whose explicit Radarr server was removed', async () => {
@@ -818,6 +1499,10 @@ describe('MediaRequestSubscriber service dispatch', () => {
     });
     assert.equal(delivered, true);
     assert.equal(saved.status, MediaRequestStatus.FAILED);
+    assert.equal(
+      saved.failureReason,
+      MediaRequestFailureReason.SERVICE_UNAVAILABLE
+    );
     assert.equal(notificationType, Notification.MEDIA_FAILED);
   });
 
@@ -1402,6 +2087,60 @@ describe('MediaRequestSubscriber service dispatch', () => {
       id: request.id,
     });
     assert.equal(savedRequest.status, MediaRequestStatus.APPROVED);
+    const subscriber = new MediaRequestSubscriber();
+    const searchId = savedSearch.id;
+    // Replaying an accepted dispatch must not insert a second operation.
+    const replay = await subscriber.dispatchRequestById(request.id);
+    assert.equal(replay.delivered, true);
+    assert.equal(lookupTerms.length, 2);
+    assert.equal(
+      await getRepository(BookRequestSearch).countBy({ requestId: request.id }),
+      1
+    );
+    assert.equal(
+      (
+        await getRepository(BookRequestSearch).findOneByOrFail({
+          requestId: request.id,
+        })
+      ).id,
+      searchId
+    );
+
+    // Recover the durable failure left by the old duplicate-insert path.
+    await getRepository(MediaRequest).update(request.id, {
+      status: MediaRequestStatus.FAILED,
+    });
+    await recordRequestStatus(request.id);
+    assert.equal(
+      (
+        await getRepository(MediaRequestStatusEvent).findOneOrFail({
+          where: { requestId: request.id },
+          order: { id: 'DESC' },
+        })
+      ).stage,
+      'failed'
+    );
+    const recovery = await subscriber.dispatchRequestById(request.id);
+    assert.equal(recovery.delivered, true);
+    assert.equal(
+      (await getRepository(MediaRequest).findOneByOrFail({ id: request.id }))
+        .status,
+      MediaRequestStatus.APPROVED
+    );
+    assert.equal(
+      (await getRepository(Media).findOneByOrFail({ id: media.id }))
+        .ebookAvailable,
+      null
+    );
+    assert.notEqual(
+      (
+        await getRepository(MediaRequestStatusEvent).findOneOrFail({
+          where: { requestId: request.id },
+          order: { id: 'DESC' },
+        })
+      ).stage,
+      'failed'
+    );
   });
 
   it('looks up a numeric Bookshelf catalog identity as a work before generic search', async () => {
@@ -2613,7 +3352,7 @@ describe('MediaRequestSubscriber service dispatch', () => {
     });
 
     let addPayload: ReadarrBookOptions | undefined;
-    mock.method(
+    const addBookMock = mock.method(
       ReadarrAPI.prototype,
       'addBook',
       async (payload: ReadarrBookOptions) => {
@@ -2646,6 +3385,38 @@ describe('MediaRequestSubscriber service dispatch', () => {
     assert.equal(
       savedMedia.audiobookExternalServiceSlug,
       'the-left-hand-of-darkness-audio'
+    );
+    const operation = await getRepository(BookRequestSearch).findOneByOrFail({
+      requestId: request.id,
+    });
+    await getRepository(BookRequestSearch).update(operation.id, {
+      state: 'importing',
+      commandId: 79,
+    });
+    await getRepository(MediaRequest).update(request.id, {
+      bookFormat: 'audiobook',
+      status: MediaRequestStatus.FAILED,
+    });
+    const outcome = await new MediaRequestSubscriber().dispatchRequestById(
+      request.id
+    );
+    assert.equal(outcome.delivered, true);
+    assert.equal(addBookMock.mock.callCount(), 1);
+    const recoveredOperation = await getRepository(
+      BookRequestSearch
+    ).findOneByOrFail({ requestId: request.id });
+    assert.equal(recoveredOperation.id, operation.id);
+    assert.equal(recoveredOperation.state, 'importing');
+    assert.equal(recoveredOperation.commandId, 79);
+    assert.equal(
+      (await getRepository(MediaRequest).findOneByOrFail({ id: request.id }))
+        .status,
+      MediaRequestStatus.APPROVED
+    );
+    assert.equal(
+      (await getRepository(Media).findOneByOrFail({ id: media.id }))
+        .audiobookAvailable,
+      null
     );
   });
 
@@ -3097,6 +3868,18 @@ describe('MediaRequestSubscriber service dispatch', () => {
       id: request.id,
     });
     assert.equal(savedRequest.status, MediaRequestStatus.FAILED);
+    // Retry only the missing half, preserving the successful format's operation.
+    await new MediaRequestSubscriber().sendToReadarr(savedRequest);
+    assert.equal(addCount, 3);
+    assert.equal(
+      await getRepository(BookRequestSearch).countBy({ requestId: request.id }),
+      2
+    );
+    assert.equal(
+      (await getRepository(MediaRequest).findOneByOrFail({ id: request.id }))
+        .status,
+      MediaRequestStatus.APPROVED
+    );
   });
 
   it('configures both formats when retrying with only an unverified ebook link', async () => {

@@ -236,10 +236,15 @@ const assertNeutralHeaderWrapper = (text) => {
     );
     if (ts.isJsxElement(header.parent)) {
       assert.equal(header.parent.openingElement.tagName.getText(), 'div');
-      assert.equal(
-        attribute(header.parent, 'className'),
-        undefined,
-        'no competing wrapper class'
+      const wrapperClassName = attribute(
+        header.parent,
+        'className'
+      )?.initializer;
+      assert.ok(
+        !wrapperClassName ||
+          (ts.isStringLiteralLike(wrapperClassName) &&
+            wrapperClassName.text === 'app-filter-section-gap'),
+        'wrapper adds no spacing except the section gap below the header'
       );
       assert.equal(
         attribute(header.parent, 'style'),

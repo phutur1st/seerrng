@@ -22,6 +22,10 @@ import MediaFilterOption from '@app/components/Discover/MediaFilterOption';
 import { PinnedFilterSectionGroup } from '@app/components/Discover/PinnedFilterSection';
 import { RequestListboxControl } from '@app/components/RequestModal/AdvancedRequester';
 import SoftwareRequests from '@app/components/RequestStatus/SoftwareRequests';
+import {
+  formatRequestStatusMessage,
+  requestStatusMessages,
+} from '@app/components/RequestStatus/messages';
 import useDebouncedState from '@app/hooks/useDebouncedState';
 import useMediaFilterPin from '@app/hooks/useMediaFilterPin';
 import useRequestStatusScrollRestoration from '@app/hooks/useRequestStatusScrollRestoration';
@@ -64,6 +68,7 @@ import type {
 } from '@server/interfaces/api/requestInterfaces';
 import type { ServiceCommonServer } from '@server/interfaces/api/serviceInterfaces';
 import type { RequestStatusSortField } from '@server/lib/requestStatusSort';
+import type { AdultDetails } from '@server/models/Adult';
 import type { BookDetails } from '@server/models/Book';
 import type { ComicDetails } from '@server/models/Comic';
 import type { MagazineDetails } from '@server/models/Magazine';
@@ -132,6 +137,7 @@ const messages = defineMessages('components.Requests', {
   album: 'Album',
   comic: 'Comic',
   magazine: 'Magazine',
+  adult: 'Adult',
   sports: 'Sports',
   bookAndAudiobook: 'Book + Audiobook',
   book: 'Book',
@@ -144,6 +150,7 @@ const messages = defineMessages('components.Requests', {
   notAvailable: 'Not available',
   releaseDate: 'Release Date',
   latestIssue: 'Latest Issue',
+  year: 'Year',
   firstPublished: 'First Published',
   runtime: 'Runtime',
   pages: 'Pages',
@@ -184,6 +191,7 @@ const messages = defineMessages('components.Requests', {
   audiobooks: 'Audiobooks',
   comics: 'Comics',
   magazines: 'Magazines',
+  adults: 'Adult',
   sportsLeagues: 'Sports',
   romsRetro: 'ROMs - Retro',
   romsModern: 'ROMs - Modern',
@@ -261,7 +269,7 @@ const messages = defineMessages('components.Requests', {
   filteredEmptyTitle: 'Filters Too Restrictive',
   emptyTitle: 'No Requests Found',
   noMediaResults:
-    'No movie, show, music, book, comic, or magazine requests match these filters.',
+    'No movie, show, music, book, comic, magazine, or adult requests match these filters.',
   clearFilters: 'Clear Filters',
   scrollProgressLeft: 'Scroll progress left',
   requestLifecycle: 'Request Lifecycle',
@@ -280,6 +288,7 @@ type MediaDetails =
   | BookDetails
   | ComicDetails
   | MagazineDetails
+  | AdultDetails
   | SportarrDetails;
 type StatusStage =
   | 'requested'
@@ -303,6 +312,7 @@ type MediaFilter =
   | 'audiobook'
   | 'comic'
   | 'magazine'
+  | 'adult'
   | 'sports'
   | 'retro'
   | 'modern'
@@ -353,6 +363,7 @@ const mediaTypeValues: MediaFilter[] = [
   'audiobook',
   'comic',
   'magazine',
+  'adult',
   'sports',
   'retro',
   'modern',
@@ -543,6 +554,9 @@ const isComic = (details: MediaDetails): details is ComicDetails =>
 const isMagazine = (details: MediaDetails): details is MagazineDetails =>
   (details as MagazineDetails).mediaType === 'magazine';
 
+const isAdult = (details: MediaDetails): details is AdultDetails =>
+  (details as AdultDetails).mediaType === 'adult';
+
 const isSports = (details: MediaDetails): details is SportarrDetails =>
   (details as SportarrDetails).mediaType === 'sports';
 
@@ -567,6 +581,11 @@ const getMagazineId = (item: RequestStatusItem): string | undefined =>
     (identifier) => identifier.provider === 'lazylibrarian'
   )?.value;
 
+const getAdultId = (item: RequestStatusItem): string | undefined =>
+  item.request.media.identifiers?.find(
+    (identifier) => identifier.provider === 'stashdb'
+  )?.value;
+
 const getSportarrId = (item: RequestStatusItem): string | undefined =>
   item.request.media.identifiers?.find(
     (identifier) => identifier.provider === 'sportarr'
@@ -589,6 +608,10 @@ const getDetailsUrl = (item: RequestStatusItem): string | null => {
     return magazineId
       ? `/api/v1/magazine/${encodeApiPathSegment(magazineId)}`
       : null;
+  }
+  if (request.type === 'adult') {
+    const adultId = getAdultId(item);
+    return adultId ? `/api/v1/adult/${encodeApiPathSegment(adultId)}` : null;
   }
   if (request.type === 'sports') {
     const sportarrId = getSportarrId(item);
@@ -617,6 +640,10 @@ const getDetailHref = (item: RequestStatusItem): string | null => {
   if (request.type === 'magazine') {
     const magazineId = getMagazineId(item);
     return magazineId ? `/magazine/${encodeApiPathSegment(magazineId)}` : null;
+  }
+  if (request.type === 'adult') {
+    const adultId = getAdultId(item);
+    return adultId ? `/adult/${encodeApiPathSegment(adultId)}` : null;
   }
   if (request.type === 'sports') {
     const sportarrId = getSportarrId(item);
@@ -656,6 +683,13 @@ const getTitle = (
   if (item.request.type === 'magazine') {
     return getMagazineId(item) ?? intl.formatMessage(messages.unknownTitle);
   }
+  if (item.request.type === 'adult') {
+    return (
+      item.request.media.externalServiceSlug ??
+      getAdultId(item) ??
+      intl.formatMessage(messages.unknownTitle)
+    );
+  }
   if (item.request.type === 'sports') {
     return getSportarrId(item) ?? intl.formatMessage(messages.unknownTitle);
   }
@@ -674,6 +708,9 @@ const getPoster = (
   if (isBook(details)) {
     return { src: details.posterPath, type: 'book' };
   }
+  if (isAdult(details)) {
+    return { src: '/images/seerr_poster_not_found.png', type: 'tmdb' };
+  }
   return { src: getTmdbPosterImageUrl(details.posterPath), type: 'tmdb' };
 };
 
@@ -691,7 +728,7 @@ const getBackdrop = (
       ? { src: details.posterPath, type: 'book' }
       : undefined;
   }
-  if (isSports(details)) return undefined;
+  if (isSports(details) || isAdult(details)) return undefined;
   if (details.backdropPath) {
     return {
       src: `https://image.tmdb.org/t/p/w1920_and_h800_multi_faces/${details.backdropPath}`,
@@ -721,6 +758,7 @@ const getMediaBadge = (
   if (item.request.type === 'comic') return intl.formatMessage(messages.comic);
   if (item.request.type === 'magazine')
     return intl.formatMessage(messages.magazine);
+  if (item.request.type === 'adult') return intl.formatMessage(messages.adult);
   if (item.request.type === 'sports')
     return intl.formatMessage(messages.sports);
   return intl.formatMessage(messages.book);
@@ -734,6 +772,7 @@ const getMediaBadgeType = (
   if (item.request.type === 'music') return 'album';
   if (item.request.type === 'comic') return 'comic';
   if (item.request.type === 'magazine') return 'magazine';
+  if (item.request.type === 'adult') return 'adult';
   if (item.request.type === 'sports') return 'sports';
   return undefined;
 };
@@ -753,6 +792,9 @@ const getMediaFormat = (
   }
   if (item.request.type === 'magazine') {
     return intl.formatMessage(messages.magazine);
+  }
+  if (item.request.type === 'adult') {
+    return intl.formatMessage(messages.adult);
   }
   if (item.request.type === 'sports') {
     return intl.formatMessage(messages.sports);
@@ -786,6 +828,10 @@ const getReleaseDate = (
     const year = (details as SportarrDetails).year;
     return year ? String(year) : undefined;
   }
+  if (item.request.type === 'adult') {
+    const year = (details as AdultDetails).year;
+    return year ? String(year) : undefined;
+  }
   const year = (details as BookDetails).firstPublishYear;
   return year ? String(year) : undefined;
 };
@@ -799,7 +845,9 @@ const getReleaseDateLabel = (
       ? messages.firstPublished
       : item.request.type === 'magazine'
         ? messages.latestIssue
-        : messages.releaseDate
+        : item.request.type === 'adult'
+          ? messages.year
+          : messages.releaseDate
   );
 
 const getRuntime = (
@@ -850,6 +898,7 @@ const getRuntime = (
   if (item.request.type === 'sports') {
     return (details as SportarrDetails).country ?? notAvailable;
   }
+  if (item.request.type === 'adult') return notAvailable;
   return notAvailable;
 };
 
@@ -911,6 +960,9 @@ const getFeaturedCredits = (
       return [];
     }
     if (item.request.type === 'sports') {
+      return [];
+    }
+    if (item.request.type === 'adult') {
       return [];
     }
 
@@ -1049,6 +1101,16 @@ const getSecondaryDetails = (
     ];
   }
 
+  if (item.request.type === 'adult') {
+    const studio = (details as AdultDetails | undefined)?.studio;
+    return [
+      {
+        label: intl.formatMessage(messages.studio),
+        name: studio ?? notAvailable,
+      },
+    ];
+  }
+
   const studio = (details as MovieDetails | undefined)
     ?.productionCompanies?.[0];
   return [
@@ -1108,6 +1170,9 @@ const getGenres = (
           },
         ]
       : [];
+  }
+  if (item.request.type === 'adult') {
+    return [];
   }
   return (
     (details as BookDetails).subjects
@@ -1334,7 +1399,8 @@ const RequestStatusCard = ({
           downloadCount: 1,
           downloadId: null,
           service: 'Radarr-HD',
-          message: 'A usable release is downloading.',
+          message: intl.formatMessage(requestStatusMessages.downloading),
+          messageKey: 'downloading' as const,
           isTerminal: false,
           needsAttention: false,
           retryable: false,
@@ -1350,13 +1416,17 @@ const RequestStatusCard = ({
         estimatedCompletionTime: null,
         downloadCount: 0,
         downloadId: null,
-        message: 'Approved for processing.',
+        message: intl.formatMessage(
+          requestStatusMessages.approvedForProcessing
+        ),
+        messageKey: 'approvedForProcessing' as const,
         observedAt: new Date(),
         isTerminal: false,
         needsAttention: false,
         retryable: false,
       }
     : observedCurrent;
+  const currentMessage = formatRequestStatusMessage(intl, current);
   const history = detail?.history.results ?? [];
   const currentStage = statusStageValues.includes(current.stage)
     ? (current.stage as StatusStage)
@@ -1665,7 +1735,8 @@ const RequestStatusCard = ({
             item.request.type === 'book' ||
             item.request.type === 'comic' ||
             item.request.type === 'magazine' ||
-            item.request.type === 'sports'
+            item.request.type === 'sports' ||
+            item.request.type === 'adult'
               ? undefined
               : item.request.media.tmdbId
           }
@@ -1678,6 +1749,10 @@ const RequestStatusCard = ({
           comicId={item.request.type === 'comic' ? getComicId(item) : undefined}
           magazineTitle={
             item.request.type === 'magazine' ? getMagazineId(item) : undefined
+          }
+          adultId={item.request.type === 'adult' ? getAdultId(item) : undefined}
+          adultRequestId={
+            item.request.type === 'adult' ? item.request.id : undefined
           }
           sportarrLeagueId={
             item.request.type === 'sports' ? getSportarrId(item) : undefined
@@ -2079,10 +2154,10 @@ const RequestStatusCard = ({
         ) : null}
 
         <div className="app-action-row request-status-action-row">
-          <Tooltip content={current.message}>
+          <Tooltip content={currentMessage}>
             <span
               className={`request-status-control ${requestStatusTone[currentStage] ?? requestStatusTone.cancelled}`}
-              aria-label={`${getStageLabel(intl, currentStage)}: ${current.message}`}
+              aria-label={`${getStageLabel(intl, currentStage)}: ${currentMessage}`}
               tabIndex={0}
             >
               <StageIcon className="request-status-control-icon" aria-hidden />
@@ -2152,8 +2227,9 @@ const RequestStatusCard = ({
                         {getStageLabel(intl, event.stage as StatusStage)}
                       </span>
                       <span className="refreshed-detail-text app-history-description">
-                        {event.message ??
-                          getStageLabel(intl, event.stage as StatusStage)}
+                        {event.message
+                          ? formatRequestStatusMessage(intl, event)
+                          : getStageLabel(intl, event.stage as StatusStage)}
                         {event.percent !== null && ` · ${event.percent}%`}
                       </span>
                     </li>
@@ -2729,6 +2805,7 @@ const Requests = () => {
     { value: 'audiobook', label: 'audiobooks' },
     { value: 'comic', label: 'comics' },
     { value: 'magazine', label: 'magazines' },
+    { value: 'adult', label: 'adults' },
     { value: 'sports', label: 'sportsLeagues' },
     { value: 'retro', label: 'romsRetro' },
     { value: 'modern', label: 'romsModern' },

@@ -16,8 +16,9 @@ import {
   normalizeOpenLibraryWorkId,
 } from '@app/utils/apiPath';
 import defineMessages from '@app/utils/defineMessages';
+import { getViewerAvailabilityPresentation } from '@app/utils/viewerAvailabilityPresentation';
 import { MediaStatus } from '@server/constants/media';
-import { MediaServerType } from '@server/constants/server';
+import { MediaServerType, ServerType } from '@server/constants/server';
 import type { DownloadingItem } from '@server/lib/downloadtracker';
 import type { ReactNode } from 'react';
 import { useIntl } from 'react-intl';
@@ -25,6 +26,7 @@ import { useIntl } from 'react-intl';
 const messages = defineMessages('components.StatusBadge', {
   status: '{status}',
   status4k: '4K {status}',
+  sharedAvailability: 'Shared: {status}',
   playonplex: 'Play on {mediaServerName}',
   openinarr: 'Open in {arr}',
   managemedia: 'Manage {mediaType}',
@@ -53,6 +55,7 @@ interface StatusBadgeProps {
   canFailDownload?: boolean;
   showQuality?: boolean;
   leadingIcon?: ReactNode;
+  viewerHasRequestedCopy?: boolean;
 }
 
 const StatusBadge = ({
@@ -74,6 +77,7 @@ const StatusBadge = ({
   canFailDownload = false,
   showQuality = true,
   leadingIcon,
+  viewerHasRequestedCopy,
 }: StatusBadgeProps) => {
   const intl = useIntl();
   const { hasPermission } = useUser();
@@ -82,12 +86,26 @@ const StatusBadge = ({
     downloadItem[0],
     hasPermission(Permission.ADMIN)
   );
+  const availability = getViewerAvailabilityPresentation(
+    status,
+    settings.currentSettings.otherUsersAvailability,
+    viewerHasRequestedCopy,
+    inProgress
+  );
   const formatStatusLabel = (statusText: string) =>
     showQuality
       ? intl.formatMessage(is4k ? messages.status4k : messages.status, {
           status: statusText,
         })
       : statusText;
+  const formatAvailabilityLabel = (statusText: string) => {
+    const formattedStatus = formatStatusLabel(statusText);
+    return availability.shared
+      ? intl.formatMessage(messages.sharedAvailability, {
+          status: formattedStatus,
+        })
+      : formattedStatus;
+  };
 
   let mediaLink: string | undefined;
   let mediaLinkDescription: string | undefined;
@@ -99,6 +117,7 @@ const StatusBadge = ({
   if (
     mediaType &&
     plexUrl &&
+    !availability.hidePlayback &&
     hasPermission(
       is4k
         ? [
@@ -141,10 +160,10 @@ const StatusBadge = ({
     mediaLinkDescription = intl.formatMessage(messages.playonplex, {
       mediaServerName:
         settings.currentSettings.mediaServerType === MediaServerType.EMBY
-          ? 'Emby'
+          ? ServerType.EMBY
           : settings.currentSettings.mediaServerType === MediaServerType.PLEX
-            ? 'Plex'
-            : 'Jellyfin',
+            ? ServerType.PLEX
+            : ServerType.JELLYFIN,
     });
   } else if (hasPermission(Permission.MANAGE_REQUESTS)) {
     if (mediaType === 'music' && (mbId || externalId)) {
@@ -267,23 +286,27 @@ const StatusBadge = ({
       tooltipContent
     );
 
-  const downloadTooltipClassName = inProgress
-    ? `scrollable-card ${
-        canFailDownload ? '' : 'hidden sm:block'
-      } max-h-96 w-96 max-w-[calc(100vw-2rem)] overflow-y-auto`
-    : undefined;
+  const downloadTooltipClassName = inProgress ? 'scrollable-card' : undefined;
   const downloadTooltipConfig = inProgress
     ? {
         interactive: true,
         delayHide: 100,
-        ...(canFailDownload && {
-          trigger: ['hover', 'click', 'focus'] as (
-            'hover' | 'click' | 'focus'
-          )[],
-          followCursor: false,
-        }),
+        trigger: (statusBadgeLink
+          ? ['hover', 'focus']
+          : ['hover', 'click', 'focus']) as ('hover' | 'click' | 'focus')[],
+        followCursor: false,
       }
     : undefined;
+  const statusBadgeOpensDownloadDetails = inProgress && !statusBadgeLink;
+
+  if (
+    availability.hidden &&
+    !inProgress &&
+    (status === MediaStatus.AVAILABLE ||
+      status === MediaStatus.PARTIALLY_AVAILABLE)
+  ) {
+    return null;
+  }
 
   const badgeDownloadProgress = (
     <div
@@ -315,9 +338,15 @@ const StatusBadge = ({
           tooltipConfig={downloadTooltipConfig}
         >
           <Badge
-            badgeType="success"
+            badgeType={availability.shared ? 'shared' : 'success'}
             href={statusBadgeLink}
+            role={statusBadgeOpensDownloadDetails ? 'button' : undefined}
+            tabIndex={statusBadgeOpensDownloadDetails ? 0 : undefined}
             className={`${className ?? ''} ${
+              statusBadgeOpensDownloadDetails
+                ? 'request-status-control-link'
+                : ''
+            } ${
               inProgress &&
               'relative !bg-gray-700/35 !px-0 hover:!bg-gray-700/55'
             } overflow-hidden`}
@@ -330,7 +359,7 @@ const StatusBadge = ({
             >
               {leadingIcon}
               <span>
-                {formatStatusLabel(
+                {formatAvailabilityLabel(
                   inProgress
                     ? intl.formatMessage(globalMessages.processing)
                     : intl.formatMessage(globalMessages.available)
@@ -375,9 +404,15 @@ const StatusBadge = ({
           tooltipConfig={downloadTooltipConfig}
         >
           <Badge
-            badgeType="success"
+            badgeType={availability.shared ? 'shared' : 'success'}
             href={statusBadgeLink}
+            role={statusBadgeOpensDownloadDetails ? 'button' : undefined}
+            tabIndex={statusBadgeOpensDownloadDetails ? 0 : undefined}
             className={`${className ?? ''} ${
+              statusBadgeOpensDownloadDetails
+                ? 'request-status-control-link'
+                : ''
+            } ${
               inProgress &&
               'relative !bg-gray-700/35 !px-0 hover:!bg-gray-700/55'
             } overflow-hidden`}
@@ -390,7 +425,7 @@ const StatusBadge = ({
             >
               {leadingIcon}
               <span>
-                {formatStatusLabel(
+                {formatAvailabilityLabel(
                   inProgress
                     ? intl.formatMessage(globalMessages.processing)
                     : intl.formatMessage(globalMessages.partiallyavailable)
@@ -437,7 +472,13 @@ const StatusBadge = ({
           <Badge
             badgeType="primary"
             href={statusBadgeLink}
+            role={statusBadgeOpensDownloadDetails ? 'button' : undefined}
+            tabIndex={statusBadgeOpensDownloadDetails ? 0 : undefined}
             className={`${className ?? ''} ${
+              statusBadgeOpensDownloadDetails
+                ? 'request-status-control-link'
+                : ''
+            } ${
               inProgress &&
               'relative !bg-gray-700/35 !px-0 hover:!bg-gray-700/55'
             } overflow-hidden`}
@@ -526,7 +567,13 @@ const StatusBadge = ({
           <Badge
             badgeType="danger"
             href={statusBadgeLink}
+            role={statusBadgeOpensDownloadDetails ? 'button' : undefined}
+            tabIndex={statusBadgeOpensDownloadDetails ? 0 : undefined}
             className={`${className ?? ''} ${
+              statusBadgeOpensDownloadDetails
+                ? 'request-status-control-link'
+                : ''
+            } ${
               inProgress &&
               'relative !bg-gray-700/35 !px-0 hover:!bg-gray-700/55'
             } overflow-hidden`}

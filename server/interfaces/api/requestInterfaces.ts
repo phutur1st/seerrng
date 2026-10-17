@@ -36,10 +36,13 @@ export type MediaRequestBody = {
   watchAheadEpisodeCount?: number;
   is4k?: boolean;
   serverId?: number;
+  requestServiceServerId?: number;
   profileId?: number;
   profileName?: string;
   rootFolder?: string;
   languageProfileId?: number;
+  metadataLanguageId?: number | null;
+  sonarrSeasonType?: string | null;
   metadataProfileId?: number;
   format?: 'ebook' | 'audiobook' | 'both';
   editionId?: string;
@@ -50,6 +53,7 @@ export type MediaRequestBody = {
   userId?: number;
   tags?: number[];
   ignoreQuota?: boolean;
+  requestQuotaApproval?: boolean;
 };
 
 export type BulkMediaRequestItem = {

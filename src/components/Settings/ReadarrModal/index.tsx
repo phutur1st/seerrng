@@ -19,8 +19,8 @@ import { useIntl } from 'react-intl';
 import * as Yup from 'yup';
 
 const messages = defineMessages('components.Settings.ReadarrModal', {
-  createreadarr: 'Add New Bookshelf Server',
-  editreadarr: 'Edit Bookshelf Server',
+  createreadarr: 'Add ChaptarrNG Server',
+  editreadarr: 'Edit Book Server',
   validationNameRequired: 'You must provide a server name',
   validationHostnameRequired: 'You must provide a valid hostname or IP address',
   validationPortRequired: 'You must provide a valid port number',
@@ -62,14 +62,14 @@ const messages = defineMessages('components.Settings.ReadarrModal', {
   ebook: 'Book',
   audiobook: 'Audiobook',
   serviceTypeHelp:
-    'To handle both books and audiobooks with one Bookshelf instance, add this same server twice: choose Books here and Audiobooks on the second connection.',
+    'To handle both books and audiobooks with one ChaptarrNG instance, add this same server twice: choose Book here and Audiobook on the second connection.',
   compatibilityNote:
-    'Bookshelf is the recommended book backend. Readarr-compatible servers, including Chaptarr, can also be used. For Chaptarr, set Book Format to match the configured root folder; Seerr sends that format explicitly on every request.',
+    'ChaptarrNG is the maintained book backend for new installs. Existing BookshelfNG and other Readarr-compatible servers remain supported during migration. Set Book Format to match the configured root folder; Seerr sends that format explicitly on every request.',
   migrationNote:
     'Hardcover is used by default for new installs. Existing Goodreads/softcover libraries remain supported. Migration to Hardcover is optional; use the migration guide if you choose to move provider-specific metadata IDs.',
   migrationGuide: 'Bookshelf Hardcover migration guide',
   apiKeyHelp:
-    'Find the key in Bookshelf or Readarr under Settings > General > Security > API Key. For ChaptarrNG 0.9.941+, set CHAPTARR__AUTH__SEERRAPIKEY in the ChaptarrNG container and use that SeerrNG-specific key here to limit access to book-service operations.',
+    'Find the key in ChaptarrNG under Settings > General > Security > API Key. For ChaptarrNG 0.9.941+, set CHAPTARR__AUTH__SEERRAPIKEY in the ChaptarrNG container and use that SeerrNG-specific key here to limit access to book-service operations. Existing BookshelfNG connections keep their current key during migration.',
   baseUrlHelp:
     'If you set a URL Base in Bookshelf, Chaptarr, or Readarr (Settings > General > Host), enter it here (e.g. /bookshelf). Leave blank otherwise. Chaptarr users do not need a provider-specific URL Base.',
   externalUrlHelp:
@@ -151,7 +151,7 @@ const ReadarrModal = ({
   const intl = useIntl();
   const bookshelfSuggestion = useSetupConnectionSuggestion('bookshelf');
   const chaptarrSuggestion = useSetupConnectionSuggestion('chaptarrng');
-  const setupConnection = bookshelfSuggestion ?? chaptarrSuggestion;
+  const setupConnection = chaptarrSuggestion ?? bookshelfSuggestion;
   const initialLoad = useRef(false);
   const { addToast } = useToasts();
   const [isValidated, setIsValidated] = useState(readarr ? true : false);
@@ -442,7 +442,7 @@ const ReadarrModal = ({
               <p className="description mt-2">
                 {intl.formatMessage(messages.migrationNote)}{' '}
                 <a
-                  href="https://github.com/snapetech/seerrng/blob/main/docs/using-seerr/bookshelf-hardcover-migration.md"
+                  href="https://github.com/snapetech-org/seerrng/blob/main/docs/using-seerr/bookshelf-hardcover-migration.md"
                   target="_blank"
                   rel="noreferrer"
                   className="text-indigo-500 transition duration-300 hover:text-indigo-400"
@@ -620,7 +620,7 @@ const ReadarrModal = ({
                         setIsValidated(false);
                         setFieldValue('hostname', e.target.value);
                       }}
-                      className="rounded-r-only"
+                      className="rounded-e-only"
                     />
                   </div>
                   {errors.hostname &&

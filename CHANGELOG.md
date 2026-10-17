@@ -10,191 +10,630 @@ and the following `v3.2.7` release includes the intervening changes. Commit-leve
 links in the generated history remain the technical source of truth for changes
 that are not called out here.
 
-# Changelog
+## [3.66.0](https://github.com/snapetech-org/seerrng/compare/v3.65.0..v3.66.0) - 2026-10-17
 
-# Changelog
+### User-facing changes
 
-# Changelog
+#### Added
 
-# Changelog
+- **Swipe:** Swipe now covers every enabled requestable catalog, with category-specific search, filters, request options, and private decision history. Adult picks stay outside AI ordering, and software requests include the right system or PC target.
+- **Settings:** Administrators can save named hostnames or IP addresses under Settings → Services → System and reuse them with one click in service connection forms. Each saved entry is shared across SeerrNG and leaves the service's port and connection settings unchanged.
 
-# Changelog
+#### Changed
 
-# Changelog
+- **Unraid:** The SeerrNG Unraid template and optional Compose stack now use the validated main image channel. Companion services also follow their main release tags, so the existing Unraid definitions track validated builds without a manual tag change.
+- **Books:** ChaptarrNG now has a clearly named entry in Services, with setup guidance that explains where its restricted API key belongs.
 
-# Changelog
+#### Fixed
 
-# Changelog
+- **Comics:** Comic discovery now refreshes its provider configuration when opened, so adding a ComicVine API key takes effect without leaving a stale missing-key message on screen.
+- **Settings:** Search Settings keeps a matching API key control on the open settings page in place, even when the same search term also matches the Seerr API key. Searching for Prowlarr from another tab still opens the dedicated Prowlarr settings page.
+- **Settings:** Settings Search now opens its known destination before checking similar wording on the current tab. Searching for the API key from Metadata, for example, now takes you to the General settings field instead of stopping on a matching note.
+- **Distribution:** The Community Apps template now calls out the SeerrNG image registry move. Existing installations can keep pointing at the old image path until the Repository field is updated, so the template and Unraid guide now explain how to switch without changing the config mount.
+  - **Action required:** Update existing Unraid installs from ghcr.io/snapetech/seerrng to ghcr.io/snapetech-org/seerrng:latest while keeping the current /app/config host path.
+- **Discovery:** Discovery pages now load catalog results when opened, including after returning from another page, instead of starting with an empty results area.
 
-# Changelog
+### 🚀 Features
+- *(settings)* Add reusable service host presets - ([fcd5835](https://github.com/snapetech-org/seerrng/commit/fcd58357c9dfb8ef7273508ad9975eec40d02ac0))
+- *(swipe)* Support all requestable catalogs - ([4681da7](https://github.com/snapetech-org/seerrng/commit/4681da7697263911d14a779d3473e7cdb266af58))
 
-# Changelog
+### 🐛 Bug Fixes
+- *(comics)* Refresh ComicVine discovery configuration - ([dd5c23e](https://github.com/snapetech-org/seerrng/commit/dd5c23e2b2f33185748fe0f487ea4e6a1d5a8e45))
+- *(discover)* Preserve initial catalog fetches - ([1c75e53](https://github.com/snapetech-org/seerrng/commit/1c75e539e83d42c81c3fd30fc97fc60f7394c291))
+- *(release)* Preserve changelog history on retries - ([369cbdf](https://github.com/snapetech-org/seerrng/commit/369cbdfbbcf871bf24af802d681a642a249ce221))
+- *(release)* Allow retrying prepared version tags - ([229b461](https://github.com/snapetech-org/seerrng/commit/229b46117b67d481504c08e4e3fa95613c408326))
+- *(settings)* Preserve local search matches - ([482f736](https://github.com/snapetech-org/seerrng/commit/482f736f43f9a12b851d93f3529c914fcbf7eda3))
+- *(settings)* Prioritize indexed search destinations - ([b9fd412](https://github.com/snapetech-org/seerrng/commit/b9fd412e62de6e7be8a67183aa2c22c33667bfec))
+- *(settings)* Surface ChaptarrNG in Services - ([5a4bc22](https://github.com/snapetech-org/seerrng/commit/5a4bc228d9d2e76c7d994036b8bdae4a98f34065))
+- *(swipe)* Refresh history when reopened - ([41aa822](https://github.com/snapetech-org/seerrng/commit/41aa8222fd0548a12c0ffc2bc2bb89b8bb81d274))
+- *(swipe)* Refresh identical catalog matches - ([4119e35](https://github.com/snapetech-org/seerrng/commit/4119e3547bf49ddb2435c7d5c954dcf57ca4baad))
+- *(swipe)* Refresh cards when catalog filters change - ([7799359](https://github.com/snapetech-org/seerrng/commit/7799359c794703b586af717b93802882c8cd2821))
+- *(swipe)* Cancel pending exits on history changes - ([7bcc26d](https://github.com/snapetech-org/seerrng/commit/7bcc26da13e1a54d33bfc624b3e7b777e8c778a3))
+- *(swipe)* Preserve cards when undoing during exit - ([da85c24](https://github.com/snapetech-org/seerrng/commit/da85c247c57c484317609564b33f99a4acd010c3))
+
+### 📖 Documentation
+- *(release)* Record settings search follow-up - ([69f909e](https://github.com/snapetech-org/seerrng/commit/69f909e7bc1c1331b43f08a05e66a6e661b854e3))
+- *(unraid)* Clarify image registry migration - ([8d620a9](https://github.com/snapetech-org/seerrng/commit/8d620a91c0035fb9a4f268c57b889c72af658642))
+
+### 🧪 Testing
+- *(cypress)* Align Swipe and book service fixtures - ([d1f17b1](https://github.com/snapetech-org/seerrng/commit/d1f17b1449f96cda512fa9b32448feba14251c70))
+- *(swipe)* Stabilize catalog and keyboard journeys - ([6751d22](https://github.com/snapetech-org/seerrng/commit/6751d22bb3e3f2c1acc2bc2a0165e0d7adf76fff))
+
+## [3.65.0](https://github.com/snapetech-org/seerrng/compare/v3.64.0..v3.65.0) - 2026-10-17
+
+### User-facing changes
+
+#### Changed
+
+- **Settings:** Operators can hide the provided-certificate notice from login and setup pages. Disabling Swipe now also removes it from desktop and mobile navigation, so users no longer see an unavailable entry.
+- **Settings:** Prowlarr settings now have a dedicated Settings page with clear guidance about manual indexer search and the supported provider. The Services page groups system tools, including Swipe Discovery and Live Download Progress, under System.
+
+### 🚀 Features
+- *(settings)* Make Prowlarr easier to find - ([b635147](https://github.com/snapetech-org/seerrng/commit/b635147c3bb006f22a84082abd9285c3e2178154))
+- Control TLS notice and hide disabled Swipe - ([2e5f549](https://github.com/snapetech-org/seerrng/commit/2e5f54906c7dc1b3b4b8e46d3d3e6f6b950b4afa))
+
+### 🐛 Bug Fixes
+- *(ci)* Restore native CI job execution - ([a82aaf6](https://github.com/snapetech-org/seerrng/commit/a82aaf6ee7b63bfbeb2e45000beef4484a10b800))
+- *(ci)* Retry truncated Jellyfin startup responses - ([3081c27](https://github.com/snapetech-org/seerrng/commit/3081c2747c8d0f378a36fb011fa18fba4264876b))
+- *(release)* Pass optional iOS flags to asset verifier - ([f2619cc](https://github.com/snapetech-org/seerrng/commit/f2619cca49c73ab6c08e23ff77ac88b7608ab0b0))
 
-# Changelog
+### 📖 Documentation
+- *(android)* Clarify Play device verification - ([6f1e488](https://github.com/snapetech-org/seerrng/commit/6f1e488704c32ef5ee5a70b54f88ff8c0981359b))
+- *(android)* Refresh Play account readiness - ([3e456ce](https://github.com/snapetech-org/seerrng/commit/3e456ce0482f94b267c5bf60d5b3d860721a1607))
+- *(android)* Link Play verification requirements - ([abb57c7](https://github.com/snapetech-org/seerrng/commit/abb57c75f2dc39d5a4e8376dda6f6707ce51a508))
+- *(android)* Prepare Play lifetime unlock setup - ([d71ac5b](https://github.com/snapetech-org/seerrng/commit/d71ac5bdb95b54b13e46fadb3dc547a28da1ace8))
 
-# Changelog
+### 🎨 Styling
+- Format release workflow test - ([b751501](https://github.com/snapetech-org/seerrng/commit/b751501295f706d7edf8f046bb3c08245d9a5c3a))
 
-# Changelog
+### 🧪 Testing
+- *(release)* Cover unset iOS signing flags - ([bfafb9c](https://github.com/snapetech-org/seerrng/commit/bfafb9c308e5ec6013f0c13c734bce87a21d34a5))
 
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
-
-# Changelog
+### ⚙️ Miscellaneous Tasks
+- *(ci)* Remove validation engine - ([265d469](https://github.com/snapetech-org/seerrng/commit/265d4696ebe870ee28ab67790ff0fd56f2ee6670))
+
+## [3.64.0](https://github.com/snapetech-org/seerrng/compare/v3.63.0..v3.64.0) - 2026-10-17
+
+### User-facing changes
+
+#### Added
+
+- **Mobile Apps:** SeerrNG now provides native Android and iOS clients that let users enter and manage multiple server addresses. Android packages support direct installation and Google Play upload; the current iOS package targets Simulator until Apple signing is configured.
+  - **Action required:** Install the Android package from GitHub Releases and enter a SeerrNG server URL.
+
+#### Changed
+
+- **Android:** Android no longer includes ads, an advertising SDK, or consent prompts. Once Play Billing is configured, each installation gets 20 successful server sessions free, followed by a one-time lifetime unlock. The recommended US price is $2.99; builds without store billing stay unlimited.
+  - **Action required:** Configure the Play lifetime product before enabling Play Billing.
+- **Settings:** Service integrations are now grouped into TV & Movies, Audiobooks & Books, Music, and Tools & Other categories. The selected category stays in the URL, and Settings search opens the matching section.
+
+#### Fixed
+
+- **Interface:** Passive notifications no longer block controls beneath them. Their dismiss and issue-detail actions remain available.
+
+### 🚀 Features
+- *(android)* Remove ads and price lifetime unlock - ([4eba6d1](https://github.com/snapetech-org/seerrng/commit/4eba6d1268cb2c1201c0659af287bb6ff65d27e9))
+- *(ios)* Add accessible server actions menu - ([854e11f](https://github.com/snapetech-org/seerrng/commit/854e11fdd68d0361f5b7c6d97416eeaee96e31a6))
+- *(mobile)* Prepare Android and iOS releases - ([c0af13c](https://github.com/snapetech-org/seerrng/commit/c0af13c5f8489dc2ddaee06799531512f883456b))
+- *(settings)* Group service integrations by category - ([3186d7e](https://github.com/snapetech-org/seerrng/commit/3186d7e70a38f9afa7dcc9b314d8750cdd0ed649))
+
+### 🐛 Bug Fixes
+- *(ci)* Isolate Android release signing from pull requests - ([e523493](https://github.com/snapetech-org/seerrng/commit/e523493ef37f1438ae935fa1a505c273af44162c))
+- *(ios)* Defer server data-store cleanup - ([0264805](https://github.com/snapetech-org/seerrng/commit/02648055564d73d51f916dc68113d5ab9b629f45))
+- *(ios)* Confirm server removal safely - ([0ab160c](https://github.com/snapetech-org/seerrng/commit/0ab160c0b712b08bde77ff4e2cc128a89fd081c3))
+- *(ios)* Declare app executable in bundle plist - ([99d8f0a](https://github.com/snapetech-org/seerrng/commit/99d8f0a619b5ccb9edb73836dbd164ccdc77405f))
+- *(ios)* Enable unit test imports and IPA export methods - ([4562659](https://github.com/snapetech-org/seerrng/commit/45626595623710d9ffcbb4133d3d3e2634527f5f))
+- *(ios)* Generate a complete shared Xcode scheme - ([b5915cb](https://github.com/snapetech-org/seerrng/commit/b5915cb0283513b1df076b557c35fd92f15854a0))
+- *(ios)* Reference shared scheme targets correctly - ([d6262a6](https://github.com/snapetech-org/seerrng/commit/d6262a610b97b9ffddf7270efe5cbcbb68dd4719))
+- *(ios)* Avoid Xcode version check pipe abort - ([534bdf5](https://github.com/snapetech-org/seerrng/commit/534bdf5acff4cf9e5cbc6138fb484676fa32a0bb))
+- *(release)* Ignore mobile prerelease tags when bumping stable - ([0f6c1d1](https://github.com/snapetech-org/seerrng/commit/0f6c1d1cb0ba48aab71f2aee609464139add367b))
+- *(settings)* Clear stale service search targets - ([62e465c](https://github.com/snapetech-org/seerrng/commit/62e465caddd18d41c5c8dfe5422b79d6fc8f8b6d))
+- *(ui)* Keep passive notifications off click targets - ([6bcfa04](https://github.com/snapetech-org/seerrng/commit/6bcfa042846a5c93e2384b68a7d5b67091929b49))
+
+### 📖 Documentation
+- *(android)* Recommend $2.99 lifetime unlock - ([3ed9200](https://github.com/snapetech-org/seerrng/commit/3ed9200e4421e6526c8449d895749913c031ddf8))
+- *(mobile)* Update Play Console status - ([2641818](https://github.com/snapetech-org/seerrng/commit/2641818f73ab26fbe65160e2805ed0dfc2eadf91))
+- *(mobile)* Clarify release guide links - ([7400117](https://github.com/snapetech-org/seerrng/commit/7400117830c89486879eb1d818e8a131d1862dfb))
+- *(mobile)* Repair docs site links - ([cb132d8](https://github.com/snapetech-org/seerrng/commit/cb132d8b114a423b374c23d4c5b08f857303d6a8))
+- *(mobile)* Link published release assets - ([50a6f97](https://github.com/snapetech-org/seerrng/commit/50a6f97657e670966e9510872ef1cd16e9412456))
+- *(release)* Announce mobile clients - ([fe9127c](https://github.com/snapetech-org/seerrng/commit/fe9127c7d800620ea8ea7203bf9fc0b30bb026b2))
+- Link mobile ci.35 prerelease artifacts - ([c8f0dc6](https://github.com/snapetech-org/seerrng/commit/c8f0dc683a7c38e1a1147b705a530723ce4ee60f))
+- Repair BookshelfNG link target - ([84f404d](https://github.com/snapetech-org/seerrng/commit/84f404d622dde25874d3f5c34092d29697c94b53))
+- Add mobile support contact - ([740ef00](https://github.com/snapetech-org/seerrng/commit/740ef00f67b04a00da6f5d8a6973e96cde9ddf1f))
+
+### 🎨 Styling
+- *(mobile)* Format iOS release metadata - ([32cf348](https://github.com/snapetech-org/seerrng/commit/32cf348bb5e768a38fd5e9e2a865bde4cc7ccab7))
+
+### 🧪 Testing
+- *(android)* Install signed APK on emulator - ([22bf221](https://github.com/snapetech-org/seerrng/commit/22bf2211e6db988468ad4f486cb5d4d7d00fc9c3))
+- *(android)* Exercise capped mode in emulator CI - ([3a3d259](https://github.com/snapetech-org/seerrng/commit/3a3d2593dd85819937576e9712778a47dbf4cc85))
+- *(ios)* Verify server deletion after relaunch - ([0f16bab](https://github.com/snapetech-org/seerrng/commit/0f16bab870702cd7b84aba20ab2b85fc54c485be))
+- *(ios)* Scroll server list after deletion - ([50f31d9](https://github.com/snapetech-org/seerrng/commit/50f31d97ea7662ee4743965406987de68f823caf))
+- *(ios)* Verify removing one server preserves the rest - ([ef1853a](https://github.com/snapetech-org/seerrng/commit/ef1853a8c67e2dc78203a20377152ecb90521258))
+- *(settings)* Align browser flows with service categories - ([0e69393](https://github.com/snapetech-org/seerrng/commit/0e69393098c891747d12160789a0cdbf0112a228))
+
+### ⚙️ Miscellaneous Tasks
+- *(ios)* Isolate project parsing from shared scheme - ([268600b](https://github.com/snapetech-org/seerrng/commit/268600b6eec261a80e1609d728bbbebc1d585923))
+- *(ios)* Capture Xcode project crash diagnostics - ([164351e](https://github.com/snapetech-org/seerrng/commit/164351ebd0e8d8f3ca57fc7df2f7d36987e11676))
+- *(ios)* Inspect Xcode project before tests - ([44afc71](https://github.com/snapetech-org/seerrng/commit/44afc71c329efd0160aaef5f67b297ffabe0e1cc))
+- *(mobile)* Version candidate builds from app release - ([db55b8c](https://github.com/snapetech-org/seerrng/commit/db55b8ce71881d7b8dd2f51679ef222476f5d991))
+- *(release)* Validate Chocolatey API key format - ([3789631](https://github.com/snapetech-org/seerrng/commit/378963138b34692b1489a69c4d414eba930e61e3))
+- Mark Android pricing docs internal - ([803d713](https://github.com/snapetech-org/seerrng/commit/803d7136ed4d66c0175d94a396e5c8290d1df102))
+- Mark Play Console docs internal - ([de0583c](https://github.com/snapetech-org/seerrng/commit/de0583cc944c61c5b5de76d1a4a23b341f96a638))
+- Mark mobile docs update internal - ([580d125](https://github.com/snapetech-org/seerrng/commit/580d125260cd95c1ee8ff3ec69e47ec8e9718890))
+
+## [3.63.0](https://github.com/snapetech-org/seerrng/compare/v3.62.0..v3.63.0) - 2026-10-17
+
+### User-facing changes
+
+#### Added
+
+- **Media:** Adult discovery now pages through Whisparr libraries, preserves the active search and server when returning from a scene page, and shows clear request states across destinations. Archive scenes can still be requested through the default server when advanced destination controls are off.
+
+#### Changed
+
+- **Media:** Whisparr Adult discovery now includes scene artwork, studio and performer details, and clearer per-server availability and request status.
+
+#### Fixed
+
+- **Settings:** Jobs & Cache now names scheduled jobs that were previously labeled “Unknown Job,” including external request-list sync, Navidrome scanning, and the requested episode queue.
+- **Interface:** Noninteractive tooltips no longer block clicks on the controls they describe.
+
+### 🚀 Features
+- *(adult)* Enrich scene discovery and requests - ([d4b6603](https://github.com/snapetech-org/seerrng/commit/d4b66036a41934066c14354f79a3ef91e0c0f964))
+- *(adult)* Integrate Whisparr category - ([f74a2eb](https://github.com/snapetech-org/seerrng/commit/f74a2ebb4d3412a34a0ec3e7b8c5b5beba429718))
+- *(android)* Add capped trial QA mode - ([c53afc5](https://github.com/snapetech-org/seerrng/commit/c53afc56f5d9b8722c2cad62d603a8b090ac19c4))
+- *(android)* Add selectable capped-use mode - ([5fea020](https://github.com/snapetech-org/seerrng/commit/5fea0205791f0839b0ffa8a947a948362a8db2ba))
+- Refine Adult Whisparr browsing and request flow - ([429c7a4](https://github.com/snapetech-org/seerrng/commit/429c7a4b8b0dad7303a05239ce968014a5df7741))
+- Enrich Whisparr Adult discovery and requests - ([cd8cabd](https://github.com/snapetech-org/seerrng/commit/cd8cabde0fba2c60bae60f60916b1dc496975cf4))
+
+### 🐛 Bug Fixes
+- *(android)* Include tested capped-trial follow-ups - ([740ed87](https://github.com/snapetech-org/seerrng/commit/740ed870605293fe2d4e88dff4427beef1f3b568))
+- *(android)* Count only successful capped sessions - ([5f62ea8](https://github.com/snapetech-org/seerrng/commit/5f62ea8ace65cbc8874ad094a8ddbf0938b4bb9a))
+- *(android)* Preserve server order and ignore failed loads - ([7e2c37b](https://github.com/snapetech-org/seerrng/commit/7e2c37b8233fcc6d167a918679a8d6567f60d606))
+- *(android)* Retain error panel and isolate trial tests - ([301e3b8](https://github.com/snapetech-org/seerrng/commit/301e3b8edf27552319bdf1489927278789c86521))
+- *(android)* Generate free session limit as Java int - ([9eaa1ba](https://github.com/snapetech-org/seerrng/commit/9eaa1ba419b9b0d49f57a8e92e0fe73937503eff))
+- *(release)* Keep tagged notes immutable - ([b562e1f](https://github.com/snapetech-org/seerrng/commit/b562e1f57d919c8210b064af8bc2618fcff7b71b))
+- *(release-notes)* Remove unnecessary scheduled-job action - ([69a2204](https://github.com/snapetech-org/seerrng/commit/69a22047df3a492330971eb4130aa3d2465368a7))
+- *(release-notes)* Preserve shipped Adult fragment - ([0ad7e96](https://github.com/snapetech-org/seerrng/commit/0ad7e968db5b55097b6c2d04265e7231e2c3b06b))
+- *(settings)* Label every scheduled job - ([690bc63](https://github.com/snapetech-org/seerrng/commit/690bc637e625e9de34813b11ce5c919dafe29f77))
+- *(ui)* Keep passive tooltips off hit targets - ([6105f42](https://github.com/snapetech-org/seerrng/commit/6105f42ce8be138b5d82fbc0cd91b9e8b227ebc2))
+- *(validation)* Handle absent optional platform links - ([e115798](https://github.com/snapetech-org/seerrng/commit/e115798c648318d03b4741535bb0c9fd64de8774))
+- *(validation)* Recognize nested governance headings - ([e8960d0](https://github.com/snapetech-org/seerrng/commit/e8960d09712ba38ace63841a8a3bde8d0a4aa415))
+
+### 🎨 Styling
+- *(adult)* Match route formatting - ([d239b45](https://github.com/snapetech-org/seerrng/commit/d239b45473d1bc44f51a5527b3fe04dba53413e4))
+- *(validation)* Format runner updates - ([dd20648](https://github.com/snapetech-org/seerrng/commit/dd20648751b7ca5463af51dbb6aadad96b352650))
+
+### 🧪 Testing
+- *(android)* Dismiss cap dialog before checking picker - ([db2b5ec](https://github.com/snapetech-org/seerrng/commit/db2b5ec584f762c961513bd63270f2348fdbf6e4))
+- *(android)* Locate WebView by type in container - ([51b67a5](https://github.com/snapetech-org/seerrng/commit/51b67a58faf96ad77d0a9e5aa13bae5e367df88f))
+- *(ci)* Include adult browser case in hosted plan - ([ab7ad33](https://github.com/snapetech-org/seerrng/commit/ab7ad336174ec6673caa86d1a6314724409dc738))
+- *(cypress)* Stabilize touch rating card fixture - ([d877668](https://github.com/snapetech-org/seerrng/commit/d877668128083306d53c457ad7525111198942c9))
+- *(ui)* Assert tooltip pointer boundaries - ([2da55b4](https://github.com/snapetech-org/seerrng/commit/2da55b4b7a2618043079ff165980b1403e020d9c))
+- Fix service and migration test harness - ([5267473](https://github.com/snapetech-org/seerrng/commit/5267473b4cf2ab31557371c04f73b241bdd563d3))
+
+### ⚙️ Miscellaneous Tasks
+- *(android)* Retain instrumentation test reports - ([9de51f5](https://github.com/snapetech-org/seerrng/commit/9de51f54b31d97862e294bc597bfea9e880d44a2))
+- *(android)* Set KVM device permissions - ([8cba6a0](https://github.com/snapetech-org/seerrng/commit/8cba6a09bc982ed8cd491c5fe39e7bd4a0f30fdb))
+- *(android)* Grant emulator KVM access - ([c32a0fc](https://github.com/snapetech-org/seerrng/commit/c32a0fcdf43ef3b71a3798b1ccbe0c61cc4af55a))
+- *(android)* Align emulator AVD directory - ([f57a5ab](https://github.com/snapetech-org/seerrng/commit/f57a5abf163e00886c01e6283257ddf3600eba4f))
+- Sync latest main before Adult merge - ([e707f32](https://github.com/snapetech-org/seerrng/commit/e707f32e5311e8f36765dcd4185a2628fe5b529e))
+
+## [3.62.0](https://github.com/snapetech-org/seerrng/compare/v3.61.0..v3.62.0) - 2026-10-16
+
+### User-facing changes
+
+#### Added
+
+- **Android:** The SeerrNG Android app prompts for a server URL on first launch, then shows a saved list with isolated sign-ins for each server. File downloads use Android's Download Manager.
+  - **Action required:** Download the signed Android APK from GitHub Releases and add your SeerrNG server address.
+- **Media:** SeerrNG now has an opt-in Adult category backed by Whisparr scene discovery, library status, requests, and a separate permission and quota path.
+- **Android:** The Android app now supports consent-managed, non-personalized banner ads while connected to a saved server, plus a one-time Google Play purchase to remove ads and restore ownership. Google Play displays the configured localized price. Release monetization remains disabled until Play Billing and AdMob are configured.
+  - **Action required:** Configure AdMob and Play Billing repository variables to enable release monetization.
+
+#### Changed
+
+- **Ci:** SeerrNG Actions validation and image publishing now run on GitHub-hosted runners. The automatic deployment job for seerr.home has been removed; deploy to that host using the existing manual procedure.
+
+#### Fixed
+
+- **Android:** The Android client now parses IPv6 hosts and explicit ports correctly when validating download URLs, preserving server matching for reverse-proxy paths.
+  - **Action required:** Download files from an IPv6 SeerrNG server.
+- **Settings:** The Sportarr quality-profile requirement no longer disables the connection test needed to load profiles, so a new server can be configured in one pass.
+  - **Action required:** Test a new Sportarr connection before selecting its quality profile.
+- **Android:** The Android client now checks for the Google Play Store before starting Play Billing. Without the store, purchase and restore remain available and report that Play Billing is unavailable instead of attempting a broken checkout.
+  - **Action required:** Use Play Billing on a device with Google Play installed.
+
+### 🚀 Features
+- *(android)* Link the published privacy policy - ([f51317f](https://github.com/snapetech-org/seerrng/commit/f51317fd31625d384e755965fa01a403d876b64f))
+- *(android)* Harden monetization lifecycle - ([622a1bb](https://github.com/snapetech-org/seerrng/commit/622a1bbf62d95b13f316b2aba7c254e2fd3f83c0))
+- *(android)* Add ads and lifetime no-ads purchase - ([8ecf4fe](https://github.com/snapetech-org/seerrng/commit/8ecf4fe32705752c62f1f5ca2adeeb2b4e086229))
+- *(android)* Add multi-server SeerrNG APK client - ([f915137](https://github.com/snapetech-org/seerrng/commit/f915137294f1d600bba70722184011b15b812e04))
+- Add Whisparr adult media category - ([d53c7e7](https://github.com/snapetech-org/seerrng/commit/d53c7e759bee4e97f3d481b8a26323ae4a913e77))
+
+### 🐛 Bug Fixes
+- *(android)* Verify emulator from SDK directory - ([b57ae3c](https://github.com/snapetech-org/seerrng/commit/b57ae3c43008392ee0959d03dcf5877dd4b43b7e))
+- *(android)* Handle missing Play Store for billing - ([731b309](https://github.com/snapetech-org/seerrng/commit/731b309825552378e799ca09d54027457d3829cf))
+- *(android)* Support IPv6 download URLs - ([4989b87](https://github.com/snapetech-org/seerrng/commit/4989b87158f40ad8ccab472ad696853b1208c784))
+- *(android)* Harden SDK workflow setup - ([e4800d1](https://github.com/snapetech-org/seerrng/commit/e4800d1fb512b72cd2d9158f5e2d130dc658a0d5))
+- *(ci)* Grant Android emulator KVM access - ([646e0b8](https://github.com/snapetech-org/seerrng/commit/646e0b8d2d875b52d4abbcb0357c4561a16c3910))
+- Stabilize Android and Adult CI fixtures - ([6aedde5](https://github.com/snapetech-org/seerrng/commit/6aedde53086e197bfe630e9b52a27fd525dfe11d))
+- Complete Adult category integration checks - ([fe068ce](https://github.com/snapetech-org/seerrng/commit/fe068ceca53139b60b486e93ce6573a8fe0ddd81))
+- Enforce Adult request access boundaries - ([06abe8a](https://github.com/snapetech-org/seerrng/commit/06abe8a880201772642cafe859c864325045fc31))
+- Unblock Sportarr setup and refresh release checks - ([77a5d2d](https://github.com/snapetech-org/seerrng/commit/77a5d2d1e8147fa970988c1abc927f555fe63c45))
+
+### 📖 Documentation
+- *(android)* Document signed APK release process - ([696f9ac](https://github.com/snapetech-org/seerrng/commit/696f9ac953d8cf4378a7d4896dd4832ec4ecfea8))
+- Note Android billing availability fix - ([a5c443f](https://github.com/snapetech-org/seerrng/commit/a5c443f6898c828b41cb41745ed6d63af8c9e24b))
+
+### 🎨 Styling
+- *(ci)* Format Android KVM workflow test - ([76f8cb9](https://github.com/snapetech-org/seerrng/commit/76f8cb9a94170c8ffdb06386ba752d3b1a41bf6a))
+
+### 🧪 Testing
+- *(ci)* Assert Android KVM failure diagnostics - ([e36fbbe](https://github.com/snapetech-org/seerrng/commit/e36fbbe774bfe7787132965e76586f072d191307))
+- *(settings)* Cover Sportarr profile bootstrap - ([7832f46](https://github.com/snapetech-org/seerrng/commit/7832f46af52a62bea0911ea0cea91924d55ae048))
+- Scope auto-request fixture user in Cypress - ([79bc32f](https://github.com/snapetech-org/seerrng/commit/79bc32f161ba2447bc47eb93eea79de475e1a6a5))
+- Stabilize auto-request settings validation - ([dd38d24](https://github.com/snapetech-org/seerrng/commit/dd38d245c619340cd17ef7be0018a9382850d9db))
+
+### ⚙️ Miscellaneous Tasks
+- *(android)* Bound emulator startup wait - ([9aa4013](https://github.com/snapetech-org/seerrng/commit/9aa40130534ac7de085a226d2a27d9f5de5517ad))
+- Route container builds to kspld0 - ([06f200c](https://github.com/snapetech-org/seerrng/commit/06f200c2c5fdb6efda0c62d525f4ec02ca239a2a))
+- Retire private GitHub Actions runners - ([d073243](https://github.com/snapetech-org/seerrng/commit/d0732434ddd1ed2893cf4d867817946ef76c8641))
+
+## [3.61.0](https://github.com/snapetech-org/seerrng/compare/v3.60.0..v3.61.0) - 2026-10-16
+
+### User-facing changes
+
+#### Added
+
+- **Profiles:** Administrators can assign separate movie and TV maturity limits to users. Browsing and requests apply those limits, and titles with missing or unrecognized U.S. ratings are excluded while a limit is active.
+  - **Action required:** set movie and TV maturity rating limits
+
+#### Fixed
+
+- **Music:** Discography requests now detect MP3 and FLAC services from their configured music quality, including lossless profiles that do not mention FLAC by name.
+  - **Action required:** recognize configured music formats when requesting a discography
+- **Servarr:** A single Radarr or Sonarr instance can now report installed 4K movies and episodes as 4K, while SeerrNG keeps HD availability separate by reading each file's resolution.
+
+### 🚀 Features
+- Add per-user video maturity limits - ([8857cb7](https://github.com/snapetech-org/seerrng/commit/8857cb7c1fd33544d6db54fdca6fb37c51b013d6))
+
+### 🐛 Bug Fixes
+- *(servarr)* Classify single-instance 4K files by resolution - ([1b7adce](https://github.com/snapetech-org/seerrng/commit/1b7adce6cc1eaed08f43f30e76ae4a58da2b446b))
+- Detect music service quality in discography requests - ([472c8ae](https://github.com/snapetech-org/seerrng/commit/472c8ae3f1f0321af1c89e7f88981b01cecabac9))
+
+### 📖 Documentation
+- Refresh README and upstream retirement matrix - ([c043518](https://github.com/snapetech-org/seerrng/commit/c043518c03d0574d7a52df1489d63fc0272444a8))
+
+### 🧪 Testing
+- *(sonarr)* Relax season mapping payload assertion - ([4c1cecc](https://github.com/snapetech-org/seerrng/commit/4c1cecc6506d98167438b57fd2331514a635584a))
+- *(sonarr)* Include season type in retry payload - ([2a93263](https://github.com/snapetech-org/seerrng/commit/2a932635e8d252371b0d2f486d176a8f1a3b981a))
+- *(ui)* Bound watchlist preview AST assertion - ([a970455](https://github.com/snapetech-org/seerrng/commit/a970455e35f370c71e94bc66cf8c96d7dec684ba))
+- Mock maturity policy for collection routes - ([793e276](https://github.com/snapetech-org/seerrng/commit/793e276541496aafa6f1b9c04e2f571ceb47f10a))
+
+## [3.60.0](https://github.com/snapetech-org/seerrng/compare/v3.59.0..v3.60.0) - 2026-10-16
+
+### User-facing changes
+
+#### Added
+
+- **Sonarr:** Sonarr 5 beta requests can choose a metadata language and series order. SeerrNG also uses Sonarr's anime identifiers, progress, and history to make season recovery clearer, while keeping mappings separate by server, quality, and order.
+
+#### Fixed
+
+- **Discover:** Returning from a title's details now waits for Discover slider cards to load before restoring each carousel's previous horizontal position.
+- **Sonarr:** Fixed the Sonarr 5 beta SQLite migration so adding request metadata options preserves existing request fields, including pending quota-exception approvals.
+
+### 🚀 Features
+- *(sonarr)* Support v5 metadata and alternate season orders - ([4e549fd](https://github.com/snapetech-org/seerrng/commit/4e549fdfd6d0c63dbb05e21444db939c687773ca))
+
+### 🐛 Bug Fixes
+- *(ci)* Skip Cypress download during dependency installs - ([1b01d73](https://github.com/snapetech-org/seerrng/commit/1b01d7300a46f8896f874bde2f7cadaa24bb753a))
+- *(deps)* Sync Nodemailer workspace override - ([50481e3](https://github.com/snapetech-org/seerrng/commit/50481e3b9ed5a927085d311b9e676efa1b49c0ca))
+- *(discover)* Restore carousel position after cards load - ([272ed6d](https://github.com/snapetech-org/seerrng/commit/272ed6de2b127bdbe670c6b64425271c204db0dd))
+- *(sonarr)* Preserve request columns in SQLite migration - ([a25aecd](https://github.com/snapetech-org/seerrng/commit/a25aecdcda2d7b00a8a5dedf681d9458ef057fb5))
+
+### 📖 Documentation
+- *(release)* Document Sonarr v5 migration fix - ([503e521](https://github.com/snapetech-org/seerrng/commit/503e5215d55e0b868d48ab8fd39e162f6ec1e876))
+
+### 🧪 Testing
+- *(ci)* Track updated chart-testing action pin - ([6ee02c3](https://github.com/snapetech-org/seerrng/commit/6ee02c3ded45c4eecf0a85324c07754bb5934c2e))
+- *(discover)* Capture actual carousel offset before navigation - ([2c69a71](https://github.com/snapetech-org/seerrng/commit/2c69a714ff63d177bc58acc235fec565bbbe67d2))
+- *(settings)* Align Chaptarr API key help expectation - ([0a6612d](https://github.com/snapetech-org/seerrng/commit/0a6612d70cb922fa890bfd6a41334ce3d5ea410c))
+
+### ⚙️ Miscellaneous Tasks
+- *(ci)* Correct artifact action version comment - ([6f81814](https://github.com/snapetech-org/seerrng/commit/6f8181441e9ead0d373f0ca52562d420bba5db49))
+
+## [3.59.0](https://github.com/snapetech-org/seerrng/compare/v3.58.0..v3.59.0) - 2026-10-16
+
+### User-facing changes
+
+#### Added
+
+- **Requests:** Administrators can enable a person-page action that submits all listed movie requests in batches of 100, while each title continues to follow the requester's permissions, quota, and duplicate checks.
+- **Requests:** Users at their movie or TV request limit can ask an administrator to approve one request per media type at a time. Pending exceptions count against quota; approved exceptions are exempt.
+- **Discover:** Administrators can now add, reorder, and remove networks from the shared Discover Networks shelf, restore the default list, or leave it empty. Lists support up to 50 networks and require a TMDB logo.
+- **Discover:** Movie and series details opened from Discover result lists now include previous and next controls that follow the loaded, visible result order. Direct detail links remain unchanged.
+- **Issue Reporting:** You can now report an issue while a requested movie or series copy is processing, with the affected quality and TV season available in the report.
+- **Notifications:** Traditional Chinese email and web-push notifications now use localized server messages instead of falling back to English.
+- **Requests:** Series requests can now reveal additional Sonarr matches when the first six results do not include the right title.
+- **Sonarr:** SeerrNG now detects Sonarr 5.0 beta and uses its v5 API, while keeping support for Sonarr v3 and v4. Sonarr 5 season, tag, and monitoring updates use focused endpoints that preserve its metadata settings; missing v5 routes fall back to v3.
+- **Discover:** Discover filters and custom sliders now let users select or clear every streaming provider in a region, including providers hidden behind Show More.
+- **Localization:** Indonesian is now available in the language picker for shared interface messages, and blank common labels were filled in several existing catalogs; untranslated screens continue to use English.
+- **Media Details:** Movie and Series detail pages now let each SeerrNG account hide or show subject tags with a browser-saved preference, helping avoid unwanted plot details.
+- **Discover:** Administrators can add a public TMDB list to Discover as a custom slider. Movies and series keep the list's order, and the slider links to a paginated page for browsing the full list.
+- **Discovery:** Movie and series discovery can exclude selected genres. Movie discovery can also exclude a studio, and Series discovery can exclude a status. Genre exclusions also work with local availability results; unsupported studio, streaming-service, and status selections are cleared when switching to local availability.
+- **Authentication:** Opening a link while signed out now returns you to that page after you sign in with a password or Jellyfin, instead of always landing on the home page.
+- **Notifications:** Users can follow another person's active movie or series request and receive a one-time availability notice through their own notification settings, without creating a duplicate request.
+- **Discover:** Movie and series discovery can now exclude selected streaming services and filter TMDB vote averages in tenth-point increments, with the selected region and filter choices preserved in the URL.
+- **Localization:** Arabic UI translations are available in the language picker. Selecting Arabic switches the document to right-to-left direction; shared navigation, setup, and calendar layouts have been reviewed, while other feature screens are not yet certified for right-to-left layout.
+- **Requests:** Users can choose administrator-granted Radarr or Sonarr destinations for movie and series requests. Instance-specific availability and TV season status keep requests aligned with the selected library.
+- **Metadata:** Administrators can test MusicBrainz and Cover Art Archive connectivity and tune bounded Cover Art Archive concurrency and request-rate limits for music artwork lookups.
+- **Requests:** Request API responses now retain a stable, non-sensitive reason for classified movie and TV dispatch failures. Retrying or resubmitting clears the old reason, and a new failure replaces it without storing provider error text.
+- **Notifications:** Administrators can optionally approve or decline pending requests from Slack notifications by mapping Slack members to SeerrNG users with request management permission.
+- **Sonarr:** Operators can choose a Latest Season Requested Sonarr mode. Future seasons are monitored only when a request includes the latest regular season; the existing All and None modes are unchanged.
+- **Requests:** Administrators can require users to finish the previous regular TV season in their linked media server before requesting a later season. The rule is off by default, skips specials, and lets request managers override it.
+- **Requests:** Failed TV requests with an unresolved TVDB identity or season-number mismatch can now be repaired by selecting a Sonarr series and mapping every requested season to official TVDB numbering. The request keeps its original server, quality, and season selections.
+- **Availability:** Administrators can choose whether movie and series availability is shown normally, marked as shared, or hidden. HD and 4K request coverage stay separate, and SeerrNG hides playback links for shared copies in the two privacy modes.
+- **Watchlist:** Local SeerrNG Watchlists can now be searched by title, filtered by media type, and sorted by saved order, recently added, or title. Lists combined with Plex keep their existing item ordering.
+
+#### Changed
+
+- **Comics:** SeerrNG now recommends Issuarr for new comic automation setups while keeping existing Mylar3 connections supported.
+- **Validation Engine:** Validation maintainer guidance now describes how host-managed retention cleans abandoned scratch without replacing run-completion evidence.
+- **Integrations:** BookshelfNG and ChaptarrNG are not drop-in replacements yet. Keep existing installations on their current data and update path until a supported BookshelfNG-to-ChaptarrNG converter and channel-specific upgrade are available.
+- **Contributing:** Contribution guidance now asks contributors to confirm the scope of substantial features and broad refactors with maintainers before coding, while preserving explicit maintainer direction.
+- **Plex Watchlist:** Deleting media already handled from Plex Watchlist sync now stays in effect until that item is removed and added again in Plex.
+  - **Action required:** remove and re-add the Plex item to start another auto-request cycle
+- **Containers:** Docker guidance now explains that PUID/PGID do not change SeerrNG's container user and clarifies how to set a user and writable config mount with Podman.
+- **Interface:** Tooltips reposition near screen edges and open from keyboard focus. Interactive download details are scrollable and open by touch or keyboard from status badges that do not navigate.
+- **Documentation:** The backup guide now groups backup and restore instructions under User Data in the page navigation, while keeping cache details in their own section.
+- **Repository:** SeerrNG links now use the snapetech-org repository address. Container registry and package names stay the same, so existing image references continue to work.
+- **Validation:** Validation guidance now clarifies which host paths are mounted for candidate tests and recommends a disposable guest for highly untrusted source.
+- **Release Pipeline:** SeerrNG validation now isolates workflow-attempt scratch and runs independent Node test files concurrently within the admitted worker budget while keeping each file process-isolated and preserving test result accounting. Superseded pull-request runs now release their concurrency slot after cancellation while current-run failures still reconcile.
+- **Discover:** When you open a title from Discover and go back, each home slider now returns to its previous horizontal position so you can continue browsing where you left off.
+- **Localization:** The SeerrNG client and server catalogs now cover 5,506 UI messages and 71 notification messages in Spanish, Simplified and Traditional Chinese, Hindi, German, Japanese, French, Brazilian Portuguese, Arabic, Korean, Vietnamese, and Indonesian. Existing translations and machine translation fill the catalogs; product and technical terms stay unchanged. Fluent-speaker review remains open.
+- **Notifications:** Indonesian now covers SeerrNG email and web-push notifications, and the interface keeps its language and direction aligned with the last catalog that loaded successfully.
+- **Authentication:** After signing in with OpenID Connect, SeerrNG now returns you to the page you asked for, including its section link, and signing out opens a clean login page.
+- **Navigation:** The main menu now groups discovery choices and library pages in a clearer order, and places User List under Settings. Movies, series, books, and audiobook discovery pages now offer a Discover/Swipe switch, including their genre, keyword, language, studio/network, and upcoming views. Returning from Swipe restores the page and filters you left.
+- **Notifications:** Notification guides now cover priority, sound, image, email-logo, SMTP-certificate, and webhook URL-variable settings, including when images are available and how URL values are encoded.
+- **Release Pipeline:** SeerrNG unit validation on main can use the restricted trusted-main runner group once operators enable TRUSTED_MAIN_RUNNERS_ENABLED. Pull requests and non-main runs continue on hosted runners.
+- **Bookshelf Migration:** The BookshelfNG migration helper now requires an explicit stopped-service confirmation before applying changes and explains how to complete the per-book media map when the source database does not identify a record's format.
+  - **Action required:** Stop BookshelfNG before applying the migration, then resolve any generated per-book media review and rerun preview.
+- **Discovery:** Movie, series, album, and book rating details are now available after tapping a poster on touch devices. Brief desktop hovers no longer trigger rating lookups, while a sustained hover still loads the ratings.
+- **Requests:** Request progress, service guidance, and history now follow the selected interface language while preserving custom text from connected services. The advanced theme page also localizes its divider-shadow label.
+- **Validation:** SeerrNG main-branch unit-test shards now use the restricted runner group on kspls0; pull requests and other refs continue using GitHub-hosted runners.
+- **Logging:** Console logs now use color only when the output supports it. `NO_COLOR` and `FORCE_COLOR` provide explicit controls, and file logs remain plain.
+- **Containers:** Production container images no longer include dependency source maps or build-only SVG tooling, reducing download and storage costs while keeping the pinned build environment.
+- **Distribution:** **Breaking:** The SeerrNG container image and Helm chart are now published as ghcr.io/snapetech-org/seerrng. New releases are no longer pushed to ghcr.io/snapetech/seerrng, so existing installs must switch to the new path to receive updates.
+  - **Action required:** Change the image reference to ghcr.io/snapetech-org/seerrng in your compose file, Unraid template, or Helm values, then pull the image again and recreate the service.
+- **User Management:** Administrators can refresh linked Jellyfin and Emby usernames and profile photos while importing users. SeerrNG email addresses, local credentials, and permissions remain unchanged. Fallback profile icons keep the requested avatar size so missing photos do not push user names out of alignment.
+- **Oidc:** OIDC setup guidance now explains the verified email and account-linking requirements for first-time sign-ins, helping administrators understand why an enabled provider may still reject a new account.
+- **Api:** Request API documentation now explains how `userId` attributes requests to another account, which management permissions are required, and the 403 response when access is missing.
+- **Requests:** Failed movie and TV requests now explain their recorded cause. Season-number mismatches link to a search for another series listing, and retry is unavailable when it would repeat the same mismatch.
+- **Notifications:** Telegram notification documentation now explains how to route messages to a group topic and include an available media poster.
+
+#### Fixed
+
+- **Tls:** Movie and TV detail pages now load correctly when SeerrNG uses built-in HTTPS.
+- **Requests:** Movie and TV requests now use the requester's saved Radarr or Sonarr folder. When administrators disable partial series requests, creation and edits require all unavailable seasons; partial episode selections are rejected except for a single Episode Queue starting episode.
+- **Reliability:** Settings Search now opens matching controls, rating sorts exclude low-vote titles by default, and swipe cards keep details readable. Plex sign-in returns the required profile fields, Requests work on PostgreSQL, and comic guidance recommends Issuarr for new setups while retaining Mylar3 support and linking to both projects.
+- **Settings:** The Sportarr port field now uses the shared dark form control styling, keeping typed values readable while operators configure and test the connection.
+- **Requests:** Managers can assign a different Radarr or Sonarr server to failed movie and TV requests and resubmit them. Requests already available in the selected quality or across their requested TV seasons now complete without another provider submission.
+- **Plex Scanner:** Plex scans now mark both standard and 4K versions as available when one movie item contains both, so standard requests no longer wait for a later Radarr scan.
+- **Plex Auth:** Plex sign-in now rides through temporary PIN lookup failures, so valid login attempts stay open while Plex recovers.
+- **Radarr:** Requests for existing Radarr movies now wait until the movie meets its configured availability threshold before starting a search, reducing premature grabs of similarly named titles.
+- **Performance:** Scrolling no longer blurs the full-width search bar, reducing repaint work while keeping its themed background more solid and readable.
+- **Sonarr:** Sonarr scans now recognize an in-progress series by its resolved TMDB identity even when Sonarr carries a different TVDB ID, preventing active requests from being reset as missing.
+- **Requests:** Sonarr cleanup now settles abandoned season requests even when a show is partly available or marked deleted. Completed seasons stay intact, and abandoned selections can be requested again.
+- **Requests:** Requests no longer stay stuck when a movie or TV season is unmonitored and unavailable, even when an earlier scan already marked it UNKNOWN. The missing selection can be requested again while completed seasons and active scans stay intact.
+- **Plex Watchlist:** Plex Watchlist sync schedules now use minute-based intervals, including the existing three-minute cadence. The schedule editor opens with the saved interval selected, so saving without changes no longer changes how often sync runs.
+- **Settings:** Media category settings now give each category a clearer label and keep its description close, making the list easier to scan.
+- **Music:** Music requests now recognize lossless Lidarr profiles as FLAC destinations, so albums can be requested from profiles whose names do not include a format label.
+- **Software Acquisition:** ROMarrNG connection checks now use authenticated integration routes and allow the DAT platform catalog time to load. Restricted integration keys can be tested without the administrative platform endpoint.
+- **Library:** Administrators can clear stale HD or 4K availability after a fresh library check confirms no copy remains, allowing the title to be requested again without deleting its media record.
+- **Localization:** Language selection now recovers cleanly when a translation chunk fails. Search-field padding follows the text direction through a logical start inset.
+- **Localization:** Corrected mistranslated and malformed interface copy across the locale catalogs, including wrong-language text and damaged branch names, environment variables, and service guidance.
+- **Plex:** Plex watchlist sync no longer caches a malformed response from Plex, so one bad reply cannot leave a user's watchlist empty or stale until the cache expires.
+- **Requests:** The request list now orders its default sort by when each request was created, with the request number only breaking ties, so imported or re-created requests appear in the right place.
+- **Jobs:** The Plex Watchlist Sync schedule editor now offers minute intervals, including 3, 5, 10, and 15 minutes, instead of 30 to 60 second choices that did not match the default schedule.
+- **Localization:** Request mapping, approval notifications, shared availability, account sync, and administrator visual-lab controls now follow the selected interface language across the supported locales.
+- **Localization:** Unknown album titles now follow the selected interface language when a music provider omits an album name.
+- **Calendar:** The release calendar now has translated labels and status messages in Spanish, German, Simplified and Traditional Chinese, Japanese, French, Brazilian Portuguese, Arabic, Korean, Hindi, and Vietnamese.
+- **Requests:** Temporary Radarr or Sonarr tag-service failures no longer block approved requests. SeerrNG continues with configured or request-selected tags and logs when a requester tag could not be added.
+- **Integrations:** SeerrNG now uses current Jellyfin authorization for server API, avatar, and logout requests, so operators can keep Jellyfin's deprecated authorization methods disabled.
+- **Media Scanning:** The Jellyfin Recently Added scan now updates TV availability when Jellyfin reports newly added seasons or episodes, so users see imported content without waiting for a full library scan.
+- **Requests:** Movie requests now open when metadata omits its optional keyword list, so an incomplete response no longer interrupts the request flow.
+- **Requests:** Override rules now follow the selected Radarr or Sonarr server. Advanced requesters and managers keep values they choose, while rules fill settings they leave unset.
+- **Requests:** Request status pages now load a series’ library seasons and requested seasons independently, keeping large TV request histories responsive while preserving their displayed details.
+- **Sonarr:** Anime requests now recover when their selected Sonarr quality profile is missing or cannot be checked, and the Services list shows the configured anime profile for easier diagnosis.
+- **Database:** SQLite upgrades now tolerate a missing push-subscription index, preventing startup from failing when that index was never created.
+- **Requests:** TV requests now explain when selected seasons are already available or requested, instead of reporting a request as successful when it adds nothing.
+- **Requests:** TV requests that cannot safely resolve a TVDB series or verify its requested season numbers now remain visible as failed requests instead of losing their request history and media record.
+- **Notifications:** Web Push registration now preserves subscriptions from devices that share a browser signature and replaces stale endpoints by subscription identity.
+- **Settings:** YouTube URL prefixes can now end with a slash, so custom proxy paths work as configured. Application URLs still reject trailing slashes.
+
+#### Security
+
+- **Validation Engine:** **Breaking:** The validation helper now refuses unsafe execution that shares privileged control sockets with repository tests. Network-lease logs retain only token digests. Use hosted Mode 2 for complete validation while this local helper is blocked.
+  - **Action required:** Use hosted Mode 2 validation until the local proof-parent isolation boundary is replaced.
+- **Supply Chain:** SeerrNG removes two flagged packages from its application and documentation dependency graphs, replaces affected lint, watch, and glob helpers, and updates the documentation workspace to patched Joi 17.13.8.
+- **Development Validation:** The package validation command rejects distributed-mode requests, and the dormant enrollment listener binds to loopback while rejecting browser origins and host aliases. Local validation limits inherited environment variables and gives test subprocesses private temporary home and cache paths.
+- **Validation Engine:** **Breaking:** Mode 3 enrollment and distributed service commands now stay disabled until the protocol authenticates and encrypts each node with its own credentials. Stop older services before upgrading so their previous binaries cannot continue accepting enrollment.
+  - **Action required:** Stop and disable existing Mode 3 services before upgrading.
+- **Validation:** Local test-only validation excludes nested environment files and common credentials from disposable workspaces, isolates test code from host services and external networks, and keeps dependencies read-only. A trusted outer launcher can isolate unreviewed candidates before their validation code runs. Main image publication and deployment wait for hosted validation and image scans.
+- **Ci Security:** Pull-request validation now uses GitHub-hosted runners for every author. Persistent local runners are reserved for main-branch validation, reducing exposure of local services and files to proposed changes.
+- **Security:** The issue template chooser now links to GitHub's private vulnerability reporting form, keeping security disclosures in the repository's existing private advisory workflow.
+
+### 🛡️ Security
+- *(repository)* Update owner links and private security reporting (#312) - ([0903d57](https://github.com/snapetech-org/seerrng/commit/0903d5790b25630d4007cc1eefe62616f94fcdba))
+- *(security)* Isolate validation control boundaries (#202) - ([bb2de21](https://github.com/snapetech-org/seerrng/commit/bb2de2116829de54da101bc3b6ecfca647b53d01))
+- *(security)* Reject external test dependency paths - ([b08243c](https://github.com/snapetech-org/seerrng/commit/b08243c3d0e4fd077c1ce9095a2ccba28de7622f))
+- *(security)* Tighten enrollment and player endpoint validation - ([68c7167](https://github.com/snapetech-org/seerrng/commit/68c71676d08f6b05f6e3469f1e291122504454a0))
+- *(validation)* Harden local lifecycle and test inventory - ([200a734](https://github.com/snapetech-org/seerrng/commit/200a734456fe6865bc82983a80cdb9d56648e97e))
+- Integrate main security hardening into proof-parent candidate - ([8b23dfd](https://github.com/snapetech-org/seerrng/commit/8b23dfd857af7191f9674629e0229dc49eaa9d79))
+
+### 🚀 Features
+- *(auth)* Return to requested page after sign-in (#221) - ([66bb617](https://github.com/snapetech-org/seerrng/commit/66bb617028712cd21e8cfa10ad3ba6ae8f737fc3))
+- *(auth)* Return to the requested page after sign-in (#297) - ([8d08cbc](https://github.com/snapetech-org/seerrng/commit/8d08cbc4bb4781f4a2331a2aed99d175d45c1c0b))
+- *(details)* Add persistent subject-tag visibility (#316) - ([5af80d3](https://github.com/snapetech-org/seerrng/commit/5af80d36ba7ce0f270f1b67d4db0fa23685e7910))
+- *(discover)* Restore slider positions on back navigation - ([ee3f98a](https://github.com/snapetech-org/seerrng/commit/ee3f98a9d3e323f6790b193d9d27738158df62d8))
+- *(discover)* Improve shelves, navigation, and ratings (#304) - ([6b1ec22](https://github.com/snapetech-org/seerrng/commit/6b1ec224c7a079c4165eeea6fd9ff6fee1a28957))
+- *(discover)* Add bulk provider filter actions (#227) - ([b5f1ca0](https://github.com/snapetech-org/seerrng/commit/b5f1ca0e16433fd60062cda76306aa499fadee6d))
+- *(discover)* Add public TMDB list sliders (#225) - ([ffaabc7](https://github.com/snapetech-org/seerrng/commit/ffaabc7b45172e0ae647ddd3f4e42c6f0b6e0414))
+- *(i18n)* Localize request status history (#327) - ([513d0da](https://github.com/snapetech-org/seerrng/commit/513d0da4d9191b63e421db9d2f3fe8b631999dee))
+- *(i18n)* Complete target UI catalogs (#210) - ([1e3ae6b](https://github.com/snapetech-org/seerrng/commit/1e3ae6bca365b6e10e96f83d89126b6e28b8651a))
+- *(i18n)* Add Traditional Chinese notification translations (#252) - ([1ff42c1](https://github.com/snapetech-org/seerrng/commit/1ff42c13e25c7ce3e6901beff1d9a142fea5749b))
+- *(metadata)* Test music providers and bound CAA traffic (#283) - ([6d9fa36](https://github.com/snapetech-org/seerrng/commit/6d9fa36b13dd60f5085442a8878ac9246eb1d5c5))
+- *(navigation)* Regroup media navigation and Swipe modes (#253) - ([ca27a80](https://github.com/snapetech-org/seerrng/commit/ca27a805340eeb38606733fd560cd4ce54181f53))
+- *(notifications)* Follow request availability (#299) - ([6deffc5](https://github.com/snapetech-org/seerrng/commit/6deffc57b6dbb813de1f0b97f5c718a48210ee87))
+- *(requestmodal)* Reveal additional Sonarr matches (#240) - ([3dfb6fa](https://github.com/snapetech-org/seerrng/commit/3dfb6fa729a12fd21fb09b1d8e9e6e2b0aad0176))
+- *(requests)* Allow over-quota approval requests (#303) - ([7a3b63f](https://github.com/snapetech-org/seerrng/commit/7a3b63f850fa408eb422f6e44e5d8f54bc1251f9))
+- *(requests)* Explain recorded failure reasons (#264) - ([5e99f5c](https://github.com/snapetech-org/seerrng/commit/5e99f5c278848afccea1b038f2c2742023583fcb))
+- *(requests)* Record bounded failure reasons (#298) - ([96e2e22](https://github.com/snapetech-org/seerrng/commit/96e2e2282f8bf8fdbde54f061fb50a69961e19a2))
+- *(requests)* Add person movie bulk requests and fix reported issues - ([9dba110](https://github.com/snapetech-org/seerrng/commit/9dba1107326ff5594c8a02c0f8f2d8c5d9bee088))
+- *(security)* Add private vulnerability report form (#233) - ([68fbd83](https://github.com/snapetech-org/seerrng/commit/68fbd83ffcaeabdde188b42b65458b9a6d2e7a07))
+- *(slack)* Add request approval actions (#255) - ([47e1e4c](https://github.com/snapetech-org/seerrng/commit/47e1e4cb28e0219ae63498f71d438f159317129a))
+- *(software)* Integrate ROMarrNG DAT catalog - ([0d16cc6](https://github.com/snapetech-org/seerrng/commit/0d16cc688ec591f470bb4315479e7e90cc800abe))
+- *(sonarr)* Support Sonarr v5 API - ([9850bf5](https://github.com/snapetech-org/seerrng/commit/9850bf533bfed019afb80ac36faa1b5dae117589))
+- *(sonarr)* Monitor future seasons when latest season is requested (#313) - ([dbf81c9](https://github.com/snapetech-org/seerrng/commit/dbf81c9227893d14c84c9d8dc8b18cfbe24455aa))
+- *(users)* Add opt-in Jellyfin and Emby import sync (#261) - ([fef485f](https://github.com/snapetech-org/seerrng/commit/fef485f7bf2376ea9aa00129600cd3810e0348d3))
+- *(watchlist)* Add local list filters (#315) - ([08b2aa9](https://github.com/snapetech-org/seerrng/commit/08b2aa9f978d4ec7d8f4b0f72e6c639e92a81d5a))
+- Add BookshelfNG-to-ChaptarrNG migration helper - ([45635ae](https://github.com/snapetech-org/seerrng/commit/45635ae36ad30f4227dfde1e6caabfa0878123eb))
+- Require previous TV season watch progress (#325) - ([241617e](https://github.com/snapetech-org/seerrng/commit/241617ebee79d08d18b969d227e255b9d29d5462))
+- Route movie and TV requests to labeled services (#320) - ([ecddc44](https://github.com/snapetech-org/seerrng/commit/ecddc44763d61e92eeae932d8154a5510af7e71c))
+- Personalize shared video availability (#322) - ([cf6378e](https://github.com/snapetech-org/seerrng/commit/cf6378e5a24630c7d4c48f75ac12f1e40bab390f))
+- Add verified TV season mapping recovery (#302) - ([3539683](https://github.com/snapetech-org/seerrng/commit/35396834e039585206ccbb6da594a6fdfb95ce14))
+- Add per-user external request list sync - ([88eefe3](https://github.com/snapetech-org/seerrng/commit/88eefe3deace753d569284f102f7f00c7daa45b3))
+- Add private game libraries and robust software search - ([4d2e657](https://github.com/snapetech-org/seerrng/commit/4d2e6572a232ddb41adc3b8fbdaca6442df240b6))
+- Add Grimmory and BookOrbit reader delivery - ([f1b69be](https://github.com/snapetech-org/seerrng/commit/f1b69beda9ac8400dae12183c32c547fc3191e40))
+- Merge Questarr bundle and play-time extensions - ([f625e4f](https://github.com/snapetech-org/seerrng/commit/f625e4f6640f58e5746ef02dc9d98129303e5ad6))
+- Merge current ROMarrNG DAT catalog integration - ([e1ec1e7](https://github.com/snapetech-org/seerrng/commit/e1ec1e7693d3ebbb1a8bab718d3d48cb02e8f05f))
+- Merge ChaptarrNG and Audiobookshelf integration - ([af39359](https://github.com/snapetech-org/seerrng/commit/af3935941178a2879617239d3532f8392f99d6b7))
+- Integrate ChaptarrNG and Audiobookshelf - ([779e889](https://github.com/snapetech-org/seerrng/commit/779e889e33a550e913f737c41bd56d028111a3fb))
+- Integrate ROMarrNG DAT catalog - ([4beb62c](https://github.com/snapetech-org/seerrng/commit/4beb62c060cb35859e9a7248fd862d4d0700f182))
+- Integrate accepted preview and SeerrNG theme - ([eba7473](https://github.com/snapetech-org/seerrng/commit/eba7473e7531495e3dff4daccc3e0e4e895ca759))
+
+### 🐛 Bug Fixes
+- *(auth)* Reject Plex PIN responses after expiry - ([b4f9374](https://github.com/snapetech-org/seerrng/commit/b4f93744c7d8c19adec4ef5dfb8c087299f21fcb))
+- *(auth)* Tolerate transient Plex PIN lookup 404s (#206) - ([fe5a872](https://github.com/snapetech-org/seerrng/commit/fe5a872bd8fc17107f04245a956e75e569388fba))
+- *(ci)* Repair validation main formatting gate (#205) - ([6916102](https://github.com/snapetech-org/seerrng/commit/691610253da06922b8faedc2c496e0076e0ac047))
+- *(ci)* Keep pull request jobs on hosted runners (#223) - ([524a8dd](https://github.com/snapetech-org/seerrng/commit/524a8dd747782996d2dff282a8d1de43d9db891f))
+- *(i18n)* Localize unknown album fallback (#331) - ([746505c](https://github.com/snapetech-org/seerrng/commit/746505cfca25d4b2425f98437392bc494b94d776))
+- *(i18n)* Close remaining supported locale gaps (#329) - ([5cdb8a1](https://github.com/snapetech-org/seerrng/commit/5cdb8a1f6e5fad5b20bd4cce25650ac171dc2e61))
+- *(issues)* Allow reports while media is processing (#323) - ([82a73d7](https://github.com/snapetech-org/seerrng/commit/82a73d748fe9c2f5db044f42521784227b86e477))
+- *(jellyfin)* Use current authorization header (#259) - ([71784fb](https://github.com/snapetech-org/seerrng/commit/71784fba5ee67e01248293792e755e64b59d7b84))
+- *(jellyfin)* Process recent TV items (#246) - ([7dfbb21](https://github.com/snapetech-org/seerrng/commit/7dfbb213fc930ef3186d1e6222a33716bcefc2c7))
+- *(jobs)* Preserve Plex Watchlist sync schedule (#307) - ([a2117e1](https://github.com/snapetech-org/seerrng/commit/a2117e12a5d97f9d2a307693feb3035dda761a96))
+- *(logger)* Respect color settings for console logs - ([1deeaa1](https://github.com/snapetech-org/seerrng/commit/1deeaa1dd7e301952350ccc284e594498f2ee116))
+- *(plex)* Prevent repeated watchlist auto-requests (#305) - ([65e1645](https://github.com/snapetech-org/seerrng/commit/65e164533ed89c5b7afd76410037a84440fe6625))
+- *(plex)* Process standard and 4K movie versions (#208) - ([8e87f5f](https://github.com/snapetech-org/seerrng/commit/8e87f5fdaadd6f34c0d286bc27be48570687aa7a))
+- *(radarr)* Honor availability for existing title searches (#212) - ([ad8da67](https://github.com/snapetech-org/seerrng/commit/ad8da67f1c65b62ef386da2aa0dd5d2b30985c9c))
+- *(requests)* Tolerate missing movie keywords - ([c3495d9](https://github.com/snapetech-org/seerrng/commit/c3495d9de7f62f2826f10e7ef427593f61a5854f))
+- *(requests)* Continue when requester tag services fail (#310) - ([2d7bd5a](https://github.com/snapetech-org/seerrng/commit/2d7bd5a928706ca92fbb9360b5aa50da2fba645d))
+- *(requests)* Preserve TV requests on lookup failures (#262) - ([6144daa](https://github.com/snapetech-org/seerrng/commit/6144daa2eb8ec5f89244d1ff1d88d5e76e7e29f6))
+- *(requests)* Order by creation time and tidy watchlist sync handling (#296) - ([1713641](https://github.com/snapetech-org/seerrng/commit/171364140f54605c711ede3de54eb02757f44a9e))
+- *(requests)* Avoid season relation fan-out (#258) - ([711ad93](https://github.com/snapetech-org/seerrng/commit/711ad93ab83f8d134d9b6d4d94d5925c633d0f6f))
+- *(requests)* Handle TV no-seasons responses (#232) - ([5ff3bd1](https://github.com/snapetech-org/seerrng/commit/5ff3bd17c38e27abadba53519749ec9aa2d90917))
+- *(requests)* Honor override rule destinations and choices (#247) - ([c26972e](https://github.com/snapetech-org/seerrng/commit/c26972e8ebb25af171cdfc04d855fb68fe0305bd))
+- *(requests)* Recover failed arr assignments (#211) - ([58d967b](https://github.com/snapetech-org/seerrng/commit/58d967b49b81b864cf8bad67aa9d3da28e86f5df))
+- *(requests)* Refresh pending badge count - ([8fc1ef7](https://github.com/snapetech-org/seerrng/commit/8fc1ef7d90ea456c50511db9adac337bbf21a07c))
+- *(requests)* Refresh pending badge count - ([312c367](https://github.com/snapetech-org/seerrng/commit/312c367390aad588c1da1db9948c580687aae224))
+- *(scanners)* Reconcile orphaned Sonarr season requests (#214) - ([868e156](https://github.com/snapetech-org/seerrng/commit/868e156d7e40cd676a3c7ca908d0091fd94566e1))
+- *(security)* Preserve dependency resolution in sandbox - ([f196515](https://github.com/snapetech-org/seerrng/commit/f196515c66626b9cb2970a1b2450853f4ae5790c))
+- *(security)* Isolate local validation test processes - ([99fa7b4](https://github.com/snapetech-org/seerrng/commit/99fa7b4932821d84832bc52d58028bfcae71347f))
+- *(security)* Block unsafe proof-parent execution - ([902ba2e](https://github.com/snapetech-org/seerrng/commit/902ba2ea5aa2e60006975f71327c0b2a5c4809d7))
+- *(security)* Isolate local validation tests - ([5c6e7de](https://github.com/snapetech-org/seerrng/commit/5c6e7def5d028e59db50c944ec08f11ebd6e22f1))
+- *(security)* Block unsafe proof-parent execution - ([26769b6](https://github.com/snapetech-org/seerrng/commit/26769b6239587f28ab505257f0ae0963e292b705))
+- *(security)* Keep distributed validation dormant - ([efb0962](https://github.com/snapetech-org/seerrng/commit/efb096283da6a006e3f149859275baf2636d7355))
+- *(security)* Restrict validation engine boundaries - ([11ac893](https://github.com/snapetech-org/seerrng/commit/11ac893cf5bf51ca75fc4356ef0d706d8bc76920))
+- *(security)* Preserve relative navigation lint rule - ([e89313c](https://github.com/snapetech-org/seerrng/commit/e89313ced4fc18fb0a2d441ee4f1eed2dc73c44b))
+- *(settings)* Allow trailing slash for YouTube URLs (#248) - ([87cd03a](https://github.com/snapetech-org/seerrng/commit/87cd03aa9dace85f5044ccefc642c21226bc6150))
+- *(sonarr)* Recover anime requests from missing profiles (#311) - ([9fe7788](https://github.com/snapetech-org/seerrng/commit/9fe7788034db8d91b5fd35f189a44bd8857d12d9))
+- *(sonarr)* Preserve cross-ID in-progress series (#209) - ([5a9deca](https://github.com/snapetech-org/seerrng/commit/5a9deca23dac2516529860e3f8a66a4ab5e42fb0))
+- *(tls)* Route server-side API calls through loopback - ([ccec04c](https://github.com/snapetech-org/seerrng/commit/ccec04c9cab2a7a537528ee1d56df1533b5ad8f4))
+- *(types)* Annotate cached image error handler - ([7783212](https://github.com/snapetech-org/seerrng/commit/7783212a682385a90f7754d473dac6ce5d141c3d))
+- *(ui)* Improve tooltip accessibility and mobile details (#314) - ([8cfef13](https://github.com/snapetech-org/seerrng/commit/8cfef13b5aeb2cb77257f2b6e4b6b85bb62d7b19))
+- *(ui)* Open edit request modal from management panel - ([b8b9be2](https://github.com/snapetech-org/seerrng/commit/b8b9be2ba190a91af4ca3b4e4d1ba2b532ba06c5))
+- *(validation)* Remove unused launcher variable (#308) - ([3e30162](https://github.com/snapetech-org/seerrng/commit/3e301627e0c77f6cead92f3c4cd1f3b83f92a809))
+- *(validation)* Use bounded Node test workers (#265) - ([7f1845f](https://github.com/snapetech-org/seerrng/commit/7f1845f393b6d498a4a55a7ceddb99ebeadb0e27))
+- *(validation)* Repair current-batch contract inputs - ([9f36008](https://github.com/snapetech-org/seerrng/commit/9f36008d778990645ca95b4abaf1963711a92890))
+- *(webpush)* Preserve multi-device subscriptions (#284) - ([ce0f27d](https://github.com/snapetech-org/seerrng/commit/ce0f27df6f5c19bd462bacc73d4028dfacb3c1a7))
+- Publish the standard image under the organization namespace (#332) - ([139992f](https://github.com/snapetech-org/seerrng/commit/139992f6cf423652115560ecee2fc36dd102753e))
+- Correct service formats and connection checks (#301) - ([e392bc4](https://github.com/snapetech-org/seerrng/commit/e392bc403c603629f7f1d7212056442294285ffe))
+- Tolerate missing SQLite subscription index (#245) - ([ac3a365](https://github.com/snapetech-org/seerrng/commit/ac3a36547edf9ec41e083ae214e66be8707800dc))
+- Improve validation isolation and preserve availability state (#203) - ([97aa148](https://github.com/snapetech-org/seerrng/commit/97aa148bed3a72cc02ca11f9f9d3341c230cceeb))
+- Preserve edit actions for requests without linked media - ([ecf3019](https://github.com/snapetech-org/seerrng/commit/ecf3019630e9fe3fc9f3e9ffd6002226b4f3e6ad))
+- Bound and validate Audiobookshelf library scans - ([884259a](https://github.com/snapetech-org/seerrng/commit/884259ab5612fff76339d4fafe7e265a7b9bd141))
+
+### 📖 Documentation
+- *(api)* Clarify request user permissions (#234) - ([1334d47](https://github.com/snapetech-org/seerrng/commit/1334d47afd256dc904f0a84b2f52d3dbdd84cc85))
+- *(backups)* Structure guide navigation (#238) - ([9085bda](https://github.com/snapetech-org/seerrng/commit/9085bda38ac025f3002c6cf230314ad964f59065))
+- *(comics)* Recommend Issuarr and keep Mylar3 support - ([3df985b](https://github.com/snapetech-org/seerrng/commit/3df985b134885ee39f48add23e3ea49a27f31e23))
+- *(contributing)* Clarify approval for large changes (#230) - ([a984ce0](https://github.com/snapetech-org/seerrng/commit/a984ce0310f1a9f6bebed89ce812e1086e103b6e))
+- *(docker)* Clarify Podman user mapping (#229) - ([b22781d](https://github.com/snapetech-org/seerrng/commit/b22781d9c1b192353d6e0356ae4317db4ed48ff8))
+- *(maintainers)* Record ROMarrNG DAT integration evidence - ([4406055](https://github.com/snapetech-org/seerrng/commit/440605550c340ef63f224db682911c2c7826b42a))
+- *(notifications)* Cover optional agent settings (#222) - ([a4103f5](https://github.com/snapetech-org/seerrng/commit/a4103f5aa83b22700db1ab82718a93730af1d0e5))
+- *(oidc)* Clarify first-time account requirements (#235) - ([94d0386](https://github.com/snapetech-org/seerrng/commit/94d0386190dbb017b70a02591f1d27aa4b367775))
+- *(telegram)* Explain notification settings (#256) - ([18b9b27](https://github.com/snapetech-org/seerrng/commit/18b9b278699edc8d632512005abcad07d8eb42a6))
+- *(validation)* Clarify sandbox mount boundaries - ([335650d](https://github.com/snapetech-org/seerrng/commit/335650d88f998d0c51c2da8f429ddb494a8f9b89))
+- Align release-note scope (#328) - ([c342790](https://github.com/snapetech-org/seerrng/commit/c342790b6337a0f586a6c1650ec1952e9e02cbf3))
+- Align merge and release-note rules (#326) - ([d5b7c5f](https://github.com/snapetech-org/seerrng/commit/d5b7c5f902aa74b895702fbfc1fa7f0d7bb925f3))
+- Remove internal review tracking material (#324) - ([8f5b4be](https://github.com/snapetech-org/seerrng/commit/8f5b4bedf3983d5100606bdec7bf779f20ff1084))
+- Index upstream review and fork retirement criteria (#257) - ([61224cb](https://github.com/snapetech-org/seerrng/commit/61224cbb1a0b310fbe0dd503db1d485a1208240d))
+- Add GitHub Free org migration runbook (#239) - ([f3198b2](https://github.com/snapetech-org/seerrng/commit/f3198b25dbea375d202065725eb7e21b84c9f663))
+- Explain why SeerrNG maintains its fork (#204) - ([0701b65](https://github.com/snapetech-org/seerrng/commit/0701b65d972822952bf2c360ed96d1d20cdd7042))
+- Add Ko-fi sponsor link - ([95b34ff](https://github.com/snapetech-org/seerrng/commit/95b34ff764ff43789686956c1f374d278db85eaf))
+- Explain maintained dependency forks - ([da92ba7](https://github.com/snapetech-org/seerrng/commit/da92ba75ff252213d86d3f4a5850af5c29f49b58))
+- Record integration ledger and generated API contract - ([f758a34](https://github.com/snapetech-org/seerrng/commit/f758a347f1d6c851fbed068da0ba309910d48dba))
+
+### ⚡ Performance
+- *(containers)* Reduce production image size (#231) - ([e284420](https://github.com/snapetech-org/seerrng/commit/e284420ee3683dd4ba3bfa2facc241c84cdba41e))
+- *(ui)* Avoid blur on scrolled search header (#228) - ([be5586d](https://github.com/snapetech-org/seerrng/commit/be5586d054cee144143f36e8b438228225096ee7))
+
+### 🚜 Refactor
+- *(ui)* Centralize media server names (#250) - ([ea1262e](https://github.com/snapetech-org/seerrng/commit/ea1262eae9a9ed037f50131d0c35e20e7755b5d6))
+
+### 🎨 Styling
+- *(discover)* Format header spacing test - ([b4f9c0f](https://github.com/snapetech-org/seerrng/commit/b4f9c0fcb0851e1cbf4751b2b828ea4660ddd781))
+
+### 🧪 Testing
+- *(availability)* Cover active season deletion cleanup (#216) - ([73fab6a](https://github.com/snapetech-org/seerrng/commit/73fab6afe5e35db2ac9dc84e4bc15f7a8699eea5))
+- *(discover)* Account for detail navigation context - ([071876f](https://github.com/snapetech-org/seerrng/commit/071876f54e5dcabb9f9529448b54241554cb3875))
+- *(requests)* Cover request-user selection permissions - ([d192aa4](https://github.com/snapetech-org/seerrng/commit/d192aa4f2b46f2d021a95e884ff81b79a326e96a))
+- *(sonarr)* Stub API version resolution in service route tests - ([0e13c5b](https://github.com/snapetech-org/seerrng/commit/0e13c5b955947a5ebe72725650889612e7097bf8))
+- *(ui)* Allow discover section spacing wrapper - ([40bd076](https://github.com/snapetech-org/seerrng/commit/40bd076f3ee0b7ea6983171ea1153da1387d5e8a))
+- *(validation)* Refresh tooling inventory count - ([4a8227d](https://github.com/snapetech-org/seerrng/commit/4a8227d4791d6c9876b7eecbfe63ce398fbd000c))
+- *(validation)* Refresh hosted test inventory - ([e5de8fe](https://github.com/snapetech-org/seerrng/commit/e5de8feec8e0f6470b3311f41939210b8debed57))
+- Assert validation-gated image publication - ([acb86e5](https://github.com/snapetech-org/seerrng/commit/acb86e5176a2bc729fd927f2546da7000a785322))
+
+### ⚙️ Miscellaneous Tasks
+- *(release)* Isolate tag publishing permissions - ([da99834](https://github.com/snapetech-org/seerrng/commit/da9983437f37bd395551c88154fa06d32e8b12d7))
+- *(release)* Use scoped token for tag publishing (#335) - ([d2a224e](https://github.com/snapetech-org/seerrng/commit/d2a224e829ef15358f4812537330c00d68489469))
+- Preserve chart release workflow runs (#334) - ([be3b4b8](https://github.com/snapetech-org/seerrng/commit/be3b4b8d45b9523d4e543116b6dde3f8f4efe1ad))
+- Preserve merge conflict labeler runs (#333) - ([384b6c1](https://github.com/snapetech-org/seerrng/commit/384b6c12bb639cf28e99e6fc831fe40271aed660))
+- Preserve concurrent validation runs (#330) - ([88698dd](https://github.com/snapetech-org/seerrng/commit/88698dd951c8e754152e6e928643732efdc9019e))
+- Pin SeerrNG main unit-test shards to kspls0 (#286) - ([1fc9be1](https://github.com/snapetech-org/seerrng/commit/1fc9be16a609bfd0b29ed7836b49cec2ab12e275))
+- Share trusted unit-test runner capacity (#278) - ([b9aea6c](https://github.com/snapetech-org/seerrng/commit/b9aea6c55527c919a32191a7b2d49dcff1c8655c))
+- Record stale branch validation-snapshot-20261005-r14 as merged - ([7ef823d](https://github.com/snapetech-org/seerrng/commit/7ef823d414b4aff4f0b355f2ed389d66ae843813))
+- Record stale branch validation-snapshot-20261005-r13 as merged - ([be2e1b2](https://github.com/snapetech-org/seerrng/commit/be2e1b2fb8c9b77ce275fedeb66f4f2edff5073d))
+- Record stale branch validation-snapshot-20261005-r12 as merged - ([daa67c2](https://github.com/snapetech-org/seerrng/commit/daa67c2ba54387fe2fe2c10a76e66268abd7e68e))
+- Record stale branch validation-snapshot-20261005-r8 as merged - ([904ac2c](https://github.com/snapetech-org/seerrng/commit/904ac2cd695e5d04e2982b84dbdade07dd69bc17))
+- Record stale branch validation-snapshot-20261005-r7 as merged - ([e7e7aad](https://github.com/snapetech-org/seerrng/commit/e7e7aaddb6132a02b5852aef14696a1a3c24a611))
+- Record stale branch validation-snapshot-20261005-r6 as merged - ([b557484](https://github.com/snapetech-org/seerrng/commit/b5574848ae861b8aa096960f0e918063b17e6afa))
+- Record stale branch validation-snapshot-20261005-r5 as merged - ([37a1808](https://github.com/snapetech-org/seerrng/commit/37a18088d7e193571bd5bf7866dbfd1155ef5246))
+- Record stale branch validation-snapshot-20261004-r4 as merged - ([75401aa](https://github.com/snapetech-org/seerrng/commit/75401aaccae0e1a1678dc2b31ddb6ce12d52cf9b))
+- Record stale branch validation-snapshot-20261004-r3 as merged - ([c5fc518](https://github.com/snapetech-org/seerrng/commit/c5fc518058eefb2e4b4b0440835261c69db2afff))
+- Record stale branch codex/release-integration-159-160-20261004-refresh as merged - ([dfefbd9](https://github.com/snapetech-org/seerrng/commit/dfefbd98ac8ed9ab269915be6661360d53e44bf2))
+- Record stale branch recovery/all-dirty-before-main-4665245 as merged - ([6311667](https://github.com/snapetech-org/seerrng/commit/6311667c3eed5be57bdc7847f513ee718d33cd3e))
+- Use Ko-fi as the sole support link - ([14b3c67](https://github.com/snapetech-org/seerrng/commit/14b3c6775dfa45df34ee6e607ebbaba1fb7b17b1))
+- Merge codex/release-integration-159-160-20261004 - ([9858b51](https://github.com/snapetech-org/seerrng/commit/9858b5184cff3cb3ef0d2deeaa481ef9723db1a0))
+- Merge current SeerrNG main 6a9746bd0 - ([7a3efa3](https://github.com/snapetech-org/seerrng/commit/7a3efa379faf5cbcb499dcae47de667628cabf91))
+- Merge current SeerrNG main v3.49.0 - ([40cbf02](https://github.com/snapetech-org/seerrng/commit/40cbf026a7fff28229c58709549b9a31e3015d33))
+- Merge recovery/request-count-pre-rebase-8fc1ef7 - ([fde48c5](https://github.com/snapetech-org/seerrng/commit/fde48c5531a76e2495aa329cc19e6d83a8645d94))
+- Merge recovery/request-count-pre-rebase-312c367 - ([4660459](https://github.com/snapetech-org/seerrng/commit/46604593b1e98ff49296eeccba33a330e79379f6))
+- Mark validation inventory fix internal - ([88cfb3c](https://github.com/snapetech-org/seerrng/commit/88cfb3c2582dc5e12d70bca571269f5a03942f4e))
 
 ## [3.58.0](https://github.com/snapetech/seerrng/compare/v3.57.1..v3.58.0) - 2026-10-09
 

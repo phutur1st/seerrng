@@ -16,6 +16,9 @@ import {
 } from '@server/constants/media';
 import dataSource, { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import MediaIdentifier, {
+  MediaIdentifierProvider,
+} from '@server/entity/MediaIdentifier';
 import MediaRequest from '@server/entity/MediaRequest';
 import Season from '@server/entity/Season';
 import SeasonRequest, {
@@ -32,11 +35,17 @@ import type {
 import BaseScanner from '@server/lib/scanners/baseScanner';
 import { forEachMediaCleanupBatch } from '@server/lib/scanners/mediaCleanupBatches';
 import {
+  externalSeasonNumberFor,
+  findMediaForTvdbId,
+  getSeasonMappingsForTvdbIdentifier,
+} from '@server/lib/seasonNumberMapping';
+import {
   ServarrServiceAuthorityChangedError,
   runWithServarrServiceSnapshot,
   runWithServarrServiceSnapshots,
 } from '@server/lib/serviceAdmission';
 import type { SonarrSettings } from '@server/lib/settings';
+import { is4kResolution } from '@server/lib/videoResolution';
 import { getHttpErrorDetails } from '@server/utils/httpError';
 import { uniqWith } from 'lodash';
 import type { FindOptionsWhere } from 'typeorm';
@@ -57,10 +66,15 @@ class SonarrScanner
   private scanned4kTvdbIds: Set<number> = new Set();
   private scannedTmdbIds: Set<number> = new Set();
   private scanned4kTmdbIds: Set<number> = new Set();
+  private currentServiceTvdbIds: Set<number> = new Set();
+  private currentServiceTmdbIds: Set<number> = new Set();
+  private currentService4kTvdbIds: Set<number> = new Set();
+  private currentService4kTmdbIds: Set<number> = new Set();
   private didScanStandard = false;
   private didScan4k = false;
   private serverReturnedEmpty = false;
   private server4kReturnedEmpty = false;
+  private resolutionAwareSingleServer = false;
 
   constructor() {
     super('Sonarr Scan', { bundleSize: 50 });
@@ -99,9 +113,30 @@ class SonarrScanner
           sonarrA.port === sonarrB.port &&
           sonarrA.baseUrl === sonarrB.baseUrl
       );
+      this.resolutionAwareSingleServer =
+        this.servers.filter((server) => server.syncEnabled).length === 1 &&
+        settings.sonarr.some(
+          (server) =>
+            server.syncEnabled &&
+            !server.is4k &&
+            server.hostname === this.servers[0].hostname &&
+            server.port === this.servers[0].port &&
+            server.baseUrl === this.servers[0].baseUrl
+        );
+      if (this.resolutionAwareSingleServer) {
+        this.enable4kShow = true;
+        this.log(
+          'Single Sonarr server detected. Episode file resolution will separate HD and 4K availability.',
+          'info'
+        );
+      }
 
       for (const server of this.servers) {
         this.currentServer = server;
+        this.currentServiceTvdbIds.clear();
+        this.currentServiceTmdbIds.clear();
+        this.currentService4kTvdbIds.clear();
+        this.currentService4kTmdbIds.clear();
         if (server.syncEnabled) {
           this.log(
             `Beginning to process Sonarr server: ${server.name}`,
@@ -121,7 +156,12 @@ class SonarrScanner
           );
 
           const server4k = this.enable4kShow && server.is4k;
-          if (server4k) {
+          const scansBothResolutions =
+            this.resolutionAwareSingleServer && this.enable4kShow;
+          if (scansBothResolutions) {
+            this.didScanStandard = true;
+            this.didScan4k = true;
+          } else if (server4k) {
             this.didScan4k = true;
           } else {
             this.didScanStandard = true;
@@ -133,6 +173,10 @@ class SonarrScanner
             } else {
               this.serverReturnedEmpty = true;
             }
+            if (scansBothResolutions) {
+              this.serverReturnedEmpty = true;
+              this.server4kReturnedEmpty = true;
+            }
             this.log(
               `Sonarr server ${server.name} returned no series. Orphan cleanup for this profile type will be skipped.`,
               'warn'
@@ -140,6 +184,44 @@ class SonarrScanner
           }
 
           await this.loop(this.processSonarrSeries.bind(this), { sessionId });
+
+          const hasCompleteMediaIdentity = this.items.every(
+            (series) => Number.isSafeInteger(series.tvdbId) && series.tvdbId > 0
+          );
+          if (this.items.length > 0 && hasCompleteMediaIdentity) {
+            const formats = scansBothResolutions
+              ? ([
+                  {
+                    format: 'standard' as const,
+                    tmdbIds: this.currentServiceTmdbIds,
+                    tvdbIds: this.currentServiceTvdbIds,
+                  },
+                  {
+                    format: '4k' as const,
+                    tmdbIds: this.currentService4kTmdbIds,
+                    tvdbIds: this.currentService4kTvdbIds,
+                  },
+                ] as const)
+              : ([
+                  {
+                    format: server4k ? ('4k' as const) : ('standard' as const),
+                    tmdbIds: this.currentServiceTmdbIds,
+                    tvdbIds: this.currentServiceTvdbIds,
+                  },
+                ] as const);
+            for (const { format, tmdbIds, tvdbIds } of formats) {
+              await runWithServarrServiceSnapshot('sonarr', server, async () =>
+                this.markMissingVideoServiceStatusesUnknown({
+                  serviceType: 'sonarr',
+                  serverId: server.id,
+                  format,
+                  mediaType: MediaType.TV,
+                  tmdbIds,
+                  tvdbIds,
+                })
+              );
+            }
+          }
         } else {
           this.log(`Sync not enabled. Skipping Sonarr server: ${server.name}`);
         }
@@ -149,12 +231,12 @@ class SonarrScanner
       // If any server is skipped, we can't distinguish truly orphaned media from
       // media that exists on an unscanned server (e.g. separate instances for
       // anime, regional content, or different languages).
-      const allStandardScanned = this.servers
-        .filter((s) => !this.enable4kShow || !s.is4k)
-        .every((s) => s.syncEnabled);
-      const all4kScanned = this.servers
-        .filter((s) => this.enable4kShow && s.is4k)
-        .every((s) => s.syncEnabled);
+      const allStandardScanned = this.serversForQuality(false).every(
+        (server) => server.syncEnabled
+      );
+      const all4kScanned = this.serversForQuality(true).every(
+        (server) => server.syncEnabled
+      );
 
       if (!allStandardScanned) {
         this.didScanStandard = false;
@@ -174,11 +256,14 @@ class SonarrScanner
         await this.resolveDeferredSeasonStatusResets(false, (callback) =>
           runWithServarrServiceSnapshots(
             'sonarr',
-            this.servers.filter((server) => !this.enable4kShow || !server.is4k),
+            this.serversForQuality(false).filter(
+              (server) => server.syncEnabled
+            ),
             callback,
             {
               requireExactAuthoritySet: true,
-              includeCurrent: (server) => !this.enable4kShow || !server.is4k,
+              includeCurrent: (server) =>
+                server.syncEnabled && this.serverMatchesQuality(server, false),
             }
           )
         );
@@ -187,11 +272,12 @@ class SonarrScanner
         await this.resolveDeferredSeasonStatusResets(true, (callback) =>
           runWithServarrServiceSnapshots(
             'sonarr',
-            this.servers.filter((server) => this.enable4kShow && server.is4k),
+            this.serversForQuality(true).filter((server) => server.syncEnabled),
             callback,
             {
               requireExactAuthoritySet: true,
-              includeCurrent: (server) => this.enable4kShow && server.is4k,
+              includeCurrent: (server) =>
+                server.syncEnabled && this.serverMatchesQuality(server, true),
             }
           )
         );
@@ -210,75 +296,240 @@ class SonarrScanner
   }
 
   private async processSonarrSeries(sonarrSeries: SonarrSeries) {
+    if (Number.isSafeInteger(sonarrSeries.tvdbId) && sonarrSeries.tvdbId > 0) {
+      if (this.resolutionAwareSingleServer) {
+        this.currentServiceTvdbIds.add(sonarrSeries.tvdbId);
+        this.currentService4kTvdbIds.add(sonarrSeries.tvdbId);
+      } else {
+        this.currentServiceTvdbIds.add(sonarrSeries.tvdbId);
+      }
+    }
     const server4k = this.enable4kShow && this.currentServer.is4k;
-    let resolvedTmdbId: number | undefined;
-    if (server4k) {
-      this.scanned4kTvdbIds.add(sonarrSeries.tvdbId);
-    } else {
-      this.scannedTvdbIds.add(sonarrSeries.tvdbId);
+    if (!this.resolutionAwareSingleServer) {
+      if (server4k) {
+        this.scanned4kTvdbIds.add(sonarrSeries.tvdbId);
+      } else {
+        this.scannedTvdbIds.add(sonarrSeries.tvdbId);
+      }
     }
 
     try {
-      const mediaRepository = getRepository(Media);
-      const processableSeasons: ProcessableSeason[] = [];
-      let tvShow: TmdbTvScanDetails | TmdbTvDetails;
+      const hasEpisodeFiles = sonarrSeries.seasons.some(
+        (season) => (season.statistics?.episodeFileCount ?? 0) > 0
+      );
+      const sonarrSeriesId = sonarrSeries.id;
+      const episodeFiles =
+        this.resolutionAwareSingleServer &&
+        hasEpisodeFiles &&
+        typeof sonarrSeriesId === 'number' &&
+        Number.isSafeInteger(sonarrSeriesId) &&
+        sonarrSeriesId > 0
+          ? await runWithServarrServiceSnapshot(
+              'sonarr',
+              this.currentServer,
+              () => this.sonarrApi.getEpisodes(sonarrSeriesId, true)
+            )
+          : this.resolutionAwareSingleServer
+            ? []
+            : undefined;
+      const mediaMatches = await findMediaForTvdbId(
+        dataSource.manager,
+        sonarrSeries.tvdbId
+      );
+      const targets: (Media | undefined)[] =
+        mediaMatches.length > 0 ? mediaMatches : [undefined];
 
-      const media = await mediaRepository.findOne({
-        where: { tvdbId: sonarrSeries.tvdbId },
+      for (const media of targets) {
+        let resolvedTmdbId: number | undefined;
+        try {
+          resolvedTmdbId = await this.processSonarrSeriesForMedia(
+            sonarrSeries,
+            media,
+            server4k,
+            episodeFiles
+          );
+        } catch (e) {
+          if (e instanceof ServarrServiceAuthorityChangedError) throw e;
+          const failedQualities = this.resolutionAwareSingleServer
+            ? ([false, true] as const)
+            : ([server4k] as const);
+          for (const is4k of failedQualities) {
+            this.markShowScanFailed(sonarrSeries.tvdbId, is4k, resolvedTmdbId);
+          }
+          this.log('Failed to process Sonarr media', 'error', {
+            errorMessage: e instanceof Error ? e.message : String(e),
+            title: sonarrSeries.title,
+            mediaId: media?.id,
+          });
+        }
+      }
+    } catch (e) {
+      if (e instanceof ServarrServiceAuthorityChangedError) throw e;
+      const failedQualities = this.resolutionAwareSingleServer
+        ? ([false, true] as const)
+        : ([server4k] as const);
+      for (const is4k of failedQualities) {
+        this.markShowScanFailed(sonarrSeries.tvdbId, is4k);
+      }
+      this.log('Failed to process Sonarr media', 'error', {
+        errorMessage: e instanceof Error ? e.message : String(e),
+        title: sonarrSeries.title,
+      });
+    }
+  }
+
+  private async processSonarrSeriesForMedia(
+    sonarrSeries: SonarrSeries,
+    media: Media | undefined,
+    server4k: boolean,
+    episodeFiles?: Awaited<ReturnType<SonarrAPI['getEpisodes']>>
+  ): Promise<number> {
+    let tvShow: TmdbTvScanDetails | TmdbTvDetails;
+    if (!media || !media.tmdbId) {
+      tvShow = await this.tmdb.getShowByTvdbIdForScan({
+        tvdbId: sonarrSeries.tvdbId,
+      });
+    } else {
+      tvShow = await this.tmdb.getTvShowForScan({ tvId: media.tmdbId });
+    }
+
+    const tmdbId = tvShow.id;
+    if (Number.isSafeInteger(tmdbId) && tmdbId > 0) {
+      if (this.resolutionAwareSingleServer) {
+        this.currentServiceTmdbIds.add(tmdbId);
+        this.currentService4kTmdbIds.add(tmdbId);
+      } else {
+        this.currentServiceTmdbIds.add(tmdbId);
+      }
+    }
+    if (!this.resolutionAwareSingleServer) {
+      (server4k ? this.scanned4kTmdbIds : this.scannedTmdbIds).add(tmdbId);
+    }
+    tvShow = await this.applyMetadataProvider(
+      tvShow,
+      this.isAnimeSeries(sonarrSeries)
+    );
+    const settings = getExternalRuntimeConfig();
+    const seasonMappings = media
+      ? getSeasonMappingsForTvdbIdentifier(
+          media,
+          sonarrSeries.tvdbId,
+          this.currentServer.id,
+          Boolean(this.currentServer.is4k),
+          sonarrSeries.seasonType ?? 'standard'
+        )
+      : [];
+
+    const episodeCountsBySeason = new Map<
+      number,
+      { standard: number; fourK: number }
+    >();
+    if (this.resolutionAwareSingleServer) {
+      for (const episode of episodeFiles ?? []) {
+        if (!episode.hasFile || episode.episodeFileId <= 0) continue;
+        const counts = episodeCountsBySeason.get(episode.seasonNumber) ?? {
+          standard: 0,
+          fourK: 0,
+        };
+        if (is4kResolution(episode.fileResolution) === true) {
+          counts.fourK++;
+        } else {
+          counts.standard++;
+        }
+        episodeCountsBySeason.set(episode.seasonNumber, counts);
+      }
+    }
+
+    const processableSeasons: ProcessableSeason[] = tvShow.seasons
+      .filter(
+        (season) =>
+          settings.main.enableSpecialEpisodes || season.season_number !== 0
+      )
+      .map((season) => {
+        const externalSeasonNumber = externalSeasonNumberFor(
+          season.season_number,
+          seasonMappings
+        );
+        const sonarrSeason = sonarrSeries.seasons.find(
+          (item) => item.seasonNumber === externalSeasonNumber
+        );
+        const totalAvailableEpisodes =
+          sonarrSeason?.statistics?.episodeFileCount ?? 0;
+        const resolutionCounts =
+          episodeCountsBySeason.get(externalSeasonNumber);
+
+        return {
+          seasonNumber: season.season_number,
+          episodes: this.resolutionAwareSingleServer
+            ? (resolutionCounts?.standard ?? 0)
+            : !server4k
+              ? totalAvailableEpisodes
+              : 0,
+          episodes4k: this.resolutionAwareSingleServer
+            ? (resolutionCounts?.fourK ?? 0)
+            : server4k
+              ? totalAvailableEpisodes
+              : 0,
+          totalEpisodes:
+            sonarrSeason?.statistics?.totalEpisodeCount ?? season.episode_count,
+          processing:
+            Boolean(sonarrSeason?.monitored) && totalAvailableEpisodes === 0,
+          is4kOverride: this.resolutionAwareSingleServer ? false : server4k,
+        };
       });
 
-      if (!media || !media.tmdbId) {
-        tvShow = await this.tmdb.getShowByTvdbIdForScan({
-          tvdbId: sonarrSeries.tvdbId,
-        });
-      } else {
-        tvShow = await this.tmdb.getTvShowForScan({ tvId: media.tmdbId });
+    if (this.resolutionAwareSingleServer) {
+      const hasStandardActivity = processableSeasons.some(
+        (season) => season.episodes > 0 || season.processing
+      );
+      const has4kFiles = processableSeasons.some(
+        (season) => season.episodes4k > 0
+      );
+      if (hasStandardActivity) {
+        this.scannedTvdbIds.add(sonarrSeries.tvdbId);
+        this.scannedTmdbIds.add(tmdbId);
+      }
+      if (has4kFiles) {
+        this.scanned4kTvdbIds.add(sonarrSeries.tvdbId);
+        this.scanned4kTmdbIds.add(tmdbId);
       }
 
-      const tmdbId = tvShow.id;
-      resolvedTmdbId = tmdbId;
-      (server4k ? this.scanned4kTmdbIds : this.scannedTmdbIds).add(tmdbId);
-      tvShow = await this.applyMetadataProvider(tvShow);
-      const settings = getExternalRuntimeConfig();
-
-      const filteredSeasons = tvShow.seasons
-        .filter(
-          (sn) => settings.main.enableSpecialEpisodes || sn.season_number !== 0
-        )
-        .map((season) => {
-          const sonarrSeason = sonarrSeries.seasons.find(
-            (s) => s.seasonNumber === season.season_number
-          );
-          if (!sonarrSeason) {
-            return {
-              seasonNumber: season.season_number,
-              episodeCount: season.episode_count,
-              monitored: false,
-              statistics: {
-                episodeFileCount: 0,
-                totalEpisodeCount: season.episode_count,
-              },
-            };
-          } else {
-            return sonarrSeason;
-          }
-        });
-
-      for (const season of filteredSeasons) {
-        const totalAvailableEpisodes = season.statistics?.episodeFileCount ?? 0;
-
-        processableSeasons.push({
-          seasonNumber: season.seasonNumber,
-          episodes: !server4k ? totalAvailableEpisodes : 0,
-          episodes4k: server4k ? totalAvailableEpisodes : 0,
-          totalEpisodes: season.statistics?.totalEpisodeCount ?? 0,
-          processing: season.monitored && totalAvailableEpisodes === 0,
-          is4kOverride: server4k,
-        });
-      }
-
+      const processOptions = {
+        serviceId: this.currentServer.id,
+        requestServiceType: 'sonarr' as const,
+        externalServiceId: sonarrSeries.id,
+        externalServiceSlug: sonarrSeries.titleSlug,
+        title: sonarrSeries.title,
+        deferStatusReset: true,
+        preserveInactiveServiceIdentity: true,
+        mutationGuard: <Result>(callback: () => Promise<Result>) =>
+          runWithServarrServiceSnapshot('sonarr', this.currentServer, callback),
+      };
+      await this.processShow(
+        tmdbId,
+        sonarrSeries.tvdbId,
+        processableSeasons.map((season) => ({
+          ...season,
+          episodes4k: 0,
+          is4kOverride: false,
+        })),
+        { ...processOptions, is4k: false }
+      );
+      await this.processShow(
+        tmdbId,
+        sonarrSeries.tvdbId,
+        processableSeasons.map((season) => ({
+          ...season,
+          episodes: 0,
+          processing: false,
+          is4kOverride: true,
+        })),
+        { ...processOptions, is4k: true }
+      );
+    } else {
       await this.processShow(tmdbId, sonarrSeries.tvdbId, processableSeasons, {
         serviceId: this.currentServer.id,
+        requestServiceType: 'sonarr',
         externalServiceId: sonarrSeries.id,
         externalServiceSlug: sonarrSeries.titleSlug,
         title: sonarrSeries.title,
@@ -288,61 +539,124 @@ class SonarrScanner
         mutationGuard: (callback) =>
           runWithServarrServiceSnapshot('sonarr', this.currentServer, callback),
       });
-
-      const updatedMedia = await getRepository(Media).findOneBy({
-        tmdbId,
-        mediaType: MediaType.TV,
-      });
-      await upsertMediaSearchMetadata(updatedMedia?.id, {
-        title: tvShow.name,
-        alternateTitle: tvShow.original_name,
-        releaseDate: tvShow.first_air_date,
-        genres: tvShow.genres.map((genre) => genre.name).join(', '),
-        runtime: tvShow.episode_run_time[0]
-          ? `${tvShow.episode_run_time[0]} minutes`
-          : undefined,
-        creator: tvShow.created_by.map((creator) => creator.name).join(', '),
-        studio: tvShow.production_companies
-          .map((company) => company.name)
-          .join(', '),
-        network: tvShow.networks.map((network) => network.name).join(', '),
-        format: 'Series',
-        provider: this.currentServer.name,
-        externalIds: [tmdbId, sonarrSeries.tvdbId, sonarrSeries.imdbId]
-          .filter(Boolean)
-          .join(' '),
-      });
-    } catch (e) {
-      if (e instanceof ServarrServiceAuthorityChangedError) throw e;
-      this.markShowScanFailed(sonarrSeries.tvdbId, server4k, resolvedTmdbId);
-      this.log('Failed to process Sonarr media', 'error', {
-        errorMessage: e.message,
-        title: sonarrSeries.title,
-      });
     }
+
+    const updatedMedia = await getRepository(Media).findOneBy({
+      tmdbId,
+      mediaType: MediaType.TV,
+    });
+    if (updatedMedia && this.isAnimeSeries(sonarrSeries)) {
+      await this.persistAnimeIdentifiers(updatedMedia, sonarrSeries);
+    }
+    await upsertMediaSearchMetadata(updatedMedia?.id, {
+      title: tvShow.name,
+      alternateTitle: tvShow.original_name,
+      releaseDate: tvShow.first_air_date,
+      genres: tvShow.genres.map((genre) => genre.name).join(', '),
+      runtime: tvShow.episode_run_time[0]
+        ? `${tvShow.episode_run_time[0]} minutes`
+        : undefined,
+      creator: tvShow.created_by.map((creator) => creator.name).join(', '),
+      studio: tvShow.production_companies
+        .map((company) => company.name)
+        .join(', '),
+      network: tvShow.networks.map((network) => network.name).join(', '),
+      format: 'Series',
+      provider: this.currentServer.name,
+      externalIds: [
+        tmdbId,
+        sonarrSeries.tvdbId,
+        sonarrSeries.imdbId,
+        ...(sonarrSeries.malIds ?? []).map((id) => `mal:${id}`),
+        ...(sonarrSeries.aniListIds ?? []).map((id) => `anilist:${id}`),
+      ]
+        .filter(Boolean)
+        .join(' '),
+    });
+
+    return tmdbId;
   }
 
   private async applyMetadataProvider(
-    tvShow: TmdbTvScanDetails | TmdbTvDetails
+    tvShow: TmdbTvScanDetails | TmdbTvDetails,
+    sonarrIdentifiesAnime = false
   ): Promise<TmdbTvScanDetails | TmdbTvDetails> {
-    const metadataProvider = tvShow.keywords.results.some(
-      (keyword) => keyword.id === ANIME_KEYWORD_ID
-    )
-      ? await getMetadataProvider('anime')
-      : await getMetadataProvider('tv');
+    const metadataProvider =
+      sonarrIdentifiesAnime ||
+      tvShow.keywords.results.some((keyword) => keyword.id === ANIME_KEYWORD_ID)
+        ? await getMetadataProvider('anime')
+        : await getMetadataProvider('tv');
 
     return isTheMovieDbProvider(metadataProvider)
       ? tvShow
       : metadataProvider.getTvShow({ tvId: tvShow.id });
   }
 
+  private isAnimeSeries(series: SonarrSeries): boolean {
+    return (
+      series.seriesType === 'anime' ||
+      (series.malIds?.length ?? 0) > 0 ||
+      (series.aniListIds?.length ?? 0) > 0
+    );
+  }
+
+  private async persistAnimeIdentifiers(
+    media: Media,
+    series: SonarrSeries
+  ): Promise<void> {
+    const candidates = [
+      ...(series.malIds ?? []).map((id) => ({
+        provider: MediaIdentifierProvider.MAL,
+        value: String(id),
+      })),
+      ...(series.aniListIds ?? []).map((id) => ({
+        provider: MediaIdentifierProvider.ANILIST,
+        value: String(id),
+      })),
+    ];
+    const repository = getRepository(MediaIdentifier);
+
+    for (const candidate of candidates) {
+      const matching = await repository.find({
+        where: candidate,
+        relations: { media: true },
+      });
+      if (matching.some((identifier) => identifier.media?.id !== media.id)) {
+        continue;
+      }
+      if (matching.some((identifier) => identifier.media?.id === media.id)) {
+        continue;
+      }
+      await repository.save(
+        new MediaIdentifier({
+          media,
+          provider: candidate.provider,
+          value: candidate.value,
+          canonical: false,
+        })
+      );
+    }
+  }
+
+  private serverMatchesQuality(server: SonarrSettings, is4k: boolean): boolean {
+    return (
+      this.resolutionAwareSingleServer ||
+      (this.enable4kShow && server.is4k) === is4k
+    );
+  }
+
+  private serversForQuality(is4k: boolean): SonarrSettings[] {
+    return this.servers.filter((server) =>
+      this.serverMatchesQuality(server, is4k)
+    );
+  }
+
   private async existsInAnyServer(
     tvdbId: number,
     is4k: boolean
   ): Promise<boolean> {
-    const servers = this.servers.filter(
-      (server) =>
-        server.syncEnabled && (this.enable4kShow && server.is4k) === is4k
+    const servers = this.serversForQuality(is4k).filter(
+      (server) => server.syncEnabled
     );
 
     for (const server of servers) {
@@ -352,9 +666,33 @@ class SonarrScanner
           url: SonarrAPI.buildUrl(server, '/api/v3'),
         });
         const series = await api.getLibrarySeriesByTvdbId(tvdbId);
+        const matchingSeries = series.find((show) => show.tvdbId === tvdbId);
 
-        if (series.some((show) => show.tvdbId === tvdbId)) {
-          return true;
+        if (matchingSeries) {
+          if (!this.resolutionAwareSingleServer) return true;
+          const matchingSeriesId = matchingSeries.id;
+          if (
+            typeof matchingSeriesId !== 'number' ||
+            !Number.isSafeInteger(matchingSeriesId) ||
+            matchingSeriesId <= 0
+          ) {
+            return true;
+          }
+
+          const episodes = await api.getEpisodes(matchingSeriesId, true);
+          const episodeFiles = episodes.filter(
+            (episode) => episode.hasFile && episode.episodeFileId > 0
+          );
+          if (episodeFiles.length === 0) return true;
+
+          if (
+            episodeFiles.some((episode) => {
+              const detected = is4kResolution(episode.fileResolution);
+              return detected === undefined || detected === is4k;
+            })
+          ) {
+            return true;
+          }
         }
       } catch (e) {
         this.log(
@@ -398,9 +736,8 @@ class SonarrScanner
     is4k: boolean
   ): Promise<boolean> {
     const statusField = is4k ? 'status4k' : 'status';
-    const servers = this.servers.filter(
-      (server) =>
-        server.syncEnabled && (this.enable4kShow && server.is4k) === is4k
+    const servers = this.serversForQuality(is4k).filter(
+      (server) => server.syncEnabled
     );
 
     return runMediaEntityMutation(mediaSnapshot, () =>
@@ -590,7 +927,7 @@ class SonarrScanner
         {
           requireExactAuthoritySet: true,
           includeCurrent: (server) =>
-            server.syncEnabled && (this.enable4kShow && server.is4k) === is4k,
+            server.syncEnabled && this.serverMatchesQuality(server, is4k),
         }
       )
     );

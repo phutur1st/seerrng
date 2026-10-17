@@ -36,8 +36,13 @@ const messages = defineMessages('components.Settings.SonarrModal', {
   validationRootFolderRequired: 'You must select a root folder',
   validationProfileRequired: 'You must select a quality profile',
   validationLanguageProfileRequired: 'You must select a language profile',
+  validationRequestButtonLabel:
+    'Request button labels can be up to 40 characters',
   toastSonarrTestSuccess: 'Sonarr connection established successfully!',
   toastSonarrTestFailure: 'Failed to connect to Sonarr.',
+  toastSonarrSaveFailure: 'Failed to save Sonarr settings.',
+  toastAnimeProfileMissing:
+    'The selected anime quality profile does not exist on this Sonarr server.',
   add: 'Add Server',
   defaultserver: 'Default Server',
   default4kserver: 'Default 4K Server',
@@ -51,7 +56,10 @@ const messages = defineMessages('components.Settings.SonarrModal', {
   languageprofile: 'Language Profile',
   rootfolder: 'Root Folder',
   seriesType: 'Series Type',
+  standardSeriesType: 'Standard',
+  dailySeriesType: 'Daily',
   animeSeriesType: 'Anime Series Type',
+  anime: 'Anime',
   animequalityprofile: 'Anime Quality Profile',
   animelanguageprofile: 'Anime Language Profile',
   animerootfolder: 'Anime Root Folder',
@@ -76,6 +84,12 @@ const messages = defineMessages('components.Settings.SonarrModal', {
   tagRequests: 'Tag Requests',
   tagRequestsInfo:
     "Automatically add an additional tag with the requester's user ID & display name",
+  requestButtonLabel: 'Request Button Label',
+  requestButtonLabelHelp:
+    'Give this Sonarr instance a short name so users can request it separately.',
+  requestButtonAnimeOnly: 'Anime Only',
+  requestButtonAnimeOnlyHelp:
+    'Only offer this instance for series identified as anime.',
   validationApplicationUrl: 'You must provide a valid URL',
   validationApplicationUrlTrailingSlash: 'URL must not end in a trailing slash',
   validationBaseUrlLeadingSlash: 'Base URL must have a leading slash',
@@ -85,8 +99,11 @@ const messages = defineMessages('components.Settings.SonarrModal', {
   notagoptions: 'No tags',
   selecttags: 'Select tags',
   monitorNewItems: 'Monitor New Seasons',
-  monitorNewItemsHelp:
-    'Whether Sonarr should monitor (All) or not (None) new seasons when a series is added.',
+  monitorNewItemsAll: 'All',
+  monitorNewItemsNone: 'None',
+  monitorNewItemsLatest: 'Latest Season Requested',
+  monitorNewItemsModeDescription:
+    'All monitors future seasons for every series; None disables them. Latest Season Requested enables them only when a request includes the latest regular season.',
   apiKeyHelp: 'Find it in Sonarr: Settings > General > Security > API Key',
   baseUrlHelp:
     'If you set a URL Base in Sonarr (Settings > General > Host), enter it here (e.g. /sonarr). Leave blank otherwise.',
@@ -142,6 +159,11 @@ const SonarrModal = ({ onClose, sonarr, onSave }: SonarrModalProps) => {
           intl.formatMessage(messages.validationLanguageProfileRequired)
         )
       : Yup.number(),
+    requestButtonLabel: Yup.string().max(
+      40,
+      intl.formatMessage(messages.validationRequestButtonLabel)
+    ),
+    requestButtonAnimeOnly: Yup.boolean(),
     externalUrl: Yup.string()
       .test(
         'valid-url',
@@ -260,17 +282,32 @@ const SonarrModal = ({ onClose, sonarr, onSave }: SonarrModalProps) => {
           syncEnabled: sonarr?.syncEnabled ?? false,
           enableSearch: !sonarr?.preventSearch,
           tagRequests: sonarr?.tagRequests ?? false,
+          requestButtonLabel: sonarr?.requestButtonLabel ?? '',
+          requestButtonAnimeOnly: sonarr?.requestButtonAnimeOnly ?? false,
           monitorNewItems: sonarr?.monitorNewItems ?? 'all',
         }}
         validationSchema={SonarrSettingsSchema}
         onSubmit={async (values) => {
           try {
-            const profileName = testResponse.profiles.find(
-              (profile) => profile.id === Number(values.activeProfileId)
-            )?.name;
-            const animeProfileName = testResponse.profiles.find(
-              (profile) => profile.id === Number(values.activeAnimeProfileId)
-            )?.name;
+            const selectedProfileId = Number(values.activeProfileId);
+            const selectedAnimeProfileId = values.activeAnimeProfileId
+              ? Number(values.activeAnimeProfileId)
+              : undefined;
+            const profileName =
+              testResponse.profiles.find(
+                (profile) => profile.id === selectedProfileId
+              )?.name ??
+              (sonarr?.activeProfileId === selectedProfileId
+                ? sonarr.activeProfileName
+                : undefined);
+            const animeProfileName =
+              testResponse.profiles.find(
+                (profile) => profile.id === selectedAnimeProfileId
+              )?.name ??
+              (selectedAnimeProfileId !== undefined &&
+              sonarr?.activeAnimeProfileId === selectedAnimeProfileId
+                ? sonarr.activeAnimeProfileName
+                : undefined);
 
             const submission = {
               name: values.name,
@@ -279,7 +316,7 @@ const SonarrModal = ({ onClose, sonarr, onSave }: SonarrModalProps) => {
               apiKey: values.apiKey,
               useSsl: values.ssl,
               baseUrl: values.baseUrl,
-              activeProfileId: Number(values.activeProfileId),
+              activeProfileId: selectedProfileId,
               activeLanguageProfileId: values.activeLanguageProfileId
                 ? Number(values.activeLanguageProfileId)
                 : undefined,
@@ -287,9 +324,7 @@ const SonarrModal = ({ onClose, sonarr, onSave }: SonarrModalProps) => {
               activeDirectory: values.rootFolder,
               seriesType: values.seriesType,
               animeSeriesType: values.animeSeriesType,
-              activeAnimeProfileId: values.activeAnimeProfileId
-                ? Number(values.activeAnimeProfileId)
-                : undefined,
+              activeAnimeProfileId: selectedAnimeProfileId,
               activeAnimeLanguageProfileId: values.activeAnimeLanguageProfileId
                 ? Number(values.activeAnimeLanguageProfileId)
                 : undefined,
@@ -304,6 +339,8 @@ const SonarrModal = ({ onClose, sonarr, onSave }: SonarrModalProps) => {
               syncEnabled: values.syncEnabled,
               preventSearch: !values.enableSearch,
               tagRequests: values.tagRequests,
+              requestButtonLabel: values.requestButtonLabel,
+              requestButtonAnimeOnly: values.requestButtonAnimeOnly,
               monitorNewItems: values.monitorNewItems,
             };
             if (!sonarr) {
@@ -316,8 +353,21 @@ const SonarrModal = ({ onClose, sonarr, onSave }: SonarrModalProps) => {
             }
 
             onSave();
-          } catch {
-            // set error here
+          } catch (error) {
+            const profileIsMissing =
+              axios.isAxiosError<{ message?: unknown }>(error) &&
+              error.response?.status === 422;
+            addToast(
+              intl.formatMessage(
+                profileIsMissing
+                  ? messages.toastAnimeProfileMissing
+                  : messages.toastSonarrSaveFailure
+              ),
+              {
+                appearance: 'error',
+                autoDismiss: true,
+              }
+            );
           }
         }}
       >
@@ -369,7 +419,12 @@ const SonarrModal = ({ onClose, sonarr, onSave }: SonarrModalProps) => {
                 isTesting ||
                 isSubmitting
               }
-              okDisabled={!isValidated || isSubmitting || isTesting || !isValid}
+              okDisabled={
+                (!sonarr && !isValidated) ||
+                isSubmitting ||
+                isTesting ||
+                !isValid
+              }
               onOk={() => handleSubmit()}
               title={
                 !sonarr
@@ -459,7 +514,7 @@ const SonarrModal = ({ onClose, sonarr, onSave }: SonarrModalProps) => {
                           setIsValidated(false);
                           setFieldValue('hostname', e.target.value);
                         }}
-                        className="rounded-r-only"
+                        className="rounded-e-only"
                       />
                     </div>
                     {errors.hostname &&
@@ -575,8 +630,12 @@ const SonarrModal = ({ onClose, sonarr, onSave }: SonarrModalProps) => {
                         name="seriesType"
                         disabled={!isValidated || isTesting}
                       >
-                        <option value="standard">Standard</option>
-                        <option value="daily">Daily</option>
+                        <option value="standard">
+                          {intl.formatMessage(messages.standardSeriesType)}
+                        </option>
+                        <option value="daily">
+                          {intl.formatMessage(messages.dailySeriesType)}
+                        </option>
                       </Field>
                     </div>
                   </div>
@@ -795,8 +854,12 @@ const SonarrModal = ({ onClose, sonarr, onSave }: SonarrModalProps) => {
                         name="animeSeriesType"
                         disabled={!isValidated || isTesting}
                       >
-                        <option value="anime">Anime</option>
-                        <option value="standard">Standard</option>
+                        <option value="anime">
+                          {intl.formatMessage(messages.anime)}
+                        </option>
+                        <option value="standard">
+                          {intl.formatMessage(messages.standardSeriesType)}
+                        </option>
                       </Field>
                     </div>
                   </div>
@@ -1027,13 +1090,22 @@ const SonarrModal = ({ onClose, sonarr, onSave }: SonarrModalProps) => {
                         name="monitorNewItems"
                         disabled={!isValidated || isTesting}
                       >
-                        <option value="all">All</option>
-                        <option value="none">None</option>
+                        <option value="all">
+                          {intl.formatMessage(messages.monitorNewItemsAll)}
+                        </option>
+                        <option value="none">
+                          {intl.formatMessage(messages.monitorNewItemsNone)}
+                        </option>
+                        <option value="latest">
+                          {intl.formatMessage(messages.monitorNewItemsLatest)}
+                        </option>
                       </Field>
                     </div>
                   </div>
                   <span className="settings-form-row-description">
-                    {intl.formatMessage(messages.monitorNewItemsHelp)}
+                    {intl.formatMessage(
+                      messages.monitorNewItemsModeDescription
+                    )}
                   </span>
                   {errors.monitorNewItems && touched.monitorNewItems && (
                     <div className="error">{errors.monitorNewItems}</div>
@@ -1105,6 +1177,42 @@ const SonarrModal = ({ onClose, sonarr, onSave }: SonarrModalProps) => {
                   </div>
                   <span className="settings-form-row-description">
                     {intl.formatMessage(messages.tagRequestsInfo)}
+                  </span>
+                </div>
+                <div className="form-row">
+                  <label htmlFor="requestButtonLabel" className="text-label">
+                    {intl.formatMessage(messages.requestButtonLabel)}
+                  </label>
+                  <div className="form-input-area">
+                    <div className="form-input-field">
+                      <Field
+                        id="requestButtonLabel"
+                        name="requestButtonLabel"
+                        type="text"
+                        maxLength={40}
+                      />
+                    </div>
+                  </div>
+                  <span className="settings-form-row-description">
+                    {intl.formatMessage(messages.requestButtonLabelHelp)}
+                  </span>
+                </div>
+                <div className="form-row">
+                  <label
+                    htmlFor="requestButtonAnimeOnly"
+                    className="checkbox-label"
+                  >
+                    {intl.formatMessage(messages.requestButtonAnimeOnly)}
+                  </label>
+                  <div className="form-input-area">
+                    <SettingsField
+                      type="checkbox"
+                      id="requestButtonAnimeOnly"
+                      name="requestButtonAnimeOnly"
+                    />
+                  </div>
+                  <span className="settings-form-row-description">
+                    {intl.formatMessage(messages.requestButtonAnimeOnlyHelp)}
                   </span>
                 </div>
               </div>

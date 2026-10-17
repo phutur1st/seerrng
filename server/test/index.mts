@@ -3,13 +3,12 @@
 import { Command, Option } from 'commander';
 import { createWriteStream, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { glob, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { availableParallelism, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { run } from 'node:test';
 import * as reporters from 'node:test/reporters';
 import { fileURLToPath } from 'node:url';
-// eslint-disable-next-line no-relative-import-paths/no-relative-import-paths -- Native test runner bootstrap cannot resolve application aliases.
-import { setIsolatedTestEnvironment } from '../../tools/validation-engine/runtime/test-environment.mjs';
+import { setIsolatedTestEnvironment } from './test-environment.mjs';
 
 const resolveImport = (specifier: string) =>
   fileURLToPath(import.meta.resolve(specifier));
@@ -23,6 +22,13 @@ const isVitestFile = async (file: string) => {
 };
 
 const program = new Command();
+const parseTestConcurrency = (value: string) => {
+  const workers = Number(value);
+  if (!Number.isSafeInteger(workers) || workers < 1 || workers > 256)
+    throw new Error('Test concurrency must be an integer between 1 and 256');
+  return workers;
+};
+
 program
   .name('test')
   .argument('[file...]', 'Test file(s) to run (default: all)')
@@ -48,6 +54,11 @@ program
     '--coverage, --experimental-test-coverage',
     'Enable code coverage collection'
   )
+  .option(
+    '--test-concurrency <workers>',
+    'Maximum number of isolated test files to run concurrently',
+    parseTestConcurrency
+  )
   // ignore additional options passed by vscode test runner
   .addOption(new Option('--test').hideHelp())
   .parse();
@@ -60,6 +71,7 @@ const opts = program.opts<{
   testReporter: string[];
   testReporterDestination: string[];
   experimentalTestCoverage: boolean;
+  testConcurrency?: number;
 }>();
 
 let files: string[];
@@ -83,6 +95,8 @@ if (positionals.length > 0) {
 
 // @ts-expect-error Node's test runner needs this explicit test environment.
 process.env.NODE_ENV = 'test';
+const testConcurrency =
+  opts.testConcurrency ?? Math.max(1, Math.min(8, availableParallelism()));
 const testConfigDirectory = mkdtempSync(
   join(tmpdir(), 'seerrng-node-test-config-')
 );
@@ -98,9 +112,10 @@ process.env.TS_NODE_FILES = 'true';
 
 const stream = run({
   files,
-  // Test files share the singleton application DataSource. Running files in
-  // parallel races schema resets and causes nested SQLite transactions.
-  concurrency: 1,
+  // Process isolation gives each file its own application DataSource and
+  // in-memory SQLite database while keeping concurrent work bounded.
+  concurrency: testConcurrency,
+  isolation: 'process',
   execArgv: [
     '--experimental-test-module-mocks',
     '-r',

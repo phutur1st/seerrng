@@ -35,7 +35,9 @@ import {
   type MusicCollectionFilters,
 } from '@app/utils/musicCollectionFilters';
 import { averageMusicRatings } from '@app/utils/musicRatings';
+import { isMusicServiceForQuality } from '@app/utils/musicService';
 import { getSafeHref } from '@app/utils/safeUrl';
+import { getViewerAvailabilityPresentation } from '@app/utils/viewerAvailabilityPresentation';
 import {
   CheckCircleIcon,
   EyeSlashIcon,
@@ -292,7 +294,7 @@ export default function CuratedCollectionDetails({
   );
   const startMusicRequests = (format: 'mp3' | 'flac') => {
     const service = musicServices?.find((candidate) =>
-      candidate.name.toLocaleLowerCase().includes(format)
+      isMusicServiceForQuality(candidate, format)
     );
     if (!service || requestableMusicIds.length === 0) return;
     setMusicRequestFormat(format);
@@ -300,7 +302,7 @@ export default function CuratedCollectionDetails({
   const musicRequestOptions = canRequestMusic
     ? (['mp3', 'flac'] as const).map((format) => {
         const service = musicServices?.find((candidate) =>
-          candidate.name.toLocaleLowerCase().includes(format)
+          isMusicServiceForQuality(candidate, format)
         );
         return {
           id: format,
@@ -388,6 +390,24 @@ export default function CuratedCollectionDetails({
     kind === 'music'
       ? visibleParts.filter((part) => shownSelection.includes(part.id))
       : parts;
+  const partQualityPresentation = (
+    part: CuratedCollectionMember,
+    high: boolean
+  ) =>
+    getViewerAvailabilityPresentation(
+      part.mediaInfo?.[high ? 'status4k' : 'status'],
+      settings.currentSettings.otherUsersAvailability,
+      kind === 'tv'
+        ? part.mediaInfo?.viewerRequestCoverage?.[high ? 'fourK' : 'standard']
+        : undefined
+    );
+  const selectedPlaybackIsShared =
+    kind === 'tv' &&
+    visibleParts.some(
+      (part) =>
+        shownSelection.includes(part.id) &&
+        partQualityPresentation(part, quality === 'high').hidePlayback
+    );
   const memberRatings = (part: CuratedCollectionMember) =>
     getCollectionMemberRatings(
       {
@@ -543,30 +563,38 @@ export default function CuratedCollectionDetails({
                     {
                       label: kind === 'music' ? 'MP3' : 'HD',
                       value: 'standard',
-                      disabled: !qualityParts.some((part) =>
-                        memberHasQuality(part, kind, false)
+                      disabled: !qualityParts.some(
+                        (part) =>
+                          memberHasQuality(part, kind, false) &&
+                          !partQualityPresentation(part, false).hidden
                       ),
                     },
                     {
                       label: kind === 'music' ? 'FLAC' : '4K',
                       value: 'high',
-                      disabled: !qualityParts.some((part) =>
-                        memberHasQuality(part, kind, true)
+                      disabled: !qualityParts.some(
+                        (part) =>
+                          memberHasQuality(part, kind, true) &&
+                          !partQualityPresentation(part, true).hidden
                       ),
                     },
                   ]}
                 />
-                <MediaServerPlayButton
-                  collectionMediaIds={playbackIds}
-                  defaultIs4k={quality === 'high'}
-                  disabled={!allSelectedPlaybackAvailable}
-                  disabledReason={playbackUnavailableReason}
-                />
-                <CollectionPlayOnDeviceButton
-                  mediaIds={playbackIds}
-                  is4k={quality === 'high'}
-                  disabledReason={playbackUnavailableReason}
-                />
+                {!selectedPlaybackIsShared && (
+                  <>
+                    <MediaServerPlayButton
+                      collectionMediaIds={playbackIds}
+                      defaultIs4k={quality === 'high'}
+                      disabled={!allSelectedPlaybackAvailable}
+                      disabledReason={playbackUnavailableReason}
+                    />
+                    <CollectionPlayOnDeviceButton
+                      mediaIds={playbackIds}
+                      is4k={quality === 'high'}
+                      disabledReason={playbackUnavailableReason}
+                    />
+                  </>
+                )}
               </div>
               <div className="collection-rating-links">
                 {kind === 'tv' ? (

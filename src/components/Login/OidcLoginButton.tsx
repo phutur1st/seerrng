@@ -1,8 +1,10 @@
 import ButtonWithLoader from '@app/components/Common/ButtonWithLoader';
+import { buildLoginPath, getSafeReturnPath } from '@app/utils/loginReturn';
 import {
-  clearOidcProviderSlug,
+  clearOidcReturnState,
   getOidcErrorMessage,
   getOidcProviderSlug,
+  getOidcReturnPath,
   initiateOidcLogin,
   processOidcCallback,
 } from '@app/utils/oidc';
@@ -11,6 +13,9 @@ import type { PublicOidcProvider } from '@server/lib/settings';
 import { useRouter } from 'next/router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
+
+const getQueryValue = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
 
 type OidcLoginButtonProps = {
   provider: PublicOidcProvider;
@@ -33,7 +38,10 @@ export default function OidcLoginButton({
     try {
       await initiateOidcLogin(
         provider.slug,
-        new URL(window.location.pathname, window.location.origin).toString()
+        new URL(window.location.pathname, window.location.origin).toString(),
+        getSafeReturnPath(
+          `${getQueryValue(query.returnTo) ?? ''}${window.location.hash}`
+        ) ?? undefined
       );
     } catch (e) {
       setLoading(false);
@@ -41,7 +49,7 @@ export default function OidcLoginButton({
         ?.response?.data?.error;
       onError?.(getOidcErrorMessage(errorCode, provider.name, intl));
     }
-  }, [provider, intl, onError]);
+  }, [provider, intl, onError, query.returnTo]);
 
   useEffect(
     () => {
@@ -55,7 +63,8 @@ export default function OidcLoginButton({
       if (isCallback && callbackProvider === provider.slug) {
         let active = true;
         callbackProviderRef.current = callbackProvider;
-        clearOidcProviderSlug();
+        const redirectTo = getOidcReturnPath();
+        clearOidcReturnState();
         setLoading(true);
 
         void processOidcCallback(callbackProvider)
@@ -65,9 +74,11 @@ export default function OidcLoginButton({
             }
             callbackProviderRef.current = null;
             if (result.type === 'success') {
-              await router.push('/');
+              await router.replace(redirectTo);
             } else {
-              await router.replace('/login').catch(() => undefined);
+              await router
+                .replace(buildLoginPath(redirectTo))
+                .catch(() => undefined);
               if (active) {
                 setLoading(false);
                 onError?.(
@@ -99,7 +110,7 @@ export default function OidcLoginButton({
       onClick={() => void redirectToLogin()}
       className="min-w-0 flex-grow"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {/* oxlint-disable-next-line nextjs/no-img-element */}
       <img
         src={provider.logo || '/images/openid.svg'}
         alt={provider.name}

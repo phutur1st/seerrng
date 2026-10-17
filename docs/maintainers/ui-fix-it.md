@@ -19,9 +19,10 @@ Use [UI Style Standard](ui-style-standard.md) as the target contract. This file 
 3. Trace headings and titles through their typography roles and active translations/generated helpers. Detect Title Case and punctuation drift by role. Do not create checks keyed to exact example titles, badges, message strings or media names.
 4. Search Tailwind use in JSX and styles, including `@apply`, utility aliases, generated `--tw-*` machinery and nested state/media rules. A zero literal-utility count in one component is not a completed dependency audit or native-CSS conversion.
 5. Map each observed presentation property to its existing shared owner. Include typography, dimensions, padding/gap/margins, alignment, ratio/crop, border/surface, icon geometry, state effects, transitions, scrollbars and breakpoints.
-6. Distinguish external/native classes and meaningful data geometry from presentation utilities. Country flags, provider branding, portrait/mosaic arrangements, runtime pointer bounds and native identifiers are not automatically removable because their names look unfamiliar.
-7. Follow source/generated reference relationships and active palette/mode variants. Preserve opt-in reference pages; do not audit a generated preview as if it were the only source or silently adopt its experimental style.
-8. Include loading placeholders in the asset inventory. Trace both whole-section loading and per-item lazy/partial metadata branches to the card family they replace. Compare them with established loaded examples at the family's breakpoints; do not assume a shared placeholder component selects the correct variant in every caller.
+6. For avatar consumers, inspect both loaded and fallback states at the requested size. Compare the rendered fallback box with its caller-owned dimensions; SVG width/height attributes alone do not prove that padding or other CSS kept the glyph contained.
+7. Distinguish external/native classes and meaningful data geometry from presentation utilities. Country flags, provider branding, portrait/mosaic arrangements, runtime pointer bounds and native identifiers are not automatically removable because their names look unfamiliar.
+8. Follow source/generated reference relationships and active palette/mode variants. Preserve opt-in reference pages; do not audit a generated preview as if it were the only source or silently adopt its experimental style.
+9. Include loading placeholders in the asset inventory. Trace both whole-section loading and per-item lazy/partial metadata branches to the card family they replace. Compare them with established loaded examples at the family's breakpoints; do not assume a shared placeholder component selects the correct variant in every caller.
 
 ## 3. Find ownership and layout regressions
 
@@ -36,7 +37,7 @@ Use [UI Style Standard](ui-style-standard.md) as the target contract. This file 
 5. Check typography together with its layout owner. Table headings/values must share the table family while independent table-layout variables prevent changes to one table type from breaking another. Compact cards remain fixed-size, not item-dependent.
 6. Check shelf headings and actions are actual shared-row children with baseline alignment. Check global poster dimensions/ratio and semantic region placement in all in-scope media renderers; distinguish compact credit/detail posters before migrating.
 7. Check fixed headers/frames against rows-only scrolling, shared tracks, gutters and dividers. Check selection glyph visible diameter, not just equal SVG boxes. Preserve separate availability, watched and selected semantics. When reusing a selector for another action, retain its existing submission, quota and destination rules; verify action-specific eligibility independently of library availability, exact payload identity, clear/all/disclosure behavior and metadata failure/retry without losing selections. When replacing non-native controls with native buttons, reset browser defaults through the existing CSS owner and check focus, geometry and one activation per click/key.
-8. Check overlays and dropdowns for duplicate surfaces, backdrop/animation owners, clipping and reduced-motion behavior. A transition migration must preserve interaction, not merely remove utility tokens.
+8. Check overlays and dropdowns for duplicate surfaces, backdrop/animation owners, clipping and reduced-motion behavior. Positioned poster rating popovers must stay within the viewport and preserve provider order when their values wrap at narrow widths; brief hover must not start delayed video-rating requests. A transition migration must preserve interaction, not merely remove utility tokens.
 9. Check each message's actual source and meaning, content-fit geometry, severity, title/body ownership, real recovery callback and cached-content behavior. Exercise long feedback in content-sized flex/grid regions: it must wrap below its control without determining sidebar width, crushing adjacent content or creating duplicate gap/margin ownership. A blank successful list is not automatically an error.
 10. Check one aggregate page status covers actual fetch/search/panel/mutation activity and clears idle/unmounted contributions. Do not add inner spinners or move searching back to the global search input.
 11. Check decorative masked frames separately from body surfaces, mode-independent artwork readability and actual control geometry through focus/selection. Native-select operating-system limits must be reported rather than disguised as a verified CSS theme.
@@ -86,25 +87,24 @@ natural wrapping for longer or translated copy rather than clipping it.
    standard minimum gaps; they must not change control geometry.
    For saved disclosure controls, test pin-to-expand and unpin-to-collapse separately from manual heading toggles. Capture previous/next state transitions before queueing React state updates; do not compare an advancing mutable ref inside a deferred updater. Cover delayed saved-state arrival, independent sections and optimistic rollback with isolated fixtures. Keep a staged rollout within the scope the maintainer authorized and complete its applicable automated checks; do not wait for separate human sign-off when the maintainer directs rollout.
 
-## 6. Run the shared gate efficiently
+## 6. Run the shared checks efficiently
 
-Before the expensive cumulative run, establish a complete pinned repository tree
-and the prerequisites required by its current test inventory. A runtime app
-volume may omit workflow/release/dotfile fixtures even though the app runs.
-Check the snapshot manifest against those inputs; do not reconstruct missing
-files from a different release or guessed ancestry. Linux platform selection is
-not proof that Bash/Git/Python, CLI tools or GNU filesystem options are installed.
-Use a suitable disposable toolchain and record its versions. Plan discovery
-does not certify these external prerequisites. Missing inputs block finalization,
-not permission to skip suites, change CI or install tools into the live preview.
+Use focused tests while repairing a change, then run the native checks that cover
+the final integrated source. The package scripts and main-branch GitHub workflow
+are the authoritative check lists. Keep mutable config and database fixtures in
+disposable scratch storage, preserve provider/network guards, and record actual
+passes, failures, skips, and platform exclusions.
 
-1. Read `tools/validation-engine/README.md` and follow the applicable mode exactly. Regenerate and review the selected source's test inventory, expected cases, ownership, dependency closure, source/dependency/runtime hashes and invocation packets. During repairs, run affected focused checks and label preview evidence as iterative. Run the engine on the exact final candidate and the integrated tree after conflicts. Keep mutable config/database fixtures in disposable scratch storage; preserve provider/network guards and global-state barriers. Queue failures for reviewed diagnosis and repair, then rerun failed checks and their affected dependency closure. A successful complete applicable engine mode owns every required stage and suite in that candidate's verified plan and live inventory; do not repeat unchanged stages. `--tests-only` is partial and cannot certify finalization. Retain discovery and executed results separately, including counts/skips/platform exclusions; Linux is required for full POSIX tooling parity.
-2. Run focused source/AST checks, effective CSS checks and behavioral tests for changed owners and affected consumers. Reuse existing focused tests instead of building a second verifier architecture or performing an unrelated whole-site audit.
-3. Assertions target roles, relationships and actual behavior. Parse CSS correctly across grouped/nested rules; do not use stale utility-name assertions, naive first-brace extraction, or exact text examples as proof of styling.
-4. Run proportional lint/type and focused checks for changed source types/style owners during iteration. Use the complete applicable engine gate for finalization rather than adding a second compile or browser sequence. Check service health only after authorized publication. Compile/type/HTTP success does not establish visual inspection evidence or a successful provider round trip.
-5. Diagnose a failing check. Repair actual behavior or update a genuinely superseded assertion with equivalent coverage and acceptance evidence. Never weaken or delete a live behavior check merely to obtain a passing count.
-6. Avoid repeated full builds, rerunning unchanged suites, broad source copies and serial work that can safely be batched. Keep one authoritative readback, one owned edit batch, focused checks and a final cumulative verification. Communicate shared-file barriers and completion promptly.
-7. If scope, safety, source identity or gate coverage is unresolved, fail closed: do not finalize or claim completion. Record unrelated baseline failures. If the user authorized broader remediation or completion of the required gate, repair failures that block that scope without asking again; otherwise keep unrelated backend repairs out of the change. Deferral never converts a failed required gate into a pass.
+1. Run affected Vitest or native TypeScript tests, then `pnpm test`,
+   `pnpm test:node`, and `pnpm test:tooling` when the change crosses those areas.
+2. Run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, and `pnpm build` for
+   the integrated source. Run `pnpm test:playwright` and Cypress for browser
+   changes; use the hosted CI browser jobs for the full suite.
+3. Review effective CSS and rendered behavior for interface changes. Test live
+   providers only when the task calls for it, and distinguish mocks from actual
+   service round trips.
+4. Diagnose failures and repair the cause. Do not remove an existing behavior
+   check just to get a passing count. Keep unrelated baseline failures explicit.
 
 ## 7. Record, report and evolve
 

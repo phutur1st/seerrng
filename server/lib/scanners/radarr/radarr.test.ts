@@ -8,6 +8,7 @@ import {
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
 import MediaRequest from '@server/entity/MediaRequest';
+import MediaServiceStatus from '@server/entity/MediaServiceStatus';
 import { User } from '@server/entity/User';
 import requestDispatchManager from '@server/lib/requestDispatch';
 import { radarrScanner } from '@server/lib/scanners/radarr';
@@ -94,6 +95,53 @@ describe('Radarr Scanner', () => {
   beforeEach(() => {
     getMoviesImpl = async () => [];
     getLibraryMoviesByTmdbIdImpl = async () => [];
+  });
+
+  it('detects 4K files in a single mixed-resolution Radarr library', async () => {
+    const mediaRepository = getRepository(Media);
+    configureRadarr([{ syncEnabled: true }]);
+    const movieFile = (id: number, resolution: string) => ({
+      id,
+      movieId: id,
+      size: 1,
+      dateAdded: '2024-01-01T00:00:00Z',
+      qualityCutoffNotMet: false,
+      mediaInfo: {
+        id,
+        audioBitrate: 0,
+        audioChannels: 2,
+        audioStreamCount: 1,
+        videoBitDepth: 8,
+        videoBitrate: 0,
+        videoFps: 24,
+        resolution,
+      },
+    });
+    getMoviesImpl = async () => [
+      fakeRadarrMovie({
+        id: 890101,
+        tmdbId: 890101,
+        hasFile: true,
+        movieFile: movieFile(890101, '1920x1080'),
+      }),
+      fakeRadarrMovie({
+        id: 890102,
+        tmdbId: 890102,
+        hasFile: true,
+        movieFile: movieFile(890102, '3840x2160'),
+      }),
+    ];
+
+    await radarrScanner.run();
+
+    const hdMovie = await mediaRepository.findOneByOrFail({ tmdbId: 890101 });
+    const fourKMovie = await mediaRepository.findOneByOrFail({
+      tmdbId: 890102,
+    });
+    assert.strictEqual(hdMovie.status, MediaStatus.AVAILABLE);
+    assert.strictEqual(hdMovie.status4k, MediaStatus.UNKNOWN);
+    assert.strictEqual(fourKMovie.status, MediaStatus.UNKNOWN);
+    assert.strictEqual(fourKMovie.status4k, MediaStatus.AVAILABLE);
   });
 
   describe('unmonitored movie handling', () => {
@@ -269,6 +317,35 @@ describe('Radarr Scanner', () => {
         where: { tmdbId: 551 },
       });
       assert.strictEqual(updated.status, MediaStatus.AVAILABLE);
+    });
+
+    it('tracks availability for the exact Radarr instance and quality', async () => {
+      const mediaRepository = getRepository(Media);
+      const media = await mediaRepository.save(
+        new Media({
+          tmdbId: 555,
+          mediaType: MediaType.MOVIE,
+          status: MediaStatus.UNKNOWN,
+        })
+      );
+      configureRadarr([
+        { id: 42, name: 'Radarr Anime', isDefault: false, is4k: false },
+      ]);
+      getMoviesImpl = async () => [
+        fakeRadarrMovie({ tmdbId: 555, hasFile: true }),
+      ];
+
+      await runWithMockTimers(() => radarrScanner.run());
+
+      const serviceStatus = await getRepository(
+        MediaServiceStatus
+      ).findOneByOrFail({
+        mediaId: media.id,
+        serviceType: 'radarr',
+        serverId: 42,
+        format: 'standard',
+      });
+      assert.strictEqual(serviceStatus.status, MediaStatus.AVAILABLE);
     });
 
     it('sets PROCESSING when movie is monitored but has no file', async () => {

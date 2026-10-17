@@ -9,7 +9,8 @@ export type RequestServiceType =
   | 'mylar'
   | 'kapowarr'
   | 'backissue'
-  | 'lazylibrarian';
+  | 'lazylibrarian'
+  | 'whisparr';
 export type RequestTargetFormat =
   | 'standard'
   | '4k'
@@ -18,7 +19,8 @@ export type RequestTargetFormat =
   | 'audiobook'
   | 'comic'
   | 'magazine'
-  | 'sports';
+  | 'sports'
+  | 'adult';
 
 export interface RequestDestination {
   serviceType: RequestServiceType;
@@ -42,6 +44,7 @@ export interface StoredRequestDestination {
   languageProfileId?: number | null;
   rootFolder?: string | null;
   bookFormat?: 'ebook' | 'audiobook' | 'both' | null;
+  quotaException?: boolean;
   serviceTargets?: RequestDestination[] | null;
   requestedBy?: { id: number } | null;
 }
@@ -113,6 +116,9 @@ const getLegacyRequestDestinations = (
         format: request.is4k ? '4k' : 'standard',
       },
     ];
+  }
+  if (request.type === 'adult') {
+    return [{ ...base, serviceType: 'whisparr', format: 'adult' }];
   }
   if (request.type === 'sports') {
     return [{ ...base, serviceType: 'sportarr', format: 'sports' }];

@@ -11,7 +11,7 @@ import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
 import { Transition } from '@headlessui/react';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/solid';
-import { MediaServerType } from '@server/constants/server';
+import { MediaServerType, ServerType } from '@server/constants/server';
 import { useRouter } from 'next/router';
 import type { ReactNode } from 'react';
 import {
@@ -31,6 +31,7 @@ const messages = defineMessages('components.Settings', {
   menuPlexSettings: 'Plex',
   menuJellyfinSettings: '{mediaServerName}',
   menuServices: 'Services',
+  menuProwlarr: 'Prowlarr',
   menuLibraryMigration: 'Library Migration',
   menuNetwork: 'Network',
   menuNotifications: 'Notifications',
@@ -65,9 +66,22 @@ type SettingsSearchDestination = {
 
 const settingsSearchTargets = [
   {
+    route: '/settings/prowlarr',
+    targetId: 'prowlarr-settings-title',
+    terms: [
+      'prowlarr',
+      'indexer search',
+      'indexer settings',
+      'nzb hydra2',
+      'nzbhydra2',
+    ],
+    adminOnly: true,
+  },
+  {
     route: '/settings/main',
     targetId: 'apiKey',
     terms: ['api', 'api key', 'apikey', 'application api key'],
+    adminOnly: false,
   },
 ] as const;
 
@@ -85,7 +99,7 @@ export const useSettingsPageAction = (action: SettingsPageAction | null) => {
 };
 
 const editableSettingsRoute = (path: string) =>
-  !/^\/settings\/(?:services|library-migration|logs|jobs|about|discovery)(?:\/|$)/.test(
+  !/^\/settings\/(?:services|prowlarr|library-migration|logs|jobs|about|discovery)(?:\/|$)/.test(
     path
   );
 
@@ -159,6 +173,12 @@ const SettingsLayout = ({ children }: SettingsLayoutProps) => {
       text: intl.formatMessage(messages.menuNetwork),
       route: '/settings/network',
       regex: /^\/settings\/network/,
+    },
+    {
+      text: intl.formatMessage(messages.menuProwlarr),
+      route: '/settings/prowlarr',
+      regex: /^\/settings\/prowlarr/,
+      requiredPermission: Permission.ADMIN,
     },
     {
       text: intl.formatMessage(messages.menuMetadataProviders),
@@ -320,51 +340,41 @@ const SettingsLayout = ({ children }: SettingsLayoutProps) => {
     focusTarget.focus({ preventScroll: true });
   };
 
-  const handleSettingsSearch = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const query = keywordSearch.trim();
-    if (!query) return;
-
-    const normalizedQuery = query.toLocaleLowerCase();
-    const matchingLabel = Array.from(
-      contentRef.current?.querySelectorAll<HTMLElement>(
-        '[data-settings-search], label, legend, h2, h3, h4'
-      ) ?? []
-    ).find((element) =>
-      element.textContent?.toLocaleLowerCase().includes(normalizedQuery)
+  const focusSettingsSearchResult = (element: HTMLElement) => {
+    const categoryPanel = element.closest<HTMLElement>(
+      '[data-settings-category]'
     );
+    const category = categoryPanel?.dataset.settingsCategory;
 
-    if (matchingLabel) {
-      const control =
-        matchingLabel instanceof HTMLLabelElement && matchingLabel.htmlFor
-          ? document.getElementById(matchingLabel.htmlFor)
-          : matchingLabel;
-      if (control instanceof HTMLElement) {
-        focusSetting(control);
-        return;
-      }
+    if (categoryPanel?.hidden && category) {
+      const query = { ...router.query };
+      delete query.settingsSearchTarget;
+      query.serviceCategory = category;
+      void router
+        .replace(
+          {
+            pathname: router.pathname,
+            query,
+          },
+          undefined,
+          { shallow: true, scroll: false }
+        )
+        .then(() => {
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => {
+              if (element.isConnected) focusSetting(element);
+            });
+          });
+        });
+      return;
     }
 
-    const indexedTarget = settingsSearchTargets.find((target) =>
-      target.terms.some(
-        (term) =>
-          term.includes(normalizedQuery) || normalizedQuery.includes(term)
-      )
-    );
-    const matchingRoute = settingsRoutes.find((route) =>
-      route.text.toLocaleLowerCase().includes(normalizedQuery)
-    );
-    const destination = indexedTarget
-      ? {
-          route: indexedTarget.route,
-          query,
-          targetId: indexedTarget.targetId,
-        }
-      : matchingRoute
-        ? { route: matchingRoute.route, query }
-        : undefined;
+    focusSetting(element);
+  };
 
-    if (!destination) return;
+  const navigateToSettingsSearchDestination = (
+    destination: SettingsSearchDestination
+  ) => {
     if (dirtyRef.current && destination.route !== router.pathname) {
       setPendingSettingsSearch(destination);
       setShowUnsavedChanges(true);
@@ -379,6 +389,73 @@ const SettingsLayout = ({ children }: SettingsLayoutProps) => {
           ? { settingsSearchTarget: destination.targetId }
           : {}),
       },
+    });
+  };
+
+  const handleSettingsSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = keywordSearch.trim();
+    if (!query) return;
+
+    const normalizedQuery = query.toLocaleLowerCase();
+    const indexedTarget = settingsSearchTargets.find(
+      (target) =>
+        (!target.adminOnly || canAdminister) &&
+        target.terms.some(
+          (term) =>
+            term.includes(normalizedQuery) || normalizedQuery.includes(term)
+        )
+    );
+
+    if (
+      indexedTarget?.targetId === 'prowlarr-settings-title' &&
+      indexedTarget.route !== router.pathname
+    ) {
+      navigateToSettingsSearchDestination({
+        route: indexedTarget.route,
+        query,
+        targetId: indexedTarget.targetId,
+      });
+      return;
+    }
+
+    const matchingLabel = Array.from(
+      contentRef.current?.querySelectorAll<HTMLElement>(
+        '[data-settings-search], label, legend, h2, h3, h4'
+      ) ?? []
+    ).find((element) =>
+      element.textContent?.toLocaleLowerCase().includes(normalizedQuery)
+    );
+
+    if (matchingLabel) {
+      const control =
+        matchingLabel instanceof HTMLLabelElement && matchingLabel.htmlFor
+          ? document.getElementById(matchingLabel.htmlFor)
+          : matchingLabel;
+      if (control instanceof HTMLElement) {
+        focusSettingsSearchResult(control);
+        return;
+      }
+    }
+
+    if (indexedTarget) {
+      navigateToSettingsSearchDestination({
+        route: indexedTarget.route,
+        query,
+        targetId: indexedTarget.targetId,
+      });
+      return;
+    }
+
+    const matchingRoute = settingsRoutes.find(
+      (route) =>
+        (!route.requiredPermission || canAdminister) &&
+        route.text.toLocaleLowerCase().includes(normalizedQuery)
+    );
+    if (!matchingRoute) return;
+    navigateToSettingsSearchDestination({
+      route: matchingRoute.route,
+      query,
     });
   };
 
@@ -504,9 +581,9 @@ const SettingsLayout = ({ children }: SettingsLayoutProps) => {
     return intl.formatMessage(messages.menuJellyfinSettings, {
       mediaServerName:
         settings.currentSettings.mediaServerType === MediaServerType.JELLYFIN
-          ? 'Jellyfin'
+          ? ServerType.JELLYFIN
           : settings.currentSettings.mediaServerType === MediaServerType.EMBY
-            ? 'Emby'
+            ? ServerType.EMBY
             : undefined,
     });
   }

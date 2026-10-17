@@ -63,7 +63,7 @@ const inspectUses = (value, location, seen = new WeakSet()) => {
     if (uses.startsWith('actions/checkout@')) {
       check(
         value.with?.clean !== false,
-        `${location}: checkout must not retain a dirty self-hosted workspace`
+        `${location}: checkout must not retain a dirty workspace`
       );
       const credentialsPersist = value.with?.['persist-credentials'] !== false;
       const isDedicatedSshPushCheckout =
@@ -252,7 +252,7 @@ if (!preview) {
 } else {
   check(
     preview.on?.workflow_dispatch === undefined,
-    'preview.yml: arbitrary workflow-dispatch refs must not reach self-hosted preview builders'
+    'preview.yml: arbitrary workflow-dispatch refs must not publish previews'
   );
   const validationJob = preview.jobs?.['validate-main-tag'];
   const publishJob = preview.jobs?.publish;
@@ -267,7 +267,7 @@ if (!preview) {
   check(
     publishJob?.needs === 'validate-main-tag' ||
       publishJob?.needs?.includes?.('validate-main-tag'),
-    'preview.yml: self-hosted preview publishing must depend on tag validation'
+    'preview.yml: preview publishing must depend on tag validation'
   );
   const validationScript = validationJob?.steps?.find(
     (step) => step.name === 'Ensure bounded preview tag is on main'
@@ -288,14 +288,54 @@ if (!createTag) {
   check(
     JSON.stringify(createTag.permissions) ===
       JSON.stringify({ contents: 'read' }),
-    'create-tag.yml: the SSH push job must not also receive a write-capable GitHub token'
+    'create-tag.yml: release preparation must retain read-only repository permissions'
   );
   const versionStep = createTag.steps?.find(
     (step) => step.name === 'Bump package.json'
   );
   check(
     String(versionStep?.run ?? '').includes('--ignore-scripts'),
-    'create-tag.yml: npm version must not execute repository lifecycle scripts while the SSH key is active'
+    'create-tag.yml: npm version must not execute repository lifecycle scripts while preparing release metadata'
+  );
+
+  const publishTag =
+    workflows.get('create-tag.yml')?.workflow?.jobs?.['publish-tag'];
+  check(
+    Boolean(publishTag) &&
+      JSON.stringify(publishTag.permissions) ===
+        JSON.stringify({ contents: 'write' }) &&
+      publishTag.needs === 'create-tag' &&
+      String(publishTag.if ?? '').includes("github.ref == 'refs/heads/main'"),
+    'create-tag.yml: repository writes must use an isolated main-only publisher job'
+  );
+  const publishCheckout = publishTag?.steps?.find(
+    (step) => step.name === 'Checkout'
+  );
+  check(
+    publishCheckout?.with?.['persist-credentials'] === false,
+    'create-tag.yml: publisher checkout must not persist its write-capable credential'
+  );
+  const publishStep = publishTag?.steps?.find(
+    (step) => step.name === 'Push release commit and tag'
+  );
+  check(
+    publishStep?.env?.GH_TOKEN === '${{ github.token }}' &&
+      String(publishStep?.run ?? '').includes('GIT_ASKPASS="$askpass"') &&
+      String(publishStep?.run ?? '').includes('git push --atomic origin'),
+    'create-tag.yml: the isolated publisher must push atomically with its short-lived token'
+  );
+
+  const dispatchRelease =
+    workflows.get('create-tag.yml')?.workflow?.jobs?.['dispatch-release'];
+  check(
+    Boolean(dispatchRelease) &&
+      JSON.stringify(dispatchRelease.permissions) ===
+        JSON.stringify({ actions: 'write', contents: 'read' }) &&
+      dispatchRelease.needs === 'publish-tag' &&
+      String(dispatchRelease.if ?? '').includes(
+        "github.ref == 'refs/heads/main'"
+      ),
+    'create-tag.yml: release dispatch must use an isolated main-only actions writer'
   );
 }
 

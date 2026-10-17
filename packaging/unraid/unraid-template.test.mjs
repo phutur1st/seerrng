@@ -9,7 +9,7 @@ const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const templatePath = path.join(repositoryRoot, 'packaging/unraid/seerrng.xml');
 const profilePath = path.join(repositoryRoot, 'ca_profile.xml');
 const templateUrl =
-  'https://raw.githubusercontent.com/snapetech/seerrng/main/packaging/unraid/seerrng.xml';
+  'https://raw.githubusercontent.com/snapetech-org/seerrng/main/packaging/unraid/seerrng.xml';
 
 const readXml = async (filePath) =>
   parseStringPromise(await fs.readFile(filePath, 'utf8'), {
@@ -20,13 +20,13 @@ const readXml = async (filePath) =>
 const asArray = (value) =>
   value === undefined ? [] : Array.isArray(value) ? value : [value];
 
-test('Unraid template exposes the stable image and canonical raw URL', async () => {
+test('Unraid template exposes the validated main image and canonical raw URL', async () => {
   const document = await readXml(templatePath);
   const container = document.Container;
 
   assert.equal(container.$.version, '2');
   assert.equal(container.Name, 'SeerrNG');
-  assert.equal(container.Repository, 'ghcr.io/snapetech/seerrng:latest');
+  assert.equal(container.Repository, 'ghcr.io/snapetech-org/seerrng:main');
   assert.match(container.Description, /installs SeerrNG itself/u);
   assert.match(
     container.Description,
@@ -41,11 +41,11 @@ test('Unraid template exposes the stable image and canonical raw URL', async () 
   assert.match(container.Icon, /^https:\/\/raw\.githubusercontent\.com\//u);
   assert.match(
     container.Support,
-    /^https:\/\/github\.com\/snapetech\/seerrng\/issues$/u
+    /^https:\/\/github\.com\/snapetech-org\/seerrng\/issues$/u
   );
   assert.match(
     container.Project,
-    /^https:\/\/github\.com\/snapetech\/seerrng$/u
+    /^https:\/\/github\.com\/snapetech-org\/seerrng$/u
   );
 
   const configs = asArray(container.Config);
@@ -80,8 +80,11 @@ test('Unraid repository profile has the required public metadata', async () => {
 
   assert.ok(profile.Profile.length > 20);
   assert.match(profile.Icon, /^https:\/\/raw\.githubusercontent\.com\//u);
-  assert.equal(profile.WebPage, 'https://github.com/snapetech/seerrng');
-  assert.equal(profile.Forum, 'https://github.com/snapetech/seerrng/issues');
+  assert.equal(profile.WebPage, 'https://github.com/snapetech-org/seerrng');
+  assert.equal(
+    profile.Forum,
+    'https://github.com/snapetech-org/seerrng/issues'
+  );
   assert.equal(profile.Discord, 'https://discord.gg/5PyXBfvS6T');
   assert.equal(profile.DonateLink, 'https://ko-fi.com/snapetech');
   assert.ok(profile.DonateText);
@@ -108,20 +111,20 @@ test('Unraid Compose project uses the SeerrNG fork images and companion profiles
   );
   const services = compose.services;
   assert.equal(compose.name, 'seerrng');
-  assert.equal(services.seerrng.image, 'ghcr.io/snapetech/seerrng:latest');
+  assert.equal(services.seerrng.image, 'ghcr.io/snapetech-org/seerrng:main');
   assert.equal(services.seerrng.init, true);
   assert.equal(
     services['bookshelf-ebooks'].image,
-    'ghcr.io/snapetech/bookshelfng:hardcover'
+    'ghcr.io/snapetech-org/bookshelfng:main'
   );
   assert.equal(
     services['bookshelf-audiobooks'].image,
-    'ghcr.io/snapetech/bookshelfng:hardcover'
+    'ghcr.io/snapetech-org/bookshelfng:main'
   );
-  assert.equal(services.romarrng.image, 'ghcr.io/snapetech/romarrng:latest');
+  assert.equal(services.romarrng.image, 'ghcr.io/snapetech-org/romarrng:main');
   assert.equal(
     services.questarrng.image,
-    'ghcr.io/snapetech/questarrng:latest'
+    'ghcr.io/snapetech-org/questarrng:main'
   );
   assert.deepEqual(services['bookshelf-ebooks'].profiles, ['bookshelf']);
   assert.deepEqual(services.lazylibrarian.profiles, ['magazines']);

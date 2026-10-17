@@ -1,5 +1,8 @@
 import type { QualityProfile, RootFolder, Tag } from '@server/api/servarr/base';
-import type { LanguageProfile } from '@server/api/servarr/sonarr';
+import type {
+  LanguageProfile,
+  SonarrMetadataLanguage,
+} from '@server/api/servarr/sonarr';
 import type { BookshelfProvider } from '@server/utils/bookshelfProvider';
 
 export interface ServiceCommonServer {
@@ -9,6 +12,7 @@ export interface ServiceCommonServer {
   isAlt?: boolean;
   isDefault: boolean;
   activeProfileId?: number;
+  musicQuality?: 'mp3' | 'flac';
   activeMetadataProfileId?: number;
   activeDirectory?: string;
   activeLanguageProfileId?: number;
@@ -17,6 +21,8 @@ export interface ServiceCommonServer {
   activeAnimeLanguageProfileId?: number;
   activeTags?: number[];
   activeAnimeTags?: number[];
+  requestButtonLabel?: string;
+  requestButtonAnimeOnly?: boolean;
   serviceType?: 'ebook' | 'audiobook';
   provider?: BookshelfProvider;
   providerNotice?: string;
@@ -30,6 +36,7 @@ export interface ServiceCommonServerWithDetails {
   metadataProfiles?: QualityProfile[];
   rootFolders: Partial<RootFolder>[];
   languageProfiles?: LanguageProfile[];
+  metadataLanguages?: SonarrMetadataLanguage[];
   tags: Tag[];
 }
 
@@ -44,6 +51,12 @@ export interface ComicServiceOption {
 }
 
 export interface MagazineServiceOption {
+  id: number;
+  name: string;
+  isDefault: boolean;
+}
+
+export interface WhisparrServiceOption {
   id: number;
   name: string;
   isDefault: boolean;

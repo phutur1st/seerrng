@@ -5,6 +5,7 @@ import type {
   TmdbMovieResult,
   TmdbTvResult,
 } from '@server/api/themoviedb/interfaces';
+import { MediaType } from '@server/constants/media';
 import type { MediaCategoryKey } from '@server/constants/mediaCategories';
 import dataSource, { getRepository } from '@server/datasource';
 import DiscoverSlider from '@server/entity/DiscoverSlider';
@@ -17,6 +18,7 @@ import {
   UserMutationActorUnauthorizedError,
   runUserSecurityReadWithActor,
 } from '@server/lib/userSecurityMutation';
+import { filterVideoItemsForUser } from '@server/lib/videoMaturityPolicy';
 import logger from '@server/logger';
 import { apiResponseCache } from '@server/middleware/apiResponseCache';
 import { checkUser, isAuthenticated } from '@server/middleware/auth';
@@ -51,6 +53,7 @@ import {
 import { Router, type RequestHandler } from 'express';
 import rateLimit from 'express-rate-limit';
 import semver from 'semver';
+import adultRoutes from './adult';
 import artistRoutes from './artist';
 import associationRoutes from './association';
 import authRoutes from './auth';
@@ -85,6 +88,7 @@ import requestRoutes from './request';
 import searchRoutes from './search';
 import seriesRoutes from './series';
 import serviceRoutes from './service';
+import slackActionRoutes from './slackActions';
 import softwareRoutes from './software';
 import soulseekRoutes from './soulseek';
 import sportarrRoutes from './sportarr';
@@ -112,6 +116,21 @@ const categoryAvailabilityGuard =
     }
     return next();
   };
+
+const adultContentPermissionGuard: RequestHandler = (req, res, next) => {
+  if (
+    !req.user?.hasPermission(
+      [Permission.ADMIN, Permission.MANAGE_REQUESTS, Permission.REQUEST_ADULT],
+      { type: 'or' }
+    )
+  ) {
+    return res.status(403).json({
+      status: 403,
+      message: 'You do not have permission to access adult media.',
+    });
+  }
+  return next();
+};
 
 const parseTmdbRouteId = (id: unknown): number | undefined =>
   parsePositiveRouteId(id, maxTmdbId);
@@ -228,6 +247,8 @@ router.get('/status/tls', publicStatusRateLimit, (_req, res) => {
       configuredHttpsPort: configured.httpsPort,
       configuredHttpAuthAllowed: configured.httpAuthAllowed,
       configuredRedirectsHttpToHttps: configured.redirectsHttpToHttps,
+      showProvidedCertificateNotice:
+        settings.network.tls.showProvidedCertificateNotice !== false,
       environmentOverrides: configured.environmentOverrides,
       pendingRestart: restartFlag.isSet(),
       setupRequired: !settings.public.initialized,
@@ -455,6 +476,7 @@ router.use('/search', isAuthenticated(), searchRoutes);
 router.use('/discover', isAuthenticated(), discoverRoutes);
 router.use('/request/lists', externalRequestListRoutes);
 router.use('/game-library', gameLibraryRoutes);
+router.use('/notifications', slackActionRoutes);
 router.use('/request', isAuthenticated(), requestRoutes);
 router.use('/request/software', softwareRoutes);
 router.use('/calendar', isAuthenticated(), calendarRoutes);
@@ -515,6 +537,14 @@ router.use(
   isAuthenticated(),
   categoryAvailabilityGuard(['comic']),
   comicRoutes
+);
+router.use(
+  '/adult',
+  isAuthenticated(),
+  categoryAvailabilityGuard(['adult']),
+  adultContentPermissionGuard,
+  externalMetadataRateLimit,
+  adultRoutes
 );
 router.use(
   '/magazine',
@@ -740,8 +770,32 @@ router.get('/backdrops', publicBackdropsRateLimit, async (req, res, next) => {
       (result) => result.media_type === 'movie' || result.media_type === 'tv'
     ) as (TmdbMovieResult | TmdbTvResult)[];
 
+    const allowedItems = req.user
+      ? await filterVideoItemsForUser(
+          new TheMovieDb(),
+          req.user.id,
+          data.map((result) => ({
+            id: result.id,
+            mediaType:
+              result.media_type === 'movie' ? MediaType.MOVIE : MediaType.TV,
+          }))
+        )
+      : data.map((result) => ({
+          id: result.id,
+          mediaType:
+            result.media_type === 'movie' ? MediaType.MOVIE : MediaType.TV,
+        }));
+    const allowedKeys = new Set(
+      allowedItems.map((item) => `${item.mediaType}:${item.id}`)
+    );
+
     return res.status(200).json(
       data
+        .filter((result) =>
+          allowedKeys.has(
+            `${result.media_type === 'movie' ? MediaType.MOVIE : MediaType.TV}:${result.id}`
+          )
+        )
         .filter((result) => !!result.backdrop_path)
         .slice(0, 8)
         .map((result) => ({

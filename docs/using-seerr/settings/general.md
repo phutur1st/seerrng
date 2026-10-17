@@ -75,6 +75,14 @@ Available media will still appear in search results, however, so it is possible 
 
 This setting is **disabled** by default.
 
+## Other Users' Availability
+
+This setting controls how movie and TV availability appears for a viewer who does not have an approved or completed request for the matching copy. Choose to show the existing shared availability, mark it as shared, or hide its availability indicator. HD and 4K are evaluated separately, as are individual TV seasons.
+
+This is a display preference, not an access control. SeerrNG cannot determine whether a media-server account can play a particular item; configure library permissions in Plex, Jellyfin, or Emby. Playback links in SeerrNG are hidden for shared copies when either non-default mode is selected.
+
+The default is **Show Availability for Everyone**, which preserves the existing display.
+
 ## Hide Blocklisted Items
 
 When enabled, media that has been blocklisted will not appear on the "Discover" home page, for all administrators. This can be useful to hide content that you don't want to see, such as content with specific tags or content that has been manually blocklisted when you have the "Manage Blocklist" permission.
@@ -94,3 +102,9 @@ This setting is **disabled** by default.
 When enabled, users will be able to submit requests for specific seasons of TV series. If disabled, users will only be able to submit requests for all unavailable seasons.
 
 This setting is **enabled** by default.
+
+## Require the Previous Season to Be Watched
+
+When enabled, users must watch every episode of the immediately previous regular season before requesting a later season. Special episodes and seasons with no episodes do not count toward this rule. The setting is **disabled** by default.
+
+SeerrNG checks the requester's linked Plex, Jellyfin, or Emby playback history. The series must be present in that media server's library so SeerrNG can match its episodes. If playback history cannot be verified, later seasons stay blocked until it can be checked. When partial series requests are disabled, the request modal includes only seasons that pass the rule, so users can request the first eligible season and continue after watching it. Administrators and users with **Manage Requests** permission can override the rule.

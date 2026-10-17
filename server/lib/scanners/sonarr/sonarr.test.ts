@@ -12,7 +12,12 @@ import {
 } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import MediaIdentifier, {
+  MediaIdentifierProvider,
+} from '@server/entity/MediaIdentifier';
+import MediaIdentifierSeasonMapping from '@server/entity/MediaIdentifierSeasonMapping';
 import MediaRequest from '@server/entity/MediaRequest';
+import MediaServiceStatus from '@server/entity/MediaServiceStatus';
 import Season from '@server/entity/Season';
 import SeasonRequest from '@server/entity/SeasonRequest';
 import { User } from '@server/entity/User';
@@ -30,6 +35,42 @@ Object.defineProperty(SonarrAPI.prototype, 'getSeries', {
   set() {},
   get() {
     return async () => getSeriesImpl();
+  },
+  configurable: true,
+});
+
+type TestSonarrEpisode = {
+  id: number;
+  seriesId: number;
+  seasonNumber: number;
+  episodeNumber: number;
+  episodeFileId: number;
+  hasFile: boolean;
+  fileResolution?: string;
+};
+let getEpisodesImpl: (
+  seriesId: number,
+  includeEpisodeFile?: boolean
+) => Promise<TestSonarrEpisode[]> = async (seriesId) => {
+  const series = (await getSeriesImpl()).find((item) => item.id === seriesId);
+  return (series?.seasons ?? []).flatMap((season) => {
+    const fileCount = season.statistics?.episodeFileCount ?? 0;
+    return Array.from({ length: fileCount }, (_, index) => ({
+      id: index + 1,
+      seriesId,
+      seasonNumber: season.seasonNumber,
+      episodeNumber: index + 1,
+      episodeFileId: index + 1,
+      hasFile: true,
+      fileResolution: '1920x1080',
+    }));
+  });
+};
+Object.defineProperty(SonarrAPI.prototype, 'getEpisodes', {
+  set() {},
+  get() {
+    return async (seriesId: number, includeEpisodeFile?: boolean) =>
+      getEpisodesImpl(seriesId, includeEpisodeFile);
   },
   configurable: true,
 });
@@ -205,9 +246,291 @@ function configureSonarr(overrides: Partial<SonarrSettings>[] = [{}]): void {
 describe('Sonarr Scanner', () => {
   beforeEach(() => {
     getSeriesImpl = async () => [];
+    getEpisodesImpl = async (seriesId) => {
+      const series = (await getSeriesImpl()).find(
+        (item) => item.id === seriesId
+      );
+      return (series?.seasons ?? []).flatMap((season) => {
+        const fileCount = season.statistics?.episodeFileCount ?? 0;
+        return Array.from({ length: fileCount }, (_, index) => ({
+          id: index + 1,
+          seriesId,
+          seasonNumber: season.seasonNumber,
+          episodeNumber: index + 1,
+          episodeFileId: index + 1,
+          hasFile: true,
+          fileResolution: '1920x1080',
+        }));
+      });
+    };
     getLibrarySeriesByTvdbIdImpl = async () => [];
     getShowByTvdbIdImpl = async () => fakeTmdbShow(1);
     getTvShowImpl = async () => fakeTmdbShow(1);
+  });
+
+  it('detects mixed HD and 4K episode files in a single Sonarr library', async () => {
+    const tmdbId = 890201;
+    const seriesId = 890202;
+    configureSonarr([{ syncEnabled: true }]);
+    getShowByTvdbIdImpl = async () =>
+      fakeTmdbShow(tmdbId, [
+        {
+          id: 1,
+          air_date: '2024-01-01',
+          episode_count: 2,
+          name: 'Season 1',
+          overview: '',
+          season_number: 1,
+        },
+      ]);
+    getSeriesImpl = async () => [
+      fakeSonarrSeries({
+        id: seriesId,
+        tvdbId: 890203,
+        seasons: [
+          {
+            seasonNumber: 1,
+            monitored: true,
+            statistics: {
+              episodeFileCount: 2,
+              totalEpisodeCount: 2,
+              episodeCount: 2,
+              percentOfEpisodes: 100,
+              sizeOnDisk: 0,
+            },
+          },
+        ],
+      }),
+    ];
+    getEpisodesImpl = async (requestedSeriesId, includeEpisodeFile) => {
+      assert.strictEqual(requestedSeriesId, seriesId);
+      assert.strictEqual(includeEpisodeFile, true);
+      return [
+        {
+          id: 1,
+          seriesId,
+          seasonNumber: 1,
+          episodeNumber: 1,
+          episodeFileId: 1,
+          hasFile: true,
+          fileResolution: '1920x1080',
+        },
+        {
+          id: 2,
+          seriesId,
+          seasonNumber: 1,
+          episodeNumber: 2,
+          episodeFileId: 2,
+          hasFile: true,
+          fileResolution: '3840x2160',
+        },
+      ];
+    };
+
+    await runWithMockTimers(() => sonarrScanner.run());
+
+    const media = await getRepository(Media).findOneByOrFail({
+      tmdbId,
+      mediaType: MediaType.TV,
+    });
+    const season = await getRepository(Season).findOneByOrFail({
+      media: { id: media.id },
+      seasonNumber: 1,
+    });
+    assert.strictEqual(media.status, MediaStatus.PARTIALLY_AVAILABLE);
+    assert.strictEqual(media.status4k, MediaStatus.PARTIALLY_AVAILABLE);
+    assert.strictEqual(season.status, MediaStatus.PARTIALLY_AVAILABLE);
+    assert.strictEqual(season.status4k, MediaStatus.PARTIALLY_AVAILABLE);
+  });
+
+  describe('per-instance availability', () => {
+    it('persists anime identifiers from Sonarr on the matched TV media', async () => {
+      const tvdbId = 1053;
+      configureSonarr([{ syncEnabled: true, id: 42 }]);
+      getShowByTvdbIdImpl = async () => fakeTmdbShow(tvdbId);
+      getSeriesImpl = async () => [
+        fakeSonarrSeries({
+          tvdbId,
+          seriesType: 'anime',
+          malIds: [1234],
+          aniListIds: [4321],
+        }),
+      ];
+
+      await runWithMockTimers(() => sonarrScanner.run());
+
+      const media = await getRepository(Media).findOneByOrFail({
+        tmdbId: tvdbId,
+        mediaType: MediaType.TV,
+      });
+      const identifiers = await getRepository(MediaIdentifier).find({
+        where: [
+          { media: { id: media.id }, provider: MediaIdentifierProvider.MAL },
+          {
+            media: { id: media.id },
+            provider: MediaIdentifierProvider.ANILIST,
+          },
+        ],
+      });
+
+      assert.deepStrictEqual(
+        identifiers
+          .map(({ provider, value }) => [provider, value])
+          .sort(([left], [right]) => String(left).localeCompare(String(right))),
+        [
+          [MediaIdentifierProvider.ANILIST, '4321'],
+          [MediaIdentifierProvider.MAL, '1234'],
+        ]
+      );
+    });
+
+    it('records partial and per-season availability for the exact Sonarr instance', async () => {
+      const firstSeason = fakeTmdbShow(1052).seasons[0];
+      getShowByTvdbIdImpl = async () =>
+        fakeTmdbShow(1052, [
+          firstSeason,
+          {
+            ...firstSeason,
+            id: 2,
+            name: 'Season 2',
+            season_number: 2,
+            episode_count: 8,
+          },
+        ]);
+      getSeriesImpl = async () => [fakeSonarrSeries()];
+      configureSonarr([{ id: 42, name: 'Sonarr Archive', isDefault: false }]);
+
+      await runWithMockTimers(() => sonarrScanner.run());
+
+      const media = await getRepository(Media).findOneByOrFail({
+        tmdbId: 1052,
+        mediaType: MediaType.TV,
+      });
+      const status = await getRepository(MediaServiceStatus).findOneByOrFail({
+        mediaId: media.id,
+        serviceType: 'sonarr',
+        serverId: 42,
+        format: 'standard',
+      });
+
+      assert.strictEqual(status.status, MediaStatus.PARTIALLY_AVAILABLE);
+      assert.deepStrictEqual(status.seasonStatuses, {
+        1: MediaStatus.AVAILABLE,
+        2: MediaStatus.UNKNOWN,
+      });
+    });
+  });
+
+  it('uses the mapped TVDB alias for the right Media row while retaining canonical seasons', async () => {
+    const mediaRepository = getRepository(Media);
+    const mappedMedia = await mediaRepository.save(
+      new Media({
+        tmdbId: 3001,
+        tvdbId: 550,
+        mediaType: MediaType.TV,
+        status: MediaStatus.PROCESSING,
+        status4k: MediaStatus.UNKNOWN,
+        seasons: [
+          new Season({
+            seasonNumber: 1,
+            status: MediaStatus.PROCESSING,
+            status4k: MediaStatus.UNKNOWN,
+          }),
+        ],
+      })
+    );
+    const canonicalMedia = await mediaRepository.save(
+      new Media({
+        tmdbId: 3002,
+        tvdbId: 999,
+        mediaType: MediaType.TV,
+        status: MediaStatus.PROCESSING,
+        status4k: MediaStatus.UNKNOWN,
+        seasons: [
+          new Season({
+            seasonNumber: 1,
+            status: MediaStatus.PROCESSING,
+            status4k: MediaStatus.UNKNOWN,
+          }),
+        ],
+      })
+    );
+    const identifier = await getRepository(MediaIdentifier).save(
+      new MediaIdentifier({
+        media: mappedMedia,
+        provider: MediaIdentifierProvider.TVDB,
+        value: '999',
+        canonical: false,
+      })
+    );
+    await getRepository(MediaIdentifierSeasonMapping).save([
+      new MediaIdentifierSeasonMapping({
+        mediaIdentifier: identifier,
+        sonarrServerId: 1,
+        is4k: false,
+        seasonNumber: 1,
+        externalSeasonNumber: 3,
+      }),
+      new MediaIdentifierSeasonMapping({
+        mediaIdentifier: identifier,
+        sonarrServerId: 0,
+        is4k: true,
+        seasonNumber: 1,
+        externalSeasonNumber: 4,
+      }),
+      new MediaIdentifierSeasonMapping({
+        mediaIdentifier: identifier,
+        sonarrServerId: 0,
+        is4k: false,
+        seasonNumber: 1,
+        externalSeasonNumber: 2,
+      }),
+    ]);
+
+    configureSonarr([{ syncEnabled: true, id: 0 }]);
+    getSeriesImpl = async () => [
+      fakeSonarrSeries({
+        tvdbId: 999,
+        seasons: [
+          {
+            seasonNumber: 2,
+            monitored: true,
+            statistics: {
+              episodeFileCount: 10,
+              totalEpisodeCount: 10,
+              episodeCount: 10,
+              percentOfEpisodes: 100,
+              sizeOnDisk: 1,
+              previousAiring: undefined,
+            },
+          },
+        ],
+      }),
+    ];
+    getTvShowImpl = async ({ tvId }) =>
+      fakeTmdbShow(tvId, [
+        {
+          id: 1,
+          air_date: '2024-01-01',
+          episode_count: 10,
+          name: 'Season 1',
+          overview: '',
+          season_number: 1,
+        },
+      ]);
+
+    await runWithMockTimers(() => sonarrScanner.run());
+
+    const updatedMapped = await mediaRepository.findOneOrFail({
+      where: { id: mappedMedia.id },
+      relations: { seasons: true },
+    });
+    const updatedCanonical = await mediaRepository.findOneOrFail({
+      where: { id: canonicalMedia.id },
+      relations: { seasons: true },
+    });
+    assert.strictEqual(updatedMapped.seasons[0].status, MediaStatus.AVAILABLE);
+    assert.strictEqual(updatedCanonical.seasons[0].status, MediaStatus.UNKNOWN);
   });
 
   describe('deferred season status reconciliation', () => {

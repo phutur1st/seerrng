@@ -19,6 +19,9 @@ export const PLEXTV_HTTP_OPTIONS = {
 export const MAX_PLEX_SHARED_USERS = 250;
 export const MAX_PLEX_WATCHLIST_PAGE_SIZE = 100;
 export const PLEX_WATCHLIST_HYDRATION_CONCURRENCY = 10;
+const PLEX_WATCHLIST_USER_STATE_CACHE_TTL_SECONDS = 15;
+const PLEX_DISCOVER_API_URL = 'https://discover.provider.plex.tv';
+const PLEX_METADATA_API_URL = 'https://metadata.provider.plex.tv';
 const MAX_PLEX_WATCHLIST_OFFSET = 1_000_000;
 const MAX_PLEX_WATCHLIST_TOTAL = 1_000_000;
 const MAX_PLEX_METADATA_GUIDS = 100;
@@ -267,6 +270,18 @@ interface WatchlistResponse {
   };
 }
 
+interface PlexUserStateResponse {
+  MediaContainer?: {
+    UserState?:
+      | {
+          watchlistedAt?: unknown;
+        }
+      | {
+          watchlistedAt?: unknown;
+        }[];
+  };
+}
+
 type PlexMetadataItem = {
   ratingKey: string;
   type: 'movie' | 'show';
@@ -290,6 +305,28 @@ export interface PlexWatchlistItem {
   title: string;
 }
 
+export const parsePlexWatchlistedAt = (value: unknown): Date | null => {
+  const timestamp =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && /^\d{1,16}$/.test(value)
+        ? Number(value)
+        : undefined;
+
+  if (
+    typeof timestamp !== 'number' ||
+    !Number.isSafeInteger(timestamp) ||
+    timestamp <= 0
+  ) {
+    return null;
+  }
+
+  const milliseconds =
+    timestamp > 100_000_000_000 ? timestamp : timestamp * 1000;
+  const date = new Date(milliseconds);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
+
 export interface PlexWatchlistCache {
   etag: string;
   response: WatchlistResponse;
@@ -305,6 +342,21 @@ export const normalizePlexWatchlistPage = (offset: number, size: number) => ({
       ? Math.min(size, MAX_PLEX_WATCHLIST_PAGE_SIZE)
       : 20,
 });
+
+/**
+ * A watchlist page is only worth caching when it has the expected container
+ * shape. Caching anything else would pin a bad body behind a valid ETag.
+ */
+export const isCacheablePlexWatchlistPage = (value: unknown): boolean => {
+  if (!isRecord(value) || !isRecord(value.MediaContainer)) {
+    return false;
+  }
+  const { Metadata, totalSize } = value.MediaContainer;
+  return (
+    (Metadata === undefined || Array.isArray(Metadata)) &&
+    (totalSize === undefined || typeof totalSize === 'number')
+  );
+};
 
 export const preparePlexWatchlistRatingKeys = (
   value: unknown,
@@ -408,7 +460,7 @@ class PlexTvAPI extends ExternalAPI {
       'https://plex.tv',
       {},
       {
-        allowedBaseUrls: ['https://discover.provider.plex.tv'],
+        allowedBaseUrls: [PLEX_DISCOVER_API_URL, PLEX_METADATA_API_URL],
         headers: {
           'X-Plex-Token': authToken,
           'Content-Type': 'application/json',
@@ -542,7 +594,7 @@ class PlexTvAPI extends ExternalAPI {
               headers: {
                 'If-None-Match': cachedWatchlist?.etag,
               },
-              baseURL: 'https://discover.provider.plex.tv',
+              baseURL: PLEX_DISCOVER_API_URL,
               validateStatus: (status) => status < 400, // Allow HTTP 304 to return without error
             }
           ),
@@ -559,15 +611,22 @@ class PlexTvAPI extends ExternalAPI {
 
       // If we don't recieve HTTP 304, the watchlist has been updated and we need to update the cache.
       if (response.status >= 200 && response.status <= 299) {
-        cachedWatchlist = {
-          etag: response.headers.etag,
-          response: response.data,
-        };
+        if (isCacheablePlexWatchlistPage(response.data)) {
+          cachedWatchlist = {
+            etag: response.headers.etag,
+            response: response.data,
+          };
 
-        watchlistCache.data.set<PlexWatchlistCache>(
-          watchlistCacheKey,
-          cachedWatchlist
-        );
+          watchlistCache.data.set<PlexWatchlistCache>(
+            watchlistCacheKey,
+            cachedWatchlist
+          );
+        } else {
+          logger.warn(
+            'Ignoring malformed Plex watchlist response; not caching it',
+            { label: 'Plex.TV Metadata API', offset, size }
+          );
+        }
       }
 
       const ratingKeys = preparePlexWatchlistRatingKeys(
@@ -583,7 +642,7 @@ class PlexTvAPI extends ExternalAPI {
             detailedResponse = await this.getRolling<MetadataResponse>(
               `/library/metadata/${ratingKey}`,
               {
-                baseURL: 'https://discover.provider.plex.tv',
+                baseURL: PLEX_DISCOVER_API_URL,
               }
             );
           } catch (e) {
@@ -646,6 +705,46 @@ class PlexTvAPI extends ExternalAPI {
         totalSize: 0,
         items: [],
       };
+    }
+  }
+
+  public async getWatchlistedAt(ratingKey: string): Promise<Date | null> {
+    if (!/^\d{1,20}$/.test(ratingKey)) {
+      return null;
+    }
+
+    const watchlistCache = cacheManager.getCache('plexwatchlist').data;
+    const cacheKey = `${this.watchlistCacheKeyPrefix}:userstate:${ratingKey}`;
+    const cachedTimestamp = watchlistCache.get<number | null>(cacheKey);
+
+    if (cachedTimestamp !== undefined) {
+      return cachedTimestamp === null ? null : new Date(cachedTimestamp);
+    }
+
+    try {
+      const response = await this.request<PlexUserStateResponse>(
+        'GET',
+        `/library/metadata/${ratingKey}/userState`,
+        undefined,
+        { baseURL: PLEX_METADATA_API_URL }
+      );
+      const userState = response.data?.MediaContainer?.UserState;
+      const state = Array.isArray(userState) ? userState[0] : userState;
+      const watchlistedAt = parsePlexWatchlistedAt(state?.watchlistedAt);
+
+      watchlistCache.set(
+        cacheKey,
+        watchlistedAt?.getTime() ?? null,
+        PLEX_WATCHLIST_USER_STATE_CACHE_TTL_SECONDS
+      );
+
+      return watchlistedAt;
+    } catch (error) {
+      logger.warn('Failed to retrieve Plex watchlist item state', {
+        label: 'Plex.TV Metadata API',
+        ...getHttpErrorDetails(error),
+      });
+      return null;
     }
   }
 

@@ -41,6 +41,30 @@ const stubTitleDetails = (
   };
 
   cy.intercept('GET', `/api/v1/${mediaType}/${result.id}`, details);
+  cy.intercept('GET', `/api/v1/${mediaType}/${result.id}/ratingscombined*`, {});
+  const emptyResults = {
+    page: 1,
+    totalPages: 1,
+    totalResults: 0,
+    results: [],
+  };
+  cy.intercept(
+    'GET',
+    `/api/v1/${mediaType}/${result.id}/recommendations*`,
+    emptyResults
+  );
+  cy.intercept(
+    'GET',
+    `/api/v1/${mediaType}/${result.id}/similar*`,
+    emptyResults
+  );
+  if (mediaType === 'tv') {
+    cy.intercept(
+      'GET',
+      `/api/v1/collection-catalog/tv/for-series/${result.id}*`,
+      { collections: [] }
+    );
+  }
   cy.intercept('GET', `**/_next/data/*/${mediaType}/${result.id}.json*`, {
     pageProps: { [mediaType]: details },
     __N_SSP: true,
@@ -98,6 +122,133 @@ describe('Discover', () => {
     }).should('be.visible');
   });
 
+  it('switches a selected genre between include and exclude modes', () => {
+    cy.viewport(1280, 900);
+    cy.intercept('GET', '/api/v1/genres/movie', {
+      body: [{ id: 28, name: 'Action' }],
+    });
+    cy.intercept('GET', '/api/v1/discover/movies*', {
+      page: 1,
+      totalPages: 1,
+      totalResults: 0,
+      results: [],
+    }).as('getMovieDiscover');
+
+    cy.visit('/discover/movies');
+    cy.wait('@getMovieDiscover');
+    cy.contains('button.detail-disclosure-button', 'Filters').click();
+    cy.get('button[aria-label="Genres"]').click();
+    cy.contains('[role=option]', 'Action').click();
+    cy.wait('@getMovieDiscover').then(({ request }) => {
+      expect(request.query.genre).to.eq('28');
+      expect(request.query.excludeGenre).to.equal(undefined);
+    });
+    cy.location('search').should('include', 'genre=28');
+
+    cy.get('button[aria-label="Exclude Genres"]')
+      .should('have.attr', 'aria-pressed', 'false')
+      .click();
+    cy.get('button[aria-label="Exclude Genres"]').should(
+      'have.attr',
+      'aria-pressed',
+      'true'
+    );
+    cy.wait('@getMovieDiscover').then(({ request }) => {
+      expect(request.query.genre).to.eq('28');
+      expect(request.query.excludeGenre).to.eq('true');
+    });
+    cy.location('search').should('include', 'excludeGenre=true');
+    cy.window().then((win) => {
+      expect(win.document.documentElement.scrollWidth).to.be.at.most(
+        win.innerWidth
+      );
+    });
+
+    cy.get('[aria-label="Quality Available"]').contains('button', 'HD').click();
+    cy.wait('@getMovieDiscover').then(({ request }) => {
+      expect(request.query.availability).to.eq('hd');
+      expect(request.query.genre).to.eq('28');
+      expect(request.query.excludeGenre).to.eq('true');
+    });
+    cy.location('search').should('include', 'availability=hd');
+    cy.location('search').should('include', 'excludeGenre=true');
+
+    cy.get('button[aria-label="Exclude Genres"]')
+      .should('have.attr', 'aria-pressed', 'true')
+      .click();
+    cy.get('button[aria-label="Exclude Genres"]').should(
+      'have.attr',
+      'aria-pressed',
+      'false'
+    );
+    cy.wait('@getMovieDiscover').then(({ request }) => {
+      expect(request.query.excludeGenre).to.equal(undefined);
+    });
+    cy.location('search').should('not.include', 'excludeGenre=');
+  });
+
+  it('clears an unsupported status exclusion when switching to local availability', () => {
+    cy.viewport(390, 844);
+    cy.intercept('GET', '/api/v1/genres/tv', {
+      body: [{ id: 18, name: 'Drama' }],
+    });
+    cy.intercept('GET', '/api/v1/discover/tv*', {
+      page: 1,
+      totalPages: 1,
+      totalResults: 0,
+      results: [],
+    }).as('getTvDiscover');
+
+    cy.visit('/discover/tv');
+    cy.wait('@getTvDiscover');
+    cy.contains('button.detail-disclosure-button', 'Filters').click();
+    cy.get('button[aria-label="Status"]').click();
+    cy.contains('[role=option]', 'Ended').click();
+    cy.wait('@getTvDiscover');
+    cy.get('button[aria-label="Exclude Status"]').click();
+    cy.wait('@getTvDiscover');
+    cy.get('button[aria-label="Exclude Status"]').should(
+      'have.attr',
+      'aria-pressed',
+      'true'
+    );
+    cy.get('button[aria-label="Exclude Status"]').then(($button) => {
+      const bounds = $button[0].getBoundingClientRect();
+      expect(bounds.left).to.be.at.least(0);
+      cy.window().then((win) => {
+        expect(bounds.right).to.be.at.most(win.innerWidth);
+      });
+    });
+
+    cy.get('[aria-label="Quality Available"]').contains('button', 'HD').click();
+    cy.wait('@getTvDiscover').then(({ request }) => {
+      expect(request.query.availability).to.eq('hd');
+      expect(request.query.status).to.equal(undefined);
+      expect(request.query.excludeStatus).to.equal(undefined);
+    });
+    cy.location('search').should('include', 'availability=hd');
+    cy.location('search').should('not.include', 'status=');
+    cy.location('search').should('not.include', 'excludeStatus=');
+    cy.get('button[aria-label="Status"]').should('not.exist');
+    cy.get('.page-error-message[role="status"][data-severity="info"]')
+      .should(
+        'have.text',
+        'Local availability cannot apply Studio, Streaming Services, or Series Status filters. Those selections were cleared.'
+      )
+      .then(($notice) => {
+        const bounds = $notice[0].getBoundingClientRect();
+        expect(bounds.left).to.be.at.least(0);
+        cy.window().then((win) => {
+          expect(bounds.right).to.be.at.most(win.innerWidth);
+        });
+      });
+    cy.window().then((win) => {
+      expect(win.document.documentElement.scrollWidth).to.be.at.most(
+        win.innerWidth
+      );
+    });
+  });
+
   it('loads upcoming movies', () => {
     const movie = {
       id: 99002,
@@ -137,6 +288,9 @@ describe('Discover', () => {
     cy.contains('.slider-header', 'Popular Series').scrollIntoView();
     cy.wait('@getPopularTv');
     clickFirstTitleCardInSlider('Popular Series');
+    cy.url().should('match', /\/tv\/99001$/);
+    cy.get('[data-testid="discover-previous"]').should('not.exist');
+    cy.get('[data-testid="discover-next"]').should('not.exist');
   });
 
   it('loads upcoming series', () => {
@@ -157,6 +311,141 @@ describe('Discover', () => {
     cy.visit('/');
     cy.contains('.slider-header', 'Upcoming Series').scrollIntoView();
     clickFirstTitleCardInSlider('Upcoming Series');
+  });
+
+  it('stores the ordered movie context when opening a Discover result', () => {
+    const movies = [
+      { id: 99011, mediaType: 'movie', title: 'Filtered Movie One' },
+      { id: 99012, mediaType: 'movie', title: 'Filtered Movie Two' },
+      { id: 99013, mediaType: 'movie', title: 'Filtered Movie Three' },
+    ];
+
+    cy.intercept('GET', '/api/v1/discover/movies*', {
+      page: 1,
+      totalPages: 1,
+      totalResults: movies.length,
+      results: movies,
+    }).as('getFilteredMovies');
+
+    cy.visit('/discover/movies?sortBy=popularity.desc');
+    cy.wait('@getFilteredMovies');
+    cy.get('[data-poster-region="detail-link"]')
+      .eq(1)
+      .should('have.attr', 'href')
+      .and('include', 'discoverContext=')
+      .then((href) => {
+        expect(href).to.match(
+          /\/movie\/99012\?discoverContext=[a-z0-9_-]{12,64}$/i
+        );
+        const contextId = href.match(/[?&]discoverContext=([^&]+)/)?.[1];
+
+        expect(contextId).to.match(/^[a-z0-9_-]{12,64}$/i);
+
+        cy.get('[data-poster-region="detail-link"]')
+          .eq(1)
+          .then(($link) => {
+            $link[0].addEventListener(
+              'click',
+              (event) => event.preventDefault(),
+              { once: true }
+            );
+          })
+          .click({ force: true });
+
+        cy.window().then((window) => {
+          const saved = JSON.parse(
+            window.sessionStorage.getItem(
+              `seerrng:discover-navigation:${contextId}`
+            ) ?? 'null'
+          );
+          expect(saved.items).to.deep.equal([
+            { id: 99011, mediaType: 'movie' },
+            { id: 99012, mediaType: 'movie' },
+            { id: 99013, mediaType: 'movie' },
+          ]);
+        });
+      });
+    cy.location('pathname').should('eq', '/discover/movies');
+  });
+
+  it('moves through the loaded filtered movie results', () => {
+    const movies = [
+      { id: 99011, mediaType: 'movie', title: 'Filtered Movie One' },
+      { id: 99012, mediaType: 'movie', title: 'Filtered Movie Two' },
+      { id: 99013, mediaType: 'movie', title: 'Filtered Movie Three' },
+    ];
+
+    cy.intercept('GET', '/api/v1/discover/movies*', {
+      page: 1,
+      totalPages: 1,
+      totalResults: movies.length,
+      results: movies,
+    }).as('getFilteredMovies');
+    movies.forEach((movie) => stubTitleDetails('movie', movie));
+
+    cy.visit('/discover/movies?sortBy=popularity.desc');
+    cy.wait('@getFilteredMovies');
+    cy.get('[data-testid="title-card"]').eq(1).trigger('mouseover');
+    cy.get('[data-poster-region="detail-link"]')
+      .eq(1)
+      .should('have.attr', 'href')
+      .and('include', 'discoverContext=');
+    cy.get('[data-poster-region="detail-link"]')
+      .eq(1)
+      .should('be.visible')
+      .click();
+    cy.url().should('include', '/movie/99012?discoverContext=');
+    cy.get('[data-testid="discover-previous"]').should('be.visible');
+    cy.get('[data-testid="discover-next"]').should('be.visible').click();
+    cy.url().should('include', '/movie/99013?discoverContext=');
+    cy.get('[data-testid="media-title"]').should(
+      'contain',
+      'Filtered Movie Three'
+    );
+    cy.viewport(390, 844);
+    cy.get('[data-testid="discover-previous"]').should('be.visible');
+    cy.get('[data-testid="discover-next"]').should('not.exist');
+    cy.go('back');
+    cy.get('[data-testid="discover-previous"]').should('be.visible');
+    cy.go('back');
+    cy.location('pathname').should('eq', '/discover/movies');
+  });
+
+  it('moves through the loaded filtered series results', () => {
+    const series = [
+      { id: 99021, mediaType: 'tv', name: 'Filtered Series One' },
+      { id: 99022, mediaType: 'tv', name: 'Filtered Series Two' },
+    ];
+
+    cy.intercept('GET', '/api/v1/discover/tv*', {
+      page: 1,
+      totalPages: 1,
+      totalResults: series.length,
+      results: series,
+    }).as('getFilteredSeries');
+    series.forEach((title) => stubTitleDetails('tv', title));
+
+    cy.visit('/discover/tv?sortBy=first_air_date.desc');
+    cy.wait('@getFilteredSeries');
+    cy.get('[data-testid="title-card"]').first().trigger('mouseover');
+    cy.get('[data-poster-region="detail-link"]')
+      .first()
+      .should('have.attr', 'href')
+      .and('include', 'discoverContext=');
+    cy.get('[data-poster-region="detail-link"]')
+      .first()
+      .should('be.visible')
+      .click();
+    cy.url().should('include', '/tv/99021?discoverContext=');
+    cy.get('[data-testid="discover-previous"]').should('not.exist');
+    cy.get('[data-testid="discover-next"]').should('be.visible').click();
+    cy.url().should('include', '/tv/99022?discoverContext=');
+    cy.get('[data-testid="media-title"]').should(
+      'contain',
+      'Filtered Series Two'
+    );
+    cy.get('[data-testid="discover-previous"]').should('be.visible');
+    cy.get('[data-testid="discover-next"]').should('not.exist');
   });
 
   it('displays error for media with invalid TMDB ID', () => {

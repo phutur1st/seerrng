@@ -5,6 +5,7 @@ import ReadarrAPI from '@server/api/servarr/readarr';
 import type { SonarrSeries } from '@server/api/servarr/sonarr';
 import SonarrAPI from '@server/api/servarr/sonarr';
 import TheMovieDb from '@server/api/themoviedb';
+import Tvdb from '@server/api/tvdb';
 import { getRepository } from '@server/datasource';
 import { User } from '@server/entity/User';
 import type {
@@ -12,8 +13,10 @@ import type {
   MagazineServiceOption,
   ServiceCommonServer,
   ServiceCommonServerWithDetails,
+  WhisparrServiceOption,
 } from '@server/interfaces/api/serviceInterfaces';
 import { getExternalRuntimeConfig } from '@server/lib/externalRuntimeConfig';
+import { getMusicQualityFromLabels } from '@server/lib/musicQuality';
 import { Permission } from '@server/lib/permissions';
 import { runWithCurrentServarrService } from '@server/lib/serviceAdmission';
 import {
@@ -47,6 +50,15 @@ export const SONARR_LOOKUP_RATE_LIMIT = {
 } as const;
 const sonarrLookupRateLimit = rateLimit({
   ...SONARR_LOOKUP_RATE_LIMIT,
+  skip: () =>
+    process.env.NODE_ENV === 'test' || process.env.E2E_TESTS === 'true',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `user:${req.user?.id ?? 'anonymous'}`,
+});
+const tvdbSeasonRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
   skip: () =>
     process.env.NODE_ENV === 'test' || process.env.E2E_TESTS === 'true',
   standardHeaders: true,
@@ -114,13 +126,45 @@ const parsePositiveServiceRouteId = (id: unknown): number | undefined =>
   parsePositiveRouteId(id, maxServiceRouteId);
 
 export const filterSonarrLookupResults = (results: SonarrSeries[]) =>
-  results.map(({ tvdbId, title, year, overview, remotePoster }) => ({
-    tvdbId,
-    title,
-    year,
-    overview,
-    remotePoster,
-  }));
+  results.map(
+    ({
+      id,
+      tvdbId,
+      title,
+      year,
+      overview,
+      remotePoster,
+      seasonType,
+      seasonTypes,
+      language,
+      originalLanguage,
+      originalCountry,
+      originalTitle,
+      alternateTitles,
+      seriesType,
+      malIds,
+      aniListIds,
+      statistics,
+    }) => ({
+      ...(id !== undefined ? { id } : {}),
+      tvdbId,
+      title,
+      year,
+      overview,
+      remotePoster,
+      ...(seasonType ? { seasonType } : {}),
+      ...(seasonTypes?.length ? { seasonTypes } : {}),
+      ...(language ? { language } : {}),
+      ...(originalLanguage ? { originalLanguage } : {}),
+      ...(originalCountry ? { originalCountry } : {}),
+      ...(originalTitle ? { originalTitle } : {}),
+      ...(alternateTitles?.length ? { alternateTitles } : {}),
+      ...(seriesType ? { seriesType } : {}),
+      ...(malIds?.length ? { malIds } : {}),
+      ...(aniListIds?.length ? { aniListIds } : {}),
+      ...(statistics ? { statistics } : {}),
+    })
+  );
 
 const filterServiceServer = (
   server: ServiceCommonServer,
@@ -133,10 +177,13 @@ const filterServiceServer = (
   return {
     id: server.id,
     name: server.name,
+    musicQuality: server.musicQuality,
     is4k: server.is4k,
     isAlt: server.isAlt,
     isDefault: server.isDefault,
     serviceType: server.serviceType,
+    requestButtonLabel: server.requestButtonLabel,
+    requestButtonAnimeOnly: server.requestButtonAnimeOnly,
   };
 };
 
@@ -156,6 +203,8 @@ serviceRoutes.get('/radarr', async (req, res, next) => {
               activeDirectory: radarr.activeDirectory,
               activeProfileId: radarr.activeProfileId,
               activeTags: radarr.tags ?? [],
+              requestButtonLabel: radarr.requestButtonLabel,
+              requestButtonAnimeOnly: radarr.requestButtonAnimeOnly ?? false,
             },
             includeOperationalDetails
           )
@@ -249,6 +298,8 @@ serviceRoutes.get('/sonarr', async (req, res, next) => {
               activeLanguageProfileId: sonarr.activeLanguageProfileId,
               activeAnimeLanguageProfileId: sonarr.activeAnimeLanguageProfileId,
               activeTags: [],
+              requestButtonLabel: sonarr.requestButtonLabel,
+              requestButtonAnimeOnly: sonarr.requestButtonAnimeOnly ?? false,
             },
             includeOperationalDetails
           )
@@ -288,15 +339,23 @@ serviceRoutes.get<{ sonarrId: string }>(
             const sonarrMajorVersion = Number(
               systemStatus.version.split('.')[0]
             );
-            const [profiles, rootFolders, languageProfiles, tags] =
-              await Promise.all([
-                sonarr.getProfiles(),
-                sonarr.getRootFolders(),
-                sonarrMajorVersion <= 3
-                  ? sonarr.getLanguageProfiles()
-                  : Promise.resolve(null),
-                sonarr.getTags(),
-              ]);
+            const [
+              profiles,
+              rootFolders,
+              languageProfiles,
+              metadataLanguages,
+              tags,
+            ] = await Promise.all([
+              sonarr.getProfiles(),
+              sonarr.getRootFolders(),
+              sonarrMajorVersion <= 3
+                ? sonarr.getLanguageProfiles()
+                : Promise.resolve(null),
+              sonarrMajorVersion >= 5
+                ? sonarr.getMetadataLanguages()
+                : Promise.resolve([]),
+              sonarr.getTags(),
+            ]);
             return {
               server: {
                 id: sonarrSettings.id,
@@ -325,6 +384,7 @@ serviceRoutes.get<{ sonarrId: string }>(
                 totalSpace: folder.totalSpace,
               })),
               languageProfiles,
+              metadataLanguages,
               tags,
             } as ServiceCommonServerWithDetails;
           }
@@ -352,6 +412,10 @@ serviceRoutes.get('/lidarr', async (req, res, next) => {
             {
               id: lidarr.id,
               name: lidarr.name,
+              musicQuality: getMusicQualityFromLabels(
+                lidarr.activeProfileName,
+                lidarr.name
+              ),
               is4k: lidarr.is4k,
               isDefault: lidarr.isDefault,
               activeDirectory: lidarr.activeDirectory,
@@ -473,6 +537,23 @@ serviceRoutes.get('/sportarr', async (req, res, next) => {
       );
 
       return res.status(200).json(sportarrServices);
+    });
+  } catch (error) {
+    return reportServiceSummaryReadError(error, next);
+  }
+});
+
+serviceRoutes.get('/whisparr', async (req, res, next) => {
+  try {
+    return await runServiceSummaryRead(req, () => {
+      const whisparrServices: WhisparrServiceOption[] =
+        getExternalRuntimeConfig().whisparr.map((service) => ({
+          id: service.id,
+          name: service.name,
+          isDefault: service.isDefault,
+        }));
+
+      return res.status(200).json(whisparrServices);
     });
   } catch (error) {
     return reportServiceSummaryReadError(error, next);
@@ -702,6 +783,32 @@ serviceRoutes.get<{ tmdbId: string }>(
       return next({ status: 404, message: 'Series not found.' });
     }
 
+    const is4kQuery: unknown = req.query.is4k;
+    if (
+      is4kQuery !== undefined &&
+      is4kQuery !== true &&
+      is4kQuery !== false &&
+      is4kQuery !== 'true' &&
+      is4kQuery !== 'false'
+    ) {
+      return next({ status: 400, message: 'is4k must be true or false.' });
+    }
+    const is4k = is4kQuery === true || is4kQuery === 'true';
+    const requestedServerId =
+      req.query.serverId === undefined
+        ? undefined
+        : parseNonNegativeRouteId(req.query.serverId, maxServiceRouteId);
+    if (req.query.serverId !== undefined && requestedServerId === undefined) {
+      return next({ status: 400, message: 'serverId must be a valid ID.' });
+    }
+    const languageId =
+      req.query.language === undefined
+        ? undefined
+        : parseNonNegativeRouteId(req.query.language, maxServiceRouteId);
+    if (req.query.language !== undefined && languageId === undefined) {
+      return next({ status: 400, message: 'language must be a valid ID.' });
+    }
+
     try {
       return await runUserSecurityMutation(req.user!.id, async () => {
         const actor = await getRepository(User).findOneBy({ id: req.user!.id });
@@ -720,10 +827,20 @@ serviceRoutes.get<{ tmdbId: string }>(
           tvId: tmdbId,
           language: 'en',
         });
-        const sonarrId = getExternalRuntimeConfig().sonarr[0]?.id;
-        if (sonarrId === undefined) {
+        const sonarrServers = getExternalRuntimeConfig().sonarr.filter(
+          (server) =>
+            server.is4k === is4k &&
+            (requestedServerId === undefined || server.id === requestedServerId)
+        );
+        const sonarrServer =
+          requestedServerId === undefined
+            ? sonarrServers.find((server) => server.isDefault)
+            : sonarrServers[0];
+        if (!sonarrServer) {
           logger.error('No sonarr server has been setup', {
             label: 'Media Request',
+            is4k,
+            requestedServerId,
           });
           return next({
             status: 404,
@@ -732,12 +849,48 @@ serviceRoutes.get<{ tmdbId: string }>(
         }
         const response = await runWithCurrentServarrService(
           'sonarr',
-          sonarrId,
-          async (sonarrSettings) =>
-            new SonarrAPI({
-              apiKey: sonarrSettings.apiKey,
-              url: SonarrAPI.buildUrl(sonarrSettings, '/api/v3'),
-            }).getSeriesByTitle(tv.name)
+          sonarrServer.id,
+          async (currentSettings) => {
+            const sonarr = new SonarrAPI({
+              apiKey: currentSettings.apiKey,
+              url: SonarrAPI.buildUrl(currentSettings, '/api/v3'),
+            });
+            const lookupResults = await sonarr.getSeriesByTitle(
+              tv.name,
+              languageId
+            );
+            const tvdbId = tv.external_ids?.tvdb_id;
+            if (!Number.isSafeInteger(tvdbId) || !tvdbId || tvdbId < 1) {
+              return lookupResults;
+            }
+            const installedSeries = await sonarr
+              .getLibrarySeriesByTvdbId(tvdbId)
+              .catch(() => []);
+            const installed = installedSeries.find(
+              (item) => item.id && item.tvdbId === tvdbId
+            );
+            if (!installed) return lookupResults;
+
+            return lookupResults.map((item) =>
+              item.tvdbId === tvdbId
+                ? {
+                    ...item,
+                    id: installed.id,
+                    seasonType: installed.seasonType,
+                    seasonTypes: installed.seasonTypes,
+                    language: installed.language,
+                    originalLanguage: installed.originalLanguage,
+                    originalCountry: installed.originalCountry,
+                    originalTitle: installed.originalTitle,
+                    alternateTitles: installed.alternateTitles,
+                    seriesType: installed.seriesType,
+                    malIds: installed.malIds,
+                    aniListIds: installed.aniListIds,
+                    statistics: installed.statistics,
+                  }
+                : item
+            );
+          }
         );
         if (!response) {
           return next({
@@ -746,7 +899,12 @@ serviceRoutes.get<{ tmdbId: string }>(
           });
         }
 
-        return res.status(200).json(filterSonarrLookupResults(response));
+        return res.status(200).json(
+          filterSonarrLookupResults(response).map((series) => ({
+            ...series,
+            sonarrServerId: sonarrServer.id,
+          }))
+        );
       });
     } catch (e) {
       if (e instanceof UserMutationActorUnauthorizedError) {
@@ -760,6 +918,96 @@ serviceRoutes.get<{ tmdbId: string }>(
       return next({
         status: 500,
         message: 'Something went wrong trying to fetch series information',
+      });
+    }
+  }
+);
+
+serviceRoutes.get<{ sonarrId: string; tvdbId: string }>(
+  '/sonarr/:sonarrId/series/by-tvdb/:tvdbId/history',
+  isAuthenticated(SERVICE_DETAILS_PERMISSIONS, { type: 'or' }),
+  authorizedMutation<{ sonarrId: string; tvdbId: string }>(
+    SERVICE_DETAILS_PERMISSIONS,
+    async (req, res, next) => {
+      const sonarrId = parseServiceRouteId(req.params.sonarrId);
+      const tvdbId = parsePositiveServiceRouteId(req.params.tvdbId);
+      if (sonarrId === undefined || tvdbId === undefined) {
+        return next({ status: 404, message: 'Sonarr series was not found.' });
+      }
+
+      try {
+        const details = await runWithCurrentServarrService(
+          'sonarr',
+          sonarrId,
+          async (sonarrSettings) => {
+            const sonarr = new SonarrAPI({
+              apiKey: sonarrSettings.apiKey,
+              url: SonarrAPI.buildUrl(sonarrSettings, '/api/v3'),
+            });
+            const installedSeries =
+              await sonarr.getLibrarySeriesByTvdbId(tvdbId);
+            const series = installedSeries.find(
+              (candidate) => candidate.tvdbId === tvdbId && candidate.id
+            );
+            if (!series?.id) return null;
+            const history = await sonarr.getSeriesHistory(series.id, 20);
+            return {
+              seriesId: series.id,
+              statistics: series.statistics,
+              seriesType: series.seriesType,
+              seasonType: series.seasonType,
+              language: series.language,
+              originalLanguage: series.originalLanguage,
+              originalCountry: series.originalCountry,
+              malIds: series.malIds ?? [],
+              aniListIds: series.aniListIds ?? [],
+              ...(history !== undefined ? { history } : {}),
+            };
+          }
+        );
+        return details
+          ? res.status(200).json(details)
+          : next({ status: 404, message: 'Sonarr series was not found.' });
+      } catch {
+        return next({
+          status: 502,
+          message: 'Unable to load Sonarr series details.',
+        });
+      }
+    }
+  )
+);
+
+serviceRoutes.get<{ tvdbId: string }>(
+  '/tvdb/seasons/:tvdbId',
+  tvdbSeasonRateLimit,
+  async (req, res, next) => {
+    const tvdbId = parsePositiveServiceRouteId(req.params.tvdbId);
+    if (!tvdbId) {
+      return next({ status: 404, message: 'Series not found.' });
+    }
+
+    try {
+      const seasons = await (
+        await Tvdb.getInstance()
+      ).getOfficialSeasons(tvdbId);
+      if (!seasons) {
+        return next({
+          status: 502,
+          message: 'Unable to verify official TVDB season data.',
+        });
+      }
+
+      return res.status(200).json(seasons);
+    } catch (e) {
+      logger.warn('Failed to fetch official TVDB season data', {
+        label: 'Media Request',
+        tvdbId,
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
+      return next({
+        status: 502,
+        message: 'Unable to verify official TVDB season data.',
       });
     }
   }

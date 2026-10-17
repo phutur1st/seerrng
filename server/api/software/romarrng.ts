@@ -46,6 +46,7 @@ export interface RomarrLibraryLookup {
 }
 
 export class ROMarrNGAPI extends ExternalAPI {
+  private static readonly DAT_CATALOG_PLATFORM_TIMEOUT_MS = 120_000;
   private handshakePromise?: Promise<RomarrHandshake>;
   private artworkScope: string;
 
@@ -231,9 +232,11 @@ export class ROMarrNGAPI extends ExternalAPI {
     );
   }
 
-  public getCatalogPlatforms(): Promise<SoftwareCatalogPlatform[]> {
+  public getCatalogPlatforms(
+    forceRefresh = false
+  ): Promise<SoftwareCatalogPlatform[]> {
     return this.getIntegrationBase().then((base) =>
-      this.get(`${base}/catalog/platforms`, {}, 600)
+      this.get(`${base}/catalog/platforms`, {}, forceRefresh ? 0 : 600)
     );
   }
 
@@ -250,9 +253,15 @@ export class ROMarrNGAPI extends ExternalAPI {
     );
   }
 
-  public getDatCatalogPlatforms(): Promise<SoftwareDatCatalogPlatformsResponse> {
+  public getDatCatalogPlatforms(
+    forceRefresh = false
+  ): Promise<SoftwareDatCatalogPlatformsResponse> {
     return this.getIntegrationBase().then((base) =>
-      this.get(`${base}/catalog/dat/platforms`, { timeout: 45000 }, 600)
+      this.get(
+        `${base}/catalog/dat/platforms`,
+        { timeout: ROMarrNGAPI.DAT_CATALOG_PLATFORM_TIMEOUT_MS },
+        forceRefresh ? 0 : 600
+      )
     );
   }
 

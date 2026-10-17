@@ -11,6 +11,10 @@ approval and searching through downloading, importing, and library
 availability. Expand **History** on a card to review its recorded status
 changes.
 
+Request explanations use the selected interface language. Custom details
+reported by connected services remain as supplied so their diagnostic wording
+is preserved.
+
 ## Find a request
 
 Use the summary filters to view all requests, completed requests, active work,
@@ -31,6 +35,36 @@ approval stage. Pending requests may also show management actions such as
 approve, decline, or edit, depending on your permissions. Actions for deleting
 status entries or removing available media are permission-controlled and
 include a confirmation step.
+
+For TV requests, SeerrNG can resolve a missing TVDB identifier through TVDB's
+confirmed TMDB match or the selected Sonarr server's TMDB lookup. It checks
+requested regular seasons against official TVDB season data before dispatch.
+If the series cannot be identified or the season numbers cannot be confirmed,
+the request stays visible as failed with its media record intact. Correct the
+provider or metadata issue before retrying. For an unresolved TVDB identity or
+season-numbering mismatch, choose **Map TV seasons** on the failed request to
+repair it directly. Select the intended Sonarr series, then map every requested
+TMDB season to one distinct season in the selected Sonarr order. The standard
+order is verified against official TVDB data; alternate Sonarr v5 orders are
+verified against the selected series. SeerrNG keeps the request's selected
+Sonarr server, quality, requested seasons, and permissions when it retries. No
+series or season mapping is selected automatically. Mappings are separate for
+each Sonarr destination, quality, and season order, so repairing one request
+does not change how another instance or order maps the same TVDB series.
+
+Request API responses include a stable `failureReason` code when a movie or TV
+dispatch failure can be classified. The code distinguishes an unavailable
+selected service, a dispatch failure, an unresolved TVDB identity, unverified
+TVDB season data, and a season-numbering mismatch. The field contains no raw
+provider error text. Retrying or resubmitting clears the previous code; a new
+failure records the latest classification.
+
+When a failed request has a recorded reason, its card and request-management
+views show a plain-language explanation. If the selected TV listing uses
+different regular-season numbers than TVDB, retry is disabled because the same
+listing will fail the same check. Use **Find Another Listing** to search for a
+series with matching season numbers, or **Map TV seasons** when the current
+Sonarr series uses different numbers.
 
 For books, the Books and Audiobooks filters keep ebook and audiobook requests
 separate. A combined request can therefore be incomplete while one format is

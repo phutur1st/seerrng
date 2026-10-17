@@ -63,6 +63,8 @@ const messages = defineMessages('components.Settings.BookshelfPathMigration', {
   mediaFiles: '{count} media files',
   sidecarFiles: '{count} sidecar files',
   missingFiles: '{count} missing files will be skipped',
+  authorFileCounts:
+    '{mediaCount, plural, one {# media file} other {# media files}}, {sidecarCount, plural, one {# sidecar file} other {# sidecar files}}, {missingCount, plural, one {# missing file will be skipped} other {# missing files will be skipped}}',
   requiredCopy: 'Required copy space: {size}',
   availableSpace: 'Available destination space: {size}',
   noSpaceEstimate: 'BookshelfNG could not report destination free space.',
@@ -158,8 +160,13 @@ const AuthorMovePreviewDetails = ({
           source: author.sourcePath,
           destination: author.destinationPath,
         })}{' '}
-        ({author.mediaFileCount} media, {author.sidecarFileCount} sidecar,{' '}
-        {author.missingFileCount} missing)
+        {' ('}
+        {intl.formatMessage(messages.authorFileCounts, {
+          mediaCount: author.mediaFileCount,
+          sidecarCount: author.sidecarFileCount,
+          missingCount: author.missingFileCount,
+        })}
+        {')'}
       </summary>
       {expanded && (
         <ul className="mt-2 max-h-64 space-y-2 overflow-y-auto pl-5 text-xs">
@@ -382,7 +389,7 @@ const BookshelfPathMigration = () => {
         <p>{intl.formatMessage(messages.safety)}</p>
         <p>{intl.formatMessage(messages.consolidation)}</p>
         <Link
-          href="https://github.com/snapetech/seerrng/blob/main/docs/using-seerr/bookshelf-media-path-migration.md"
+          href="https://github.com/snapetech-org/seerrng/blob/main/docs/using-seerr/bookshelf-media-path-migration.md"
           className="text-blue-400 hover:text-blue-300"
         >
           {intl.formatMessage(messages.documentation)}

@@ -4,7 +4,9 @@ import ReadarrAPI from '@server/api/servarr/readarr';
 import SonarrAPI from '@server/api/servarr/sonarr';
 import SportarrAPI from '@server/api/servarr/sportarr';
 import TheMovieDb from '@server/api/themoviedb';
+import Tvdb from '@server/api/tvdb';
 import {
+  MediaRequestFailureReason,
   MediaRequestStatus,
   MediaStatus,
   MediaType,
@@ -20,6 +22,7 @@ import {
   DuplicateMediaRequestError,
   MediaRequest,
   NoSeasonsAvailableError,
+  QuotaExceptionAlreadyPendingError,
   QuotaRestrictedError,
   RequestPermissionError,
   ServiceConfigurationError,
@@ -77,22 +80,38 @@ import {
   REQUEST_STATUS_SORT_FIELDS,
   parseRequestStatusSort,
 } from '@server/lib/requestStatusSort';
+import {
+  PendingRequestTransitionConflictError,
+  PendingRequestTransitionNotFoundError,
+  transitionPendingMediaRequest,
+  validateExternalServiceConfiguration,
+} from '@server/lib/requestTransition';
 import requestWorkCleanupManager, {
   RequestWorkCleanupError,
 } from '@server/lib/requestWorkCleanup';
+import {
+  DuplicateExternalSeasonMappingError,
+  persistTvdbSeasonMappings,
+  type SeasonNumberMapping,
+} from '@server/lib/seasonNumberMapping';
 import { runWithCurrentServarrService } from '@server/lib/serviceAdmission';
 import { getSettings } from '@server/lib/settings';
 import { isSportarrLeagueExternalId } from '@server/lib/sportarrIdentity';
+import { normalizeStashDbId } from '@server/lib/stashdbIdentity';
+import {
+  TvSeasonWatchGateError,
+  enforceTvSeasonWatchGate,
+} from '@server/lib/tvSeasonWatchGate';
 import {
   UserMutationActorUnauthorizedError,
   acquireAuthorizedUserSecurityMutation,
   isUserCredentialVersionCurrent,
-  runAuthorizedUserSecurityMutation,
   runUserSecurityMutation,
   runUserSecurityMutationWithActor,
   runUserSecurityReadWithActor,
   type AuthorizedUserSecurityMutationLease,
 } from '@server/lib/userSecurityMutation';
+import { doesUserAllowVideo } from '@server/lib/videoMaturityPolicy';
 import { hasWatchAheadMediaServerLink } from '@server/lib/watchAheadEligibility';
 import logger from '@server/logger';
 import { isAuthenticated } from '@server/middleware/auth';
@@ -112,6 +131,7 @@ import {
 } from '@server/utils/validation';
 import { Router, type Request } from 'express';
 import { pipeline } from 'node:stream/promises';
+import { EntityNotFoundError } from 'typeorm';
 
 const requestRoutes = Router();
 export const REQUEST_SERVICE_PROFILE_CONCURRENCY = 10;
@@ -277,8 +297,15 @@ const requestMediaTypeFilters = [
   'book',
   'comic',
   'magazine',
+  'adult',
   'sports',
 ] as const;
+
+const hasAdultRequestAccess = (user?: User | null): boolean =>
+  user?.hasPermission(
+    [Permission.ADMIN, Permission.MANAGE_REQUESTS, Permission.REQUEST_ADULT],
+    { type: 'or' }
+  ) ?? false;
 const requestStatusFilters = [
   'all',
   'recent',
@@ -434,11 +461,13 @@ const getDisabledCategoryForRequest = (
             ? ['comic']
             : mediaType === MediaType.MAGAZINE
               ? ['magazine']
-              : mediaType === MediaType.SPORTS
-                ? ['sports']
-                : format === 'both'
-                  ? ['ebook', 'audiobook']
-                  : [format === 'audiobook' ? 'audiobook' : 'ebook'];
+              : mediaType === MediaType.ADULT
+                ? ['adult']
+                : mediaType === MediaType.SPORTS
+                  ? ['sports']
+                  : format === 'both'
+                    ? ['ebook', 'audiobook']
+                    : [format === 'audiobook' ? 'audiobook' : 'ebook'];
 
   return categories.find((category) => !isMediaCategoryEnabled(category));
 };
@@ -452,6 +481,7 @@ const getMediaCategoryLabel = (category: MediaCategoryKey): string => {
     audiobook: 'Audiobook',
     comic: 'Comic',
     magazine: 'Magazine',
+    adult: 'Adult',
     sports: 'Sports',
     retro: 'Retro emulation',
     modern: 'Modern emulation',
@@ -599,7 +629,7 @@ const formatEpisodeQueueSetting = (episodeCount: number): string =>
 
 const parseRequestStatusAction = (
   status: unknown
-): MediaRequestStatus | undefined => {
+): MediaRequestStatus.APPROVED | MediaRequestStatus.DECLINED | undefined => {
   switch (status) {
     case 'approve':
       return MediaRequestStatus.APPROVED;
@@ -658,20 +688,27 @@ const getRequestDownloadAccess = async (
   });
   if (!request) return { status: 404 };
 
+  let adultAccessDenied = false;
   const hasAccess = await runUserSecurityReadWithActor(
     req.user!.id,
     request.requestedBy.id,
     [Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW],
-    async (actor) =>
-      actor.hasPermission(
-        [Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW],
-        {
-          type: 'or',
-        }
-      ) || request.requestedBy.id === actor.id,
+    async (actor) => {
+      if (request.type === MediaType.ADULT && !hasAdultRequestAccess(actor)) {
+        adultAccessDenied = true;
+        return false;
+      }
+
+      return (
+        actor.hasPermission(
+          [Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW],
+          { type: 'or' }
+        ) || request.requestedBy.id === actor.id
+      );
+    },
     { expectedCredentialVersion: getExpectedCredentialVersion(req) }
   );
-  return hasAccess ? { request } : { status: 403 };
+  return hasAccess ? { request } : { status: adultAccessDenied ? 404 : 403 };
 };
 
 const parseRequestDownloadRange = (
@@ -1002,6 +1039,31 @@ const sanitizeMediaRequestBody = (
     };
   }
 
+  if (
+    bodyObject.requestQuotaApproval !== undefined &&
+    typeof bodyObject.requestQuotaApproval !== 'boolean'
+  ) {
+    return {
+      error: {
+        status: 400,
+        message: 'requestQuotaApproval must be a boolean.',
+      },
+    };
+  }
+  if (
+    bodyObject.requestQuotaApproval === true &&
+    (!options.requireCreateIdentity ||
+      (mediaType !== MediaType.MOVIE && mediaType !== MediaType.TV))
+  ) {
+    return {
+      error: {
+        status: 400,
+        message:
+          'requestQuotaApproval is only valid for new movie or TV requests.',
+      },
+    };
+  }
+
   if (bodyObject.watchAheadEpisodeCount !== undefined) {
     if (
       !Number.isSafeInteger(bodyObject.watchAheadEpisodeCount) ||
@@ -1212,6 +1274,27 @@ const sanitizeMediaRequestBody = (
     if (externalId) bodyObject.mediaId = externalId;
   }
 
+  if (mediaType === MediaType.ADULT) {
+    const stashDbId = normalizeStashDbId(bodyObject.mediaId);
+    if (bodyObject.mediaId !== undefined && !stashDbId) {
+      return {
+        error: {
+          status: 400,
+          message: 'mediaId must be a canonical StashDB scene ID.',
+        },
+      };
+    }
+    if (options.requireCreateIdentity && !stashDbId) {
+      return {
+        error: {
+          status: 400,
+          message: 'mediaId is required for adult requests.',
+        },
+      };
+    }
+    if (stashDbId) bodyObject.mediaId = stashDbId;
+  }
+
   const serverId = parseOptionalRequestOptionId(
     bodyObject.serverId,
     'serverId',
@@ -1219,6 +1302,43 @@ const sanitizeMediaRequestBody = (
   );
   if ('error' in serverId) {
     return serverId;
+  }
+
+  const requestServiceServerId = parseOptionalRequestOptionId(
+    bodyObject.requestServiceServerId,
+    'requestServiceServerId',
+    true
+  );
+  if ('error' in requestServiceServerId) {
+    return requestServiceServerId;
+  }
+  if (requestServiceServerId.value !== undefined) {
+    if (mediaType !== MediaType.MOVIE && mediaType !== MediaType.TV) {
+      return {
+        error: {
+          status: 400,
+          message:
+            'requestServiceServerId is only valid for movie and series requests.',
+        },
+      };
+    }
+    if (serverId.value !== undefined) {
+      return {
+        error: {
+          status: 400,
+          message:
+            'Choose either a request destination or advanced server override.',
+        },
+      };
+    }
+    if (!options.requireCreateIdentity) {
+      return {
+        error: {
+          status: 400,
+          message: 'requestServiceServerId is only valid for new requests.',
+        },
+      };
+    }
   }
 
   const profileId = parseOptionalRequestOptionId(
@@ -1246,6 +1366,51 @@ const sanitizeMediaRequestBody = (
   );
   if ('error' in metadataProfileId) {
     return metadataProfileId;
+  }
+
+  const metadataLanguageId = parseOptionalRequestOptionId(
+    bodyObject.metadataLanguageId,
+    'metadataLanguageId',
+    true
+  );
+  if ('error' in metadataLanguageId) {
+    return metadataLanguageId;
+  }
+  const sanitizedMetadataLanguageId =
+    bodyObject.metadataLanguageId === null ? null : metadataLanguageId.value;
+
+  const sonarrSeasonType = parseOptionalRequestString(
+    bodyObject.sonarrSeasonType,
+    'sonarrSeasonType',
+    100
+  );
+  if (
+    'error' in sonarrSeasonType ||
+    (sonarrSeasonType.value !== undefined &&
+      !/^[A-Za-z0-9._-]+$/.test(sonarrSeasonType.value))
+  ) {
+    return 'error' in sonarrSeasonType
+      ? sonarrSeasonType
+      : {
+          error: {
+            status: 400,
+            message: 'sonarrSeasonType must be a valid Sonarr order name.',
+          },
+        };
+  }
+  const sanitizedSonarrSeasonType =
+    bodyObject.sonarrSeasonType === null ? null : sonarrSeasonType.value;
+  if (
+    mediaType !== MediaType.TV &&
+    (sanitizedMetadataLanguageId !== undefined ||
+      sanitizedSonarrSeasonType !== undefined)
+  ) {
+    return {
+      error: {
+        status: 400,
+        message: 'Sonarr metadata options are only valid for TV requests.',
+      },
+    };
   }
 
   const userId = parseOptionalRequestOptionId(bodyObject.userId, 'userId');
@@ -1365,10 +1530,13 @@ const sanitizeMediaRequestBody = (
     ...body,
     is4k: bodyObject.is4k ?? false,
     serverId: serverId.value,
+    requestServiceServerId: requestServiceServerId.value,
     profileId: profileId.value,
     profileName: profileName.value,
     rootFolder: rootFolder.value,
     languageProfileId: languageProfileId.value,
+    metadataLanguageId: sanitizedMetadataLanguageId,
+    sonarrSeasonType: sanitizedSonarrSeasonType,
     metadataProfileId: metadataProfileId.value,
     format: format.value,
     preferredEditionId: preferredEditionId.value,
@@ -1381,6 +1549,8 @@ const sanitizeMediaRequestBody = (
     seasonRequests: seasonRequests.value,
     watchAheadEpisodeCount: bodyObject.watchAheadEpisodeCount as
       number | undefined,
+    requestQuotaApproval: bodyObject.requestQuotaApproval as
+      boolean | undefined,
   } as MediaRequestBody;
 
   return {
@@ -1544,171 +1714,6 @@ const sanitizeBulkMediaRequestBody = (
       tags: sanitized.value.tags,
     },
   };
-};
-
-const validateExternalServiceConfiguration = (
-  requestType: MediaType,
-  serverId?: number | null,
-  bookFormat?: 'ebook' | 'audiobook' | 'both' | null,
-  is4k = false
-) => {
-  const settings = getExternalRuntimeConfig();
-
-  if (requestType === MediaType.MOVIE || requestType === MediaType.TV) {
-    if (serverId === undefined || serverId === null) {
-      return;
-    }
-    const selectedServer =
-      requestType === MediaType.MOVIE
-        ? settings.radarr.find(({ id }) => id === serverId)
-        : settings.sonarr.find(({ id }) => id === serverId);
-    if (!selectedServer) {
-      throw new ServiceConfigurationError(
-        `The selected ${
-          requestType === MediaType.MOVIE ? 'Radarr' : 'Sonarr'
-        } server no longer exists.`
-      );
-    }
-    if (selectedServer.is4k !== is4k) {
-      throw new ServiceConfigurationError(
-        `The selected ${
-          requestType === MediaType.MOVIE ? 'Radarr' : 'Sonarr'
-        } server does not match the requested quality tier.`
-      );
-    }
-    return;
-  }
-
-  if (requestType === MediaType.MUSIC) {
-    if (serverId === undefined || serverId === null) {
-      if (!settings.lidarr.some((lidarr) => lidarr.isDefault)) {
-        throw new ServiceConfigurationError(
-          'No default Lidarr server is configured for music requests.'
-        );
-      }
-
-      return;
-    }
-
-    if (!settings.lidarr.some((lidarr) => lidarr.id === serverId)) {
-      throw new ServiceConfigurationError(
-        'The selected Lidarr server no longer exists.'
-      );
-    }
-  }
-
-  if (requestType === MediaType.BOOK) {
-    const requestedFormat = bookFormat ?? 'ebook';
-
-    if (serverId === undefined || serverId === null) {
-      const hasDefaultEbook = settings.readarr.some(
-        (readarr) =>
-          readarr.isDefault && (readarr.serviceType ?? 'ebook') === 'ebook'
-      );
-      const hasDefaultAudiobook = settings.readarr.some(
-        (readarr) => readarr.isDefault && readarr.serviceType === 'audiobook'
-      );
-
-      if (requestedFormat === 'both') {
-        if (!hasDefaultEbook || !hasDefaultAudiobook) {
-          throw new ServiceConfigurationError(
-            'Both-format book requests require default ebook and audiobook Bookshelf services.'
-          );
-        }
-
-        return;
-      }
-
-      if (
-        (requestedFormat === 'ebook' && !hasDefaultEbook) ||
-        (requestedFormat === 'audiobook' && !hasDefaultAudiobook)
-      ) {
-        throw new ServiceConfigurationError(
-          `No default ${requestedFormat} Bookshelf server is configured for book requests.`
-        );
-      }
-
-      return;
-    }
-
-    const selectedReadarr = settings.readarr.find(
-      (readarr) => readarr.id === serverId
-    );
-
-    if (!selectedReadarr) {
-      throw new ServiceConfigurationError(
-        'The selected Bookshelf server no longer exists.'
-      );
-    }
-
-    if (requestedFormat === 'both') {
-      if ((selectedReadarr.serviceType ?? 'ebook') !== 'ebook') {
-        throw new ServiceConfigurationError(
-          'The selected Bookshelf server is configured for audiobook requests, not ebook requests.'
-        );
-      }
-      if (
-        !settings.readarr.some(
-          (readarr) => readarr.isDefault && readarr.serviceType === 'audiobook'
-        )
-      ) {
-        throw new ServiceConfigurationError(
-          'Both-format book requests require a default audiobook Bookshelf service.'
-        );
-      }
-      return;
-    }
-
-    const selectedReadarrServiceType = selectedReadarr.serviceType ?? 'ebook';
-
-    if (selectedReadarrServiceType !== requestedFormat) {
-      throw new ServiceConfigurationError(
-        `The selected Bookshelf server is configured for ${selectedReadarrServiceType} requests, not ${requestedFormat} requests.`
-      );
-    }
-  }
-
-  if (requestType === MediaType.COMIC) {
-    if (serverId === undefined || serverId === null) {
-      if (
-        !settings.mylar.some((mylar) => mylar.isDefault) &&
-        !settings.kapowarr.some((kapowarr) => kapowarr.isDefault) &&
-        !settings.backissue.some((backissue) => backissue.isDefault)
-      ) {
-        throw new ServiceConfigurationError(
-          'No default comic service is configured for comic requests.'
-        );
-      }
-      return;
-    }
-
-    if (
-      !settings.mylar.some((mylar) => mylar.id === serverId) &&
-      !settings.kapowarr.some((kapowarr) => kapowarr.id === serverId) &&
-      !settings.backissue.some((backissue) => backissue.id === serverId)
-    ) {
-      throw new ServiceConfigurationError(
-        'The selected comics server no longer exists.'
-      );
-    }
-  }
-
-  if (requestType === MediaType.MAGAZINE) {
-    if (serverId === undefined || serverId === null) {
-      if (!settings.lazylibrarian.some((service) => service.isDefault)) {
-        throw new ServiceConfigurationError(
-          'No default LazyLibrarian server is configured for magazine requests.'
-        );
-      }
-      return;
-    }
-
-    if (!settings.lazylibrarian.some((service) => service.id === serverId)) {
-      throw new ServiceConfigurationError(
-        'The selected LazyLibrarian server no longer exists.'
-      );
-    }
-  }
 };
 
 const inactiveMediaRequestStatuses = [
@@ -1949,7 +1954,7 @@ requestRoutes.get<
         sortFilter = 'request.updatedAt';
         break;
       default:
-        sortFilter = 'request.id';
+        sortFilter = 'request.createdAt';
     }
 
     switch (sortDirectionParam) {
@@ -1996,6 +2001,16 @@ requestRoutes.get<
         [Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW],
         { type: 'or' }
       ) ?? false;
+    const canViewAdultRequests = hasAdultRequestAccess(
+      requestReadLease?.actor ?? req.user
+    );
+
+    if (mediaType === 'adult' && !canViewAdultRequests) {
+      return next({
+        status: 403,
+        message: 'You do not have permission to view adult requests.',
+      });
+    }
 
     let query = getRepository(MediaRequest)
       .createQueryBuilder('request')
@@ -2026,6 +2041,12 @@ requestRoutes.get<
     } else if (requestedBy) {
       query = query.andWhere('requestedBy.id = :id', {
         id: requestedBy,
+      });
+    }
+
+    if (!canViewAdultRequests) {
+      query = query.andWhere('request.type != :hiddenAdultType', {
+        hiddenAdultType: MediaType.ADULT,
       });
     }
 
@@ -2062,6 +2083,11 @@ requestRoutes.get<
           type: MediaType.MAGAZINE,
         });
         break;
+      case 'adult':
+        query = query.andWhere('request.type = :type', {
+          type: MediaType.ADULT,
+        });
+        break;
       case 'sports':
         query = query.andWhere('request.type = :type', {
           type: MediaType.SPORTS,
@@ -2071,6 +2097,7 @@ requestRoutes.get<
 
     const [requestRows, requestCount] = await query
       .orderBy(sortFilter, sortDirection)
+      .addOrderBy('request.id', sortDirection)
       .take(pageSize)
       .skip(skip)
       .getManyAndCount();
@@ -2592,7 +2619,7 @@ requestRoutes.post<never, MediaRequest, MediaRequestBody>(
           req.user,
           req.user.id,
           body.value.is4k ?? false,
-          body.value.serverId
+          body.value.requestServiceServerId ?? body.value.serverId
         );
         if (eligibilityError) {
           return next({ status: 409, message: eligibilityError });
@@ -2601,6 +2628,7 @@ requestRoutes.post<never, MediaRequest, MediaRequestBody>(
 
       const request = await MediaRequest.request(body.value, req.user, {
         expectedCredentialVersion: getExpectedCredentialVersion(req),
+        requestQuotaApproval: body.value.requestQuotaApproval === true,
       });
 
       return res.status(201).json(filterEntityResponse(request, req.user));
@@ -2615,11 +2643,17 @@ requestRoutes.post<never, MediaRequest, MediaRequestBody>(
         return next({ status: 500, message: 'Unable to submit request.' });
       }
 
+      if (error instanceof TvSeasonWatchGateError) {
+        return next({ status: error.status, message: error.message });
+      }
+
       switch (error.constructor) {
         case UserMutationActorUnauthorizedError:
         case RequestPermissionError:
         case QuotaRestrictedError:
           return next({ status: 403, message: error.message });
+        case QuotaExceptionAlreadyPendingError:
+          return next({ status: 409, message: error.message });
         case DuplicateMediaRequestError:
           return next({ status: 409, message: error.message });
         case ServiceConfigurationError:
@@ -3082,6 +3116,10 @@ requestRoutes.get('/count', async (req, res, next) => {
           'magazine'
         )
         .addSelect(
+          'SUM(CASE WHEN request.type = :adult THEN 1 ELSE 0 END)',
+          'adult'
+        )
+        .addSelect(
           'SUM(CASE WHEN request.type = :sports THEN 1 ELSE 0 END)',
           'sports'
         )
@@ -3130,6 +3168,7 @@ requestRoutes.get('/count', async (req, res, next) => {
           book: MediaType.BOOK,
           comic: MediaType.COMIC,
           magazine: MediaType.MAGAZINE,
+          adult: MediaType.ADULT,
           sports: MediaType.SPORTS,
           pending: MediaRequestStatus.PENDING,
           approved: MediaRequestStatus.APPROVED,
@@ -3152,6 +3191,12 @@ requestRoutes.get('/count', async (req, res, next) => {
         });
       }
 
+      if (!hasAdultRequestAccess(actor)) {
+        countQuery.andWhere('request.type != :hiddenAdultType', {
+          hiddenAdultType: MediaType.ADULT,
+        });
+      }
+
       const counts =
         await countQuery.getRawOne<Record<string, string | number | null>>();
 
@@ -3167,6 +3212,7 @@ requestRoutes.get('/count', async (req, res, next) => {
         book: count('book'),
         comic: count('comic'),
         magazine: count('magazine'),
+        adult: count('adult'),
         sports: count('sports'),
         pending: count('pending'),
         approved: count('approved'),
@@ -3306,6 +3352,13 @@ requestRoutes.get<
         const canManageRequests = actor.hasPermission(
           Permission.MANAGE_REQUESTS
         );
+        const canViewAdultRequests = hasAdultRequestAccess(actor);
+        if (mediaType === 'adult' && !canViewAdultRequests) {
+          return next({
+            status: 403,
+            message: 'You do not have permission to view adult requests.',
+          });
+        }
         const settings = getExternalRuntimeConfig();
         const page = await getRequestStatusPage({
           take: pageSize,
@@ -3314,6 +3367,7 @@ requestRoutes.get<
           mediaId,
           ownerId: canViewAllRequests ? (requestedBy ?? undefined) : actor.id,
           mediaType: mediaType === 'all' ? undefined : (mediaType as MediaType),
+          excludeAdult: !canViewAdultRequests,
           bookFormat: parsedBookFormat.value,
           search: parsedSearch.value,
           since: getRequestStatusStartDate(parsedTimeFrame.value ?? 'all'),
@@ -3432,24 +3486,50 @@ requestRoutes.get<
       return next({ status: 404, message: 'Request not found.' });
     }
 
-    const request = await getRepository(MediaRequest).findOne({
+    const requestRepository = getRepository(MediaRequest);
+    const request = await requestRepository.findOne({
       where: { id: requestId },
       relations: {
-        media: { identifiers: true, seasons: true },
+        media: true,
         modifiedBy: true,
         requestedBy: true,
-        seasons: true,
       },
+      loadEagerRelations: false,
     });
     if (!request) {
       return next({ status: 404, message: 'Request not found.' });
     }
+
+    const [identifiers, mediaSeasons, requestedSeasons] = await Promise.all([
+      getRepository(Media)
+        .createQueryBuilder()
+        .relation(Media, 'identifiers')
+        .of(request.media.id)
+        .loadMany<MediaIdentifier>(),
+      getRepository(Media)
+        .createQueryBuilder()
+        .relation(Media, 'seasons')
+        .of(request.media.id)
+        .loadMany(),
+      requestRepository
+        .createQueryBuilder()
+        .relation(MediaRequest, 'seasons')
+        .of(request.id)
+        .loadMany<SeasonRequest>(),
+    ]);
+    request.media.identifiers = identifiers;
+    request.media.seasons = mediaSeasons;
+    request.seasons = requestedSeasons;
 
     return await runUserSecurityReadWithActor(
       req.user!.id,
       request.requestedBy.id,
       [Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW],
       async (actor) => {
+        if (request.type === MediaType.ADULT && !hasAdultRequestAccess(actor)) {
+          return next({ status: 404, message: 'Request not found.' });
+        }
+
         const canViewAllRequests = actor.hasPermission(
           [Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW],
           { type: 'or' }
@@ -3653,6 +3733,10 @@ requestRoutes.get('/:requestId', async (req, res, next) => {
           media: { identifiers: true },
         },
       });
+
+      if (request.type === MediaType.ADULT && !hasAdultRequestAccess(actor)) {
+        return next({ status: 404, message: 'Request not found.' });
+      }
 
       if (
         request.requestedBy.id !== actor.id &&
@@ -3932,7 +4016,13 @@ requestRoutes.put<{ requestId: string }>(
       const body = sanitizedBody.value;
       const initialRequest = await requestRepository.findOne({
         where: { id: requestId },
-        select: { id: true, status: true, type: true },
+        relations: { requestedBy: true },
+        select: {
+          id: true,
+          status: true,
+          type: true,
+          requestedBy: { id: true },
+        },
       });
       if (!initialRequest) {
         return next({ status: 404, message: 'Request not found.' });
@@ -3953,7 +4043,10 @@ requestRoutes.put<{ requestId: string }>(
 
       return await runUserSecurityMutationWithActor(
         req.user!.id,
-        body.userId ?? req.user!.id,
+        [
+          initialRequest.requestedBy.id,
+          body.userId ?? initialRequest.requestedBy.id,
+        ],
         [Permission.MANAGE_USERS, Permission.MANAGE_REQUESTS],
         (actor) =>
           runWithRequestAdmission(
@@ -4083,6 +4176,24 @@ requestRoutes.put<{ requestId: string }>(
                       status: 403,
                       message:
                         'The selected user does not have permission to request this media.',
+                    });
+                  }
+
+                  if (
+                    (request.type === MediaType.MOVIE ||
+                      request.type === MediaType.TV) &&
+                    request.media?.tmdbId &&
+                    !(await doesUserAllowVideo(
+                      new TheMovieDb(),
+                      requestUser.id,
+                      request.type,
+                      request.media.tmdbId
+                    ))
+                  ) {
+                    return next({
+                      status: 403,
+                      message:
+                        'This title exceeds the selected user’s maturity limit or has no recognized US rating.',
                     });
                   }
 
@@ -4302,6 +4413,8 @@ requestRoutes.put<{ requestId: string }>(
                       }
                     );
 
+                    let tmdbShow:
+                      Awaited<ReturnType<TheMovieDb['getTvShow']>> | undefined;
                     if (
                       !getSettings().main.partialRequestsEnabled &&
                       !isSingleEpisodeWatchAheadSelection(
@@ -4323,9 +4436,6 @@ requestRoutes.put<{ requestId: string }>(
                         });
                       }
 
-                      let tmdbShow: Awaited<
-                        ReturnType<TheMovieDb['getTvShow']>
-                      >;
                       try {
                         tmdbShow = await new TheMovieDb().getTvShow({
                           tvId: request.media.tmdbId,
@@ -4381,6 +4491,70 @@ requestRoutes.put<{ requestId: string }>(
                         status: 202,
                         message: 'No seasons available to request',
                       });
+                    }
+
+                    const newSeasonSelections = filteredSelections.filter(
+                      ({ seasonNumber }) =>
+                        !currentSeasonNumbers.has(seasonNumber)
+                    );
+                    const seasonWatchGateSelections = changesRequestUser
+                      ? filteredSelections
+                      : newSeasonSelections;
+
+                    if (
+                      getSettings().main.tvSeasonWatchGateEnabled &&
+                      seasonWatchGateSelections.some(
+                        ({ seasonNumber }) => seasonNumber > 1
+                      ) &&
+                      !actor.hasPermission(
+                        [Permission.MANAGE_REQUESTS, Permission.ADMIN],
+                        { type: 'or' }
+                      )
+                    ) {
+                      try {
+                        tmdbShow ??= await new TheMovieDb().getTvShow({
+                          tvId: request.media.tmdbId,
+                        });
+                      } catch {
+                        throw new TvSeasonWatchGateError(
+                          503,
+                          'Unable to verify TV season metadata. Try again later.'
+                        );
+                      }
+                      if (!tmdbShow) {
+                        throw new TvSeasonWatchGateError(
+                          503,
+                          'Unable to verify TV season metadata. Try again later.'
+                        );
+                      }
+                      const requestUserWithPlaybackCredentials =
+                        await userRepository
+                          .createQueryBuilder('user')
+                          .addSelect([
+                            'user.plexToken',
+                            'user.jellyfinAuthToken',
+                            'user.jellyfinDeviceId',
+                          ])
+                          .where('user.id = :requestUserId', {
+                            requestUserId: requestUser.id,
+                          })
+                          .getOne();
+                      if (!requestUserWithPlaybackCredentials) {
+                        throw new TvSeasonWatchGateError(
+                          403,
+                          'The request owner is no longer available.'
+                        );
+                      }
+                      await enforceTvSeasonWatchGate(
+                        actor,
+                        requestUserWithPlaybackCredentials,
+                        request.media,
+                        tmdbShow.seasons.map((season) => ({
+                          seasonNumber: season.season_number,
+                          episodeCount: season.episode_count,
+                        })),
+                        seasonWatchGateSelections
+                      );
                     }
 
                     const quotas = await requestUser.getQuota();
@@ -4440,6 +4614,31 @@ requestRoutes.put<{ requestId: string }>(
                       if (body.languageProfileId !== undefined) {
                         request.languageProfileId =
                           body.languageProfileId as number;
+                      }
+                      if (
+                        (body.metadataLanguageId !== undefined ||
+                          body.sonarrSeasonType !== undefined) &&
+                        !actor.hasPermission(
+                          [
+                            Permission.REQUEST_ADVANCED,
+                            Permission.MANAGE_REQUESTS,
+                          ],
+                          { type: 'or' }
+                        )
+                      ) {
+                        return next({
+                          status: 403,
+                          message:
+                            'You do not have permission to change Sonarr metadata options.',
+                        });
+                      }
+                      if (body.metadataLanguageId !== undefined) {
+                        request.metadataLanguageId = body.metadataLanguageId as
+                          number | null;
+                      }
+                      if (body.sonarrSeasonType !== undefined) {
+                        request.sonarrSeasonType = body.sonarrSeasonType as
+                          string | null;
                       }
                       if (body.tags !== undefined) {
                         request.tags = body.tags;
@@ -4515,7 +4714,6 @@ requestRoutes.put<{ requestId: string }>(
                     request.watchAheadLastEpisode = null;
                     request.watchAheadLastReconciledAt = null;
                   }
-
                   if (isFailedRequestRepair) {
                     if (
                       body.serverId === undefined ||
@@ -4529,9 +4727,13 @@ requestRoutes.put<{ requestId: string }>(
                     }
 
                     request.status = MediaRequestStatus.APPROVED;
+                    request.failureReason = null;
                     request.modifiedBy = actor;
                   }
 
+                  if (changesRequestUser) {
+                    request.quotaException = false;
+                  }
                   request.requestedBy = requestUser;
                   await requestRepository.save(request);
                   return res
@@ -4551,6 +4753,9 @@ requestRoutes.put<{ requestId: string }>(
           status: 403,
           message: 'You do not have permission to modify this request.',
         });
+      }
+      if (e instanceof TvSeasonWatchGateError) {
+        return next({ status: e.status, message: e.message });
       }
       if (e instanceof ServiceConfigurationError) {
         return next({ status: 400, message: e.message });
@@ -4710,6 +4915,98 @@ requestRoutes.post<{
   requestId: string;
 }>('/:requestId/retry', isAuthenticated(), async (req, res, next) => {
   const requestRepository = getRepository(MediaRequest);
+  let manualSeasonMapping:
+    | {
+        tvdbId: number;
+        seasonType: string;
+        mappings: SeasonNumberMapping[];
+      }
+    | undefined;
+
+  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
+    const body = req.body as Record<string, unknown>;
+    const bodyKeys = Object.keys(body);
+    if (bodyKeys.length > 0) {
+      if (
+        bodyKeys.some(
+          (key) =>
+            key !== 'tvdbId' && key !== 'seasonType' && key !== 'seasonMappings'
+        )
+      ) {
+        return next({
+          status: 400,
+          message: 'Only TVDB season mapping fields are accepted.',
+        });
+      }
+
+      const tvdbId = parsePositiveRouteId(body.tvdbId, maxRequestIdValue);
+      const seasonType =
+        body.seasonType === undefined ? 'standard' : body.seasonType;
+      if (
+        tvdbId === undefined ||
+        typeof seasonType !== 'string' ||
+        seasonType.length > 100 ||
+        !/^[A-Za-z0-9._-]+$/.test(seasonType) ||
+        !Array.isArray(body.seasonMappings) ||
+        body.seasonMappings.length === 0 ||
+        body.seasonMappings.length > maxSeasonCount
+      ) {
+        return next({
+          status: 400,
+          message: 'A TVDB ID and at least one season mapping are required.',
+        });
+      }
+
+      const mappings: SeasonNumberMapping[] = [];
+      const sourceSeasons = new Set<number>();
+      const externalSeasons = new Set<number>();
+      for (const value of body.seasonMappings) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+          return next({
+            status: 400,
+            message: 'Each season mapping must contain two season numbers.',
+          });
+        }
+        const mapping = value as Record<string, unknown>;
+        if (
+          Object.keys(mapping).some(
+            (key) => key !== 'seasonNumber' && key !== 'externalSeasonNumber'
+          )
+        ) {
+          return next({
+            status: 400,
+            message: 'Each season mapping must contain only season numbers.',
+          });
+        }
+        const seasonNumber = parseOptionalNonNegativeInteger(
+          mapping.seasonNumber,
+          maxSeasonNumber
+        );
+        const externalSeasonNumber = parseOptionalNonNegativeInteger(
+          mapping.externalSeasonNumber,
+          maxSeasonNumber
+        );
+        if (
+          seasonNumber === undefined ||
+          externalSeasonNumber === undefined ||
+          sourceSeasons.has(seasonNumber) ||
+          externalSeasons.has(externalSeasonNumber)
+        ) {
+          return next({
+            status: 400,
+            message:
+              'Season mappings must use unique, non-negative integer season numbers.',
+          });
+        }
+        sourceSeasons.add(seasonNumber);
+        externalSeasons.add(externalSeasonNumber);
+        mappings.push({ seasonNumber, externalSeasonNumber });
+      }
+      manualSeasonMapping = { tvdbId, seasonType, mappings };
+    }
+  } else if (req.body !== undefined && req.body !== null) {
+    return next({ status: 400, message: 'The retry body must be an object.' });
+  }
 
   try {
     const requestId = parseRequestParamId(req.params.requestId);
@@ -4731,7 +5028,12 @@ requestRoutes.post<{
       Permission.MANAGE_REQUESTS,
       (actor) =>
         runWithRequestAdmission(
-          [getRequestMutationAdmissionKey(requestId)],
+          [
+            getRequestMutationAdmissionKey(requestId),
+            ...(initialRequest.type === MediaType.TV
+              ? [`request-media:${MediaType.TV}:${initialRequest.media.tmdbId}`]
+              : []),
+          ],
           async () => {
             const request = await requestRepository.findOneOrFail({
               where: { id: requestId },
@@ -4772,6 +5074,152 @@ requestRoutes.post<{
               });
             }
 
+            if (
+              !manualSeasonMapping &&
+              request.failureReason ===
+                MediaRequestFailureReason.TVDB_SEASON_MISMATCH
+            ) {
+              return next({
+                status: 409,
+                message:
+                  'This request cannot be retried until a listing with matching season numbers is selected.',
+              });
+            }
+
+            let mappingSonarrServerId: number | undefined;
+            if (manualSeasonMapping) {
+              if (!actor.hasPermission(Permission.MANAGE_REQUESTS)) {
+                return next({
+                  status: 403,
+                  message:
+                    'You do not have permission to map seasons for this request.',
+                });
+              }
+
+              if (
+                request.type !== MediaType.TV ||
+                request.status !== MediaRequestStatus.FAILED ||
+                ![
+                  MediaRequestFailureReason.TVDB_SEASON_MISMATCH,
+                  MediaRequestFailureReason.TVDB_ID_UNRESOLVED,
+                ].includes(request.failureReason as MediaRequestFailureReason)
+              ) {
+                return next({
+                  status: 409,
+                  message:
+                    'Manual season mapping is only available for failed TVDB resolution or season-mismatch requests.',
+                });
+              }
+
+              const activeSeasonNumbers = new Set(
+                request.seasons
+                  .filter(isActiveSeasonRequest)
+                  .map((season) => season.seasonNumber)
+              );
+              if (
+                manualSeasonMapping.mappings.some(
+                  ({ seasonNumber }) => !activeSeasonNumbers.has(seasonNumber)
+                ) ||
+                manualSeasonMapping.mappings.length !== activeSeasonNumbers.size
+              ) {
+                return next({
+                  status: 400,
+                  message:
+                    'Map every active season selected on this request exactly once.',
+                });
+              }
+
+              const settings = getExternalRuntimeConfig();
+              const hasExplicitSonarrServer =
+                request.serverId !== null &&
+                request.serverId !== undefined &&
+                request.serverId >= 0;
+              const mappingSonarrServer = hasExplicitSonarrServer
+                ? settings.sonarr.find(
+                    (server) =>
+                      server.id === request.serverId &&
+                      Boolean(server.is4k) === request.is4k
+                  )
+                : settings.sonarr.find(
+                    (server) =>
+                      server.isDefault && Boolean(server.is4k) === request.is4k
+                  );
+              if (!mappingSonarrServer) {
+                return next({
+                  status: 400,
+                  message:
+                    'A matching Sonarr server must be configured for this request.',
+                });
+              }
+              mappingSonarrServerId = mappingSonarrServer.id;
+
+              let validSeasonNumbers: Set<number> | undefined;
+              if (manualSeasonMapping.seasonType === 'standard') {
+                let officialSeasons;
+                try {
+                  officialSeasons = await (
+                    await Tvdb.getInstance()
+                  ).getOfficialSeasons(manualSeasonMapping.tvdbId);
+                } catch {
+                  officialSeasons = null;
+                }
+                if (!officialSeasons) {
+                  return next({
+                    status: 502,
+                    message: 'Unable to verify official TVDB season data.',
+                  });
+                }
+                validSeasonNumbers = new Set(
+                  officialSeasons.map(({ seasonNumber }) => seasonNumber)
+                );
+              } else {
+                let selectedSonarrSeries;
+                try {
+                  selectedSonarrSeries = await runWithCurrentServarrService(
+                    'sonarr',
+                    mappingSonarrServer.id,
+                    async (currentSettings) =>
+                      new SonarrAPI({
+                        apiKey: currentSettings.apiKey,
+                        url: SonarrAPI.buildUrl(currentSettings, '/api/v3'),
+                      }).getSeriesByTvdbId(manualSeasonMapping.tvdbId)
+                  );
+                } catch {
+                  selectedSonarrSeries = null;
+                }
+                const selectedOrder = selectedSonarrSeries?.seasonTypes?.find(
+                  (order) => order.type === manualSeasonMapping!.seasonType
+                );
+                if (
+                  !selectedSonarrSeries ||
+                  selectedSonarrSeries.tvdbId !== manualSeasonMapping.tvdbId ||
+                  !selectedOrder?.seasonNumbers.length
+                ) {
+                  return next({
+                    status: 400,
+                    message:
+                      'The selected Sonarr order is unavailable for this series.',
+                  });
+                }
+                validSeasonNumbers = new Set(selectedOrder.seasonNumbers);
+              }
+
+              const allowedSeasonNumbers = validSeasonNumbers;
+              if (
+                !allowedSeasonNumbers ||
+                manualSeasonMapping.mappings.some(
+                  ({ externalSeasonNumber }) =>
+                    !allowedSeasonNumbers.has(externalSeasonNumber)
+                )
+              ) {
+                return next({
+                  status: 400,
+                  message:
+                    'Every mapped season must exist in the selected series order.',
+                });
+              }
+            }
+
             // this also triggers updating the parent media's status & sending to *arr
             validateExternalServiceConfiguration(
               request.type,
@@ -4796,8 +5244,26 @@ requestRoutes.post<{
               });
               request.status = MediaRequestStatus.APPROVED;
             }
+            request.failureReason = null;
             request.modifiedBy = actor;
-            await requestRepository.save(request);
+            if (manualSeasonMapping) {
+              request.overrideTvdbId = manualSeasonMapping.tvdbId;
+              request.sonarrSeasonType = manualSeasonMapping.seasonType;
+              await dataSource.transaction(async (manager) => {
+                await persistTvdbSeasonMappings(
+                  manager,
+                  request.media.id,
+                  manualSeasonMapping!.tvdbId,
+                  mappingSonarrServerId!,
+                  request.is4k,
+                  manualSeasonMapping!.mappings,
+                  manualSeasonMapping!.seasonType
+                );
+                await manager.getRepository(MediaRequest).save(request);
+              });
+            } else {
+              await requestRepository.save(request);
+            }
             await requestDispatchManager.enqueue(request.id);
             await recordRequestRetry(request.id);
 
@@ -4823,12 +5289,22 @@ requestRoutes.post<{
     if (e instanceof RequestWorkCleanupError) {
       return next({ status: 409, message: e.message });
     }
+    if (e instanceof DuplicateExternalSeasonMappingError) {
+      return next({ status: 400, message: e.message });
+    }
 
     logger.error('Error processing request retry', {
       label: 'Media Request',
       message: e.message,
     });
-    next({ status: 404, message: 'Request not found.' });
+    next(
+      manualSeasonMapping && !(e instanceof EntityNotFoundError)
+        ? {
+            status: 500,
+            message: 'Unable to save the TV season mapping.',
+          }
+        : { status: 404, message: 'Request not found.' }
+    );
   }
 });
 
@@ -4930,8 +5406,6 @@ requestRoutes.post<{
   '/:requestId/:status',
   isAuthenticated(Permission.MANAGE_REQUESTS),
   async (req, res, next) => {
-    const requestRepository = getRepository(MediaRequest);
-
     try {
       const requestId = parseRequestParamId(req.params.requestId);
       if (!requestId) {
@@ -4942,64 +5416,35 @@ requestRoutes.post<{
         return next({ status: 404, message: 'Request not found.' });
       }
 
-      return await runAuthorizedUserSecurityMutation(
+      const request = await transitionPendingMediaRequest(
+        requestId,
         req.user!.id,
-        req.user!.id,
-        Permission.MANAGE_REQUESTS,
-        (actor) =>
-          runWithRequestAdmission(
-            [getRequestMutationAdmissionKey(requestId)],
-            async () => {
-              const request = await requestRepository.findOneOrFail({
-                where: { id: requestId },
-                relations: { requestedBy: true, modifiedBy: true },
-              });
-
-              if (request.status !== MediaRequestStatus.PENDING) {
-                return next({
-                  status: 409,
-                  message: 'Only pending requests can be approved or declined.',
-                });
-              }
-
-              if (newStatus === MediaRequestStatus.APPROVED) {
-                validateExternalServiceConfiguration(
-                  request.type,
-                  request.serverId,
-                  request.bookFormat,
-                  request.is4k
-                );
-              }
-
-              request.status = newStatus;
-              request.modifiedBy = actor;
-              await requestRepository.save(request);
-
-              return res
-                .status(200)
-                .json(filterEntityResponse(request, req.user));
-            }
-          ),
-        {
-          expectedCredentialVersion: getExpectedCredentialVersion(req),
-        }
+        newStatus,
+        getExpectedCredentialVersion(req)
       );
-    } catch (e) {
-      if (e instanceof UserMutationActorUnauthorizedError) {
+      return res.status(200).json(filterEntityResponse(request, req.user));
+    } catch (error) {
+      if (error instanceof UserMutationActorUnauthorizedError) {
         return next({
           status: 403,
           message: 'You do not have permission to update this request.',
         });
       }
-      if (e instanceof ServiceConfigurationError) {
-        return next({ status: 400, message: e.message });
+      if (error instanceof PendingRequestTransitionConflictError) {
+        return next({ status: error.status, message: error.message });
+      }
+      if (error instanceof PendingRequestTransitionNotFoundError) {
+        return next({ status: error.status, message: error.message });
+      }
+      if (error instanceof ServiceConfigurationError) {
+        return next({ status: 400, message: error.message });
       }
 
       logger.error('Error processing request update', {
         label: 'Media Request',
-        message: e.message,
+        message: error instanceof Error ? error.message : String(error),
       });
-      next({ status: 404, message: 'Request not found.' });
+      return next({ status: 404, message: 'Request not found.' });
     }
   }
 );

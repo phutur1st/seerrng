@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -233,12 +233,14 @@ test('release-note range discovery distinguishes additions from edits', () => {
       false
     );
 
-    const updatedPreview = execFileSync(
+    const updatedPreview = spawnSync(
       process.execPath,
       [previewScript, '--base', firstHead, '--head', secondHead],
       { cwd: repository, encoding: 'utf8' }
     );
-    assert.match(updatedPreview, /cached metadata/u);
+    assert.equal(updatedPreview.status, 0, updatedPreview.stderr);
+    assert.equal(updatedPreview.stderr, '');
+    assert.match(updatedPreview.stdout, /cached metadata/u);
 
     execFileSync(
       process.execPath,
@@ -303,7 +305,7 @@ test('changelog assembly prepends a release without replacing prior history', ()
     path.dirname(fileURLToPath(import.meta.url)),
     'prepend-changelog-section.mjs'
   );
-  const existing = `# Changelog\n\nIntroductory text.\n\n## [3.11.2]\n\n- Previous release.\n\n## Historical upstream history\n\n- Legacy release.\n`;
+  const existing = `# Changelog\n\nIntroductory text.\n\n# Changelog\n\n# Changelog\n\n## [3.11.2]\n\n- Previous release.\n\n## Historical upstream history\n\n- Legacy release.\n`;
   const current = `# Changelog\n\n## [3.12.0]\n\n### Fixed\n\n- Current release.\n`;
 
   try {
@@ -325,6 +327,7 @@ test('changelog assembly prepends a release without replacing prior history', ()
 
     const assembled = fs.readFileSync(outputPath, 'utf8');
     assert.match(assembled, /^# Changelog[\s\S]*^## \[3\.12\.0\]/mu);
+    assert.equal((assembled.match(/^# Changelog$/gmu) ?? []).length, 1);
     assert.match(
       assembled,
       /3\.12\.0[\s\S]*3\.11\.2[\s\S]*Historical upstream history/u
@@ -346,6 +349,8 @@ test('changelog assembly prepends a release without replacing prior history', ()
     );
     const rerun = fs.readFileSync(outputPath, 'utf8');
     assert.equal((rerun.match(/^## \[3\.12\.0\]/gmu) ?? []).length, 1);
+    assert.match(rerun, /^## \[3\.11\.2\]/mu);
+    assert.equal((rerun.match(/^# Changelog$/gmu) ?? []).length, 1);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

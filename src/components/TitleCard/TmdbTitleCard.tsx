@@ -3,6 +3,7 @@ import { Permission, useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
 import type { MediaStatus } from '@server/constants/media';
+import type { ViewerRequestCoverage } from '@server/lib/viewerRequestCoverage';
 import type { MovieDetails } from '@server/models/Movie';
 import type { TvDetails } from '@server/models/Tv';
 import axios from 'axios';
@@ -22,9 +23,12 @@ export interface TmdbTitleCardProps {
   year?: string;
   status?: MediaStatus;
   status4k?: MediaStatus;
+  viewerRequestCoverage?: ViewerRequestCoverage;
   canExpand?: boolean;
   isAddedToWatchlist?: boolean;
   mutateParent?: () => void;
+  discoverNavigationContextId?: string;
+  onOpen?: () => void;
 }
 
 const messages = defineMessages('components.TitleCard', {
@@ -53,9 +57,12 @@ const TmdbTitleCard = ({
   year: fallbackYear,
   status: fallbackStatus,
   status4k: fallbackStatus4k,
+  viewerRequestCoverage: fallbackViewerRequestCoverage,
   canExpand,
   isAddedToWatchlist = false,
   mutateParent,
+  discoverNavigationContextId,
+  onOpen,
 }: TmdbTitleCardProps) => {
   const intl = useIntl();
   const { hasPermission } = useUser();
@@ -116,10 +123,13 @@ const TmdbTitleCard = ({
         year={fallbackYear}
         status={fallbackStatus}
         status4k={fallbackStatus4k}
+        viewerRequestCoverage={fallbackViewerRequestCoverage}
         mediaType={type}
         isAddedToWatchlist={isAddedToWatchlist}
         canExpand={canExpand}
         mutateParent={mutateParent}
+        discoverNavigationContextId={discoverNavigationContextId}
+        onOpen={onOpen}
       />
     </div>
   );
@@ -182,6 +192,7 @@ const TmdbTitleCard = ({
       fallbackImage={getSupplementalPosterPath(title)}
       status={title.mediaInfo?.status}
       status4k={title.mediaInfo?.status4k}
+      viewerRequestCoverage={title.mediaInfo?.viewerRequestCoverage}
       summary={
         [
           title.overview,
@@ -203,6 +214,8 @@ const TmdbTitleCard = ({
       inProgress4k={(title.mediaInfo?.downloadStatus4k ?? []).length > 0}
       canExpand={canExpand}
       mutateParent={mutateParent}
+      discoverNavigationContextId={discoverNavigationContextId}
+      onOpen={onOpen}
     />
   ) : (
     <TitleCard
@@ -215,6 +228,7 @@ const TmdbTitleCard = ({
       fallbackImage={getSupplementalPosterPath(title)}
       status={title.mediaInfo?.status}
       status4k={title.mediaInfo?.status4k}
+      viewerRequestCoverage={title.mediaInfo?.viewerRequestCoverage}
       summary={
         [
           title.overview,
@@ -236,6 +250,8 @@ const TmdbTitleCard = ({
       inProgress4k={(title.mediaInfo?.downloadStatus4k ?? []).length > 0}
       canExpand={canExpand}
       mutateParent={mutateParent}
+      discoverNavigationContextId={discoverNavigationContextId}
+      onOpen={onOpen}
     />
   );
 };

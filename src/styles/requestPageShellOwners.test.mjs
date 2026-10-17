@@ -64,6 +64,7 @@ const verifyShellOwners = (source) => {
         'max-width': 'min(28rem, calc(100vw - 2rem))',
         'white-space': 'normal',
         'overflow-wrap': 'anywhere',
+        'pointer-events': 'none',
       },
     ],
   ]) {
@@ -87,6 +88,10 @@ const verifyShellOwners = (source) => {
       });
     }
   }
+  assert.equal(
+    value(".app-tooltip[data-interactive='true']", 'pointer-events'),
+    'auto'
+  );
   for (const selector of ['.detail-summary-card', '.media-detail-card']) {
     for (const property of [
       'border',
@@ -345,10 +350,31 @@ test('Software Requests checks reject missing shared surface padding owners', ()
   }
 });
 
-test('the shared tooltip remains a body portal with one semantic class owner', () => {
+test('the shared tooltip uses a floating portal and one semantic class owner', () => {
   const source = read('../components/Common/Tooltip/index.tsx');
   assert.match(source, /\['app-tooltip', className\]/);
-  assert.match(source, /ReactDOM\.createPortal\([\s\S]*document\.body/);
+  assert.match(source, /<FloatingPortal>/);
+  assert.match(source, /role: interactive \? 'dialog' : 'tooltip'/);
+  assert.match(
+    source,
+    /data-interactive=\{interactive \? 'true' : undefined\}/
+  );
+  assert.match(source, /findFocusableDescendant/);
+  const tooltipStyle = styleContract(css);
+  assert.equal(
+    tooltipStyle.declaration(
+      ".app-tooltip[data-interactive='true']",
+      'overflow-y'
+    ),
+    'auto'
+  );
+  assert.equal(
+    tooltipStyle.declaration(
+      ".app-tooltip[data-interactive='true']",
+      'max-height'
+    ),
+    'min(24rem, var(--app-tooltip-available-height, 80vh))'
+  );
 });
 
 test('shell checks reject geometry, paint, tooltip and retired-owner regressions', () => {
@@ -361,6 +387,8 @@ test('shell checks reject geometry, paint, tooltip and retired-owner regressions
     '.app-tooltip { position: fixed; }',
     '.app-tooltip { padding: 20px; }',
     '.app-tooltip { z-index: 1; }',
+    '.app-tooltip { pointer-events: auto; }',
+    ".app-tooltip[data-interactive='true'] { pointer-events: none; }",
     '.app-tooltip { @apply rounded; }',
     '.media-detail-card { --tw-shadow: 0 0 #0000; }',
   ]) {

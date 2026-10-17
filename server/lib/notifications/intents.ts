@@ -19,6 +19,7 @@ import {
 } from '@server/lib/externalIds';
 import { getExternalRuntimeConfig } from '@server/lib/externalRuntimeConfig';
 import { Permission } from '@server/lib/permissions';
+import { normalizeStashDbId } from '@server/lib/stashdbIdentity';
 import {
   getBookshelfBookDetails,
   parseBookshelfBookId,
@@ -134,7 +135,9 @@ export const buildMediaRequestNotificationPayload = async (
             ? 'Comic'
             : entity.type === MediaType.MAGAZINE
               ? 'Magazine'
-              : 'Book';
+              : entity.type === MediaType.ADULT
+                ? 'Adult Scene'
+                : 'Book';
   let event: string | undefined;
   let notifyAdmin = true;
   let notifySystem = true;
@@ -349,6 +352,22 @@ export const buildMediaRequestNotificationPayload = async (
       image,
     };
   }
+  if (entity.type === MediaType.ADULT) {
+    const stashDbId = normalizeStashDbId(
+      media.identifiers?.find(
+        (identifier) => identifier.provider === MediaIdentifierProvider.STASHDB
+      )?.value
+    );
+    return {
+      ...base,
+      mediaUrl: stashDbId
+        ? notificationMediaUrl(`/adult/${encodeURIComponent(stashDbId)}`)
+        : undefined,
+      subject: media.externalServiceSlug ?? stashDbId ?? 'Adult scene request',
+      message: `${mediaType} request details are available in SeerrNG.`,
+      image: undefined,
+    };
+  }
   throw new Error(`Unsupported media notification request ${entity.id}.`);
 };
 
@@ -364,6 +383,49 @@ const hydrateMediaRequestIntent = async (
   // is no current payload to send, so the outbox should retire this stale row.
   if (!request) return undefined;
   return buildMediaRequestNotificationPayload(request, request.media, type);
+};
+
+const hydrateMediaAvailabilitySubscriptionIntent = async (
+  type: Notification,
+  mediaId: number,
+  userId: number
+): Promise<NotificationPayload | undefined> => {
+  if (type !== Notification.MEDIA_AVAILABLE) {
+    return undefined;
+  }
+
+  const [media, user] = await Promise.all([
+    getRepository(Media).findOne({
+      where: { id: mediaId },
+      relations: { identifiers: true, searchMetadata: true },
+    }),
+    getRepository(User).findOne({
+      where: { id: userId },
+      relations: { settings: true },
+    }),
+  ]);
+  if (
+    !media ||
+    !user ||
+    ![MediaType.MOVIE, MediaType.TV].includes(media.mediaType)
+  ) {
+    return undefined;
+  }
+
+  const { title, image } = await getMediaDetails(media);
+  const mediaType = media.mediaType === MediaType.MOVIE ? 'Movie' : 'Series';
+
+  return {
+    event: `${mediaType} Now Available`,
+    subject: title,
+    notifySystem: false,
+    notifyAdmin: false,
+    notifyUser: user,
+    media,
+    mediaUrl: `/${media.mediaType}/${media.tmdbId}`,
+    image,
+    availabilitySubscription: true,
+  };
 };
 
 const hydrateIssueIntent = async (
@@ -479,6 +541,12 @@ export const hydrateNotificationIntent = (
   switch (intent.kind) {
     case 'media-request':
       return hydrateMediaRequestIntent(type, intent.requestId);
+    case 'media-availability-subscription':
+      return hydrateMediaAvailabilitySubscriptionIntent(
+        type,
+        intent.mediaId,
+        intent.userId
+      );
     case 'issue':
       return hydrateIssueIntent(type, intent.issueId, intent.modifiedById);
     case 'issue-comment':

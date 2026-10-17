@@ -26,7 +26,13 @@ export interface QuotaResponse {
   book: QuotaStatus;
   comic: QuotaStatus;
   magazine: QuotaStatus;
+  adult: QuotaStatus;
   software: QuotaStatus;
+}
+
+export interface UserAvailabilitySubscriptionResponse {
+  subscribed: boolean;
+  canSubscribe: boolean;
 }
 
 export interface UserWatchDataResponse {

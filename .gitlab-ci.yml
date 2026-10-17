@@ -21,7 +21,7 @@ docker:seerrng:
   stage: build
   image: docker:27.5.1@sha256:aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce
   tags:
-    - kspls0
+    - kspld0
     - amd64
     - docker
   before_script:
@@ -124,8 +124,8 @@ deploy:seerr.home:
 
 .github_publication_defaults:
   variables:
-    GITHUB_MIRROR_URL: 'git@github.com:snapetech/seerrng.git'
-    GITHUB_REPOSITORY: 'snapetech/seerrng'
+    GITHUB_MIRROR_URL: 'git@github.com:snapetech-org/seerrng.git'
+    GITHUB_REPOSITORY: 'snapetech-org/seerrng'
 
 # Historical external-publication definitions remain for reference only.
 # GitHub Actions is the sole publisher for tags, releases, and public registries.

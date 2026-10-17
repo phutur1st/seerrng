@@ -34,7 +34,7 @@ do not require a second confirmation that the same work was reviewed.
 2. Add the remote `upstream`:
 
    ```bash
-   git remote add upstream https://github.com/snapetech/seerrng.git
+   git remote add upstream https://github.com/snapetech-org/seerrng.git
    ```
 
 3. Create a new branch:
@@ -75,10 +75,10 @@ do not require a second confirmation that the same work was reviewed.
      git push origin BRANCH_NAME --force-with-lease
      ```
 
-   - For final-candidate verification, follow the authoritative
-     [validation-engine guide](./tools/validation-engine/README.md). `pnpm test`
-     and `pnpm test:ci` are Vitest-only and do not replace the complete
-     applicable engine gate.
+   - Run the native checks for the code you changed. The main-branch CI runs
+     Vitest, native TypeScript and tooling tests, lint, formatting, type checks,
+     build, browser suites, docs, CodeQL, and packaging checks directly.
+     See the useful commands in [README](./README.md).
 
 ### Helm Chart
 
@@ -101,9 +101,14 @@ Steps:
 - Pull requests with titles not following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) will **not** be merged. PR titles are automatically checked for compliance.
 - Please make meaningful commits, or squash them prior to opening a pull request.
   - Do not squash commits once people have begun reviewing your changes.
-- Every user-facing feature, fix, security change, operational behavior change, or documentation change must add a structured release-note fragment under [`release-notes/`](./release-notes/README.md). The fragment must identify its audience, area, required action, and breaking-change status. Internal-only work must explicitly select the release-note opt-out in the PR template.
-- Always rebase your branch to the latest `main` branch.
-- It is your responsibility to keep your branch up-to-date. Your work will **not** be merged unless it is rebased off the latest `main` branch.
+- For any user-facing change, add one validated structured fragment under
+  [`release-notes/`](./release-notes/README.md). A single fragment may cover related
+  user-facing changes in the same pull request. Internal-only work needs no
+  fragment; select the internal-only template option or put `release-note: none`
+  on its own line in the PR description. For direct pushes or merge checks that
+  read commit messages, put the same marker on its own line in the commit message.
+- Keep a PR branch current with `main` only when current GitHub rules require it; rebase or merge as needed.
+- Merge after the checks and approvals required by current GitHub rules are satisfied. An explicit maintainer direction to merge is sufficient; no additional review or approval is required beyond those rules. Use any merge method enabled in GitHub.
 - You can create a "draft" pull request early to get feedback on your work.
 - Your code **must** be formatted correctly, or the tests will fail.
   - We use Prettier to format our code base. It should automatically run with a Git hook, but it is recommended to have the Prettier extension installed in your editor and format on save.

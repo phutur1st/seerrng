@@ -14,10 +14,33 @@ Seerr checks these linked servers to determine whether or not media has already 
 **If you only maintain one copy of media, you can instead simply set up one server and set the "Quality Profile" setting on a per-request basis.**
 :::
 
+### Whisparr Settings
+
+SeerrNG supports the scene-focused [Whisparr Eros v3 API](https://github.com/Whisparr/Whisparr-Eros).
+Connect Whisparr to enable the opt-in Adult category. Configure its indexers,
+download client, and acquisition settings in Whisparr; SeerrNG sends approved
+scene requests there and reads the queue and library when **Enable Library
+Scan** is selected. See [Adult media](../adult-media.md) for setup,
+permissions, and request quotas. The studio-focused Whisparr v2 API is not
+supported.
+
 ### Radarr/Sonarr Settings
 
 :::warning
-**Only v3 & V4 Radarr/Sonarr servers are supported!** If your Radarr/Sonarr server is still running v2, you will need to upgrade in order to add it to Seerr.
+**Radarr v3/v4 and Sonarr v3/v4 are supported. Sonarr 5.0 beta is supported through its v5 API.** SeerrNG detects each Sonarr server's version: v3 and v4 use the v3 API, while v5 uses the v5 API with per-endpoint fallback when a route is unavailable. The [v5 beta API](https://sonarr.tv/docs/api/?api=v5) may change before stable release; back up Sonarr before upgrading because downgrading requires restoring a v4 backup. See the [Sonarr v5 beta announcement](https://forums.sonarr.tv/t/sonarr-v5-beta/41099) for upgrade details. Radarr/Sonarr v2 is not supported.
+
+Sonarr v5 adds request options for the series metadata language and, when the
+series exposes more than one, its season order. These are advanced request
+options and apply to the selected Sonarr server. Metadata language controls
+Sonarr's series metadata; it is separate from an audio language profile. A
+selected season order is retained with the request so season monitoring,
+availability, and any manual season repair use the same numbering.
+
+When a failed TV request needs manual season repair, the mapping dialog shows
+the installed series' order, progress, anime identifiers, and recent history
+when Sonarr v5 provides them. Standard-order seasons are checked against
+official TVDB data. Alternate-order seasons are checked against the selected
+Sonarr series, and the mapping stays scoped to that server and quality.
 ::::
 
 #### Default Server
@@ -28,11 +51,26 @@ If you have separate 4K Radarr/Sonarr servers, you need to designate default 4K 
 
 #### 4K Server
 
-Only select this option if you have separate non-4K and 4K servers. If you only have a single Radarr/Sonarr server, do _not_ check this box!
+Only select this option if you have separate non-4K and 4K servers. If you have one enabled Radarr/Sonarr instance, leave this unchecked; SeerrNG uses the reported resolution of installed movie and episode files to keep HD and 4K availability separate.
 
 #### Server Name
 
 Enter a friendly name for the Radarr/Sonarr server.
+
+#### Request Destination Label (optional)
+
+Give a non-default instance a short label, such as **Anime** or **Kids**. Users
+who are granted access will see the label and server name in the movie or
+series request dialog. The default instance remains the normal destination and
+does not need a label.
+
+Select **Anime only** when the instance should accept anime titles only.
+SeerrNG checks the title's TMDB anime keyword before showing the destination
+and verifies it again when the request is submitted.
+
+Manage access for each user under **Users → Edit → Permissions → Request
+destinations**. This access is separate from advanced request permissions and
+does not grant permission to change profiles, folders, or tags.
 
 #### Hostname or IP Address
 
@@ -62,6 +100,25 @@ You can verify whether or not you have a URL base configured in your Radarr/Sona
 
 Select the default settings you would like to use for all new requests. Note that all of these options are required, and that requests will fail if any of these are not configured!
 
+Sonarr also supports a separate **Anime Quality Profile**. SeerrNG checks the
+selected profile when you save the service settings and rejects it if the
+connected Sonarr server confirms that the profile is missing. If Sonarr cannot
+be reached during the save, the settings are retained so you can repair the
+connection. When an approved anime request is sent, SeerrNG verifies the
+selected anime profile again and falls back to that same Sonarr service's
+default profile if the anime profile is missing or cannot be verified. The
+Services list shows the configured anime profile beneath the standard profile.
+
+#### Monitor New Seasons (Sonarr)
+
+Choose how Sonarr should monitor future seasons when SeerrNG adds a series:
+
+- **All** monitors future seasons for every requested series.
+- **None** leaves future seasons unmonitored.
+- **Latest Season Requested** monitors future seasons only when the request includes the latest regular season listed by TMDB. Specials do not count as regular seasons, and requests for older seasons alone do not enable future-season monitoring.
+
+This setting controls monitoring only. Automatic searches are controlled separately by **Enable Automatic Search**. If SeerrNG cannot identify a regular season, it uses **None** for that request.
+
 #### External URL (optional)
 
 If the hostname or IP address you configured above is not accessible outside your network, you can set a different URL here. This "external" URL is used to add clickable links to your Radarr/Sonarr servers on media detail pages.
@@ -74,14 +131,27 @@ Enable this setting if you would like to scan your Radarr/Sonarr server for exis
 
 Enable this setting to have Radarr/Sonarr to automatically search for media upon approval of a request.
 
-### Bookshelf Settings
+#### Requester Tags (optional)
 
-SeerrNG uses Bookshelf for book requests through the Readarr-compatible API.
-One BookshelfNG instance can manage ebooks and audiobooks in the same library.
-SeerrNG keeps ebook and audiobook routing separate, so add a service entry for
-each format you enable and mark one as the default for that format. Both
-entries can use the same BookshelfNG URL and API key; this does not require two
-BookshelfNG instances.
+When enabled, SeerrNG adds a tag for the requester to each movie or series sent
+to Radarr or Sonarr. If a temporary tag lookup or creation error occurs, SeerrNG
+still sends the request with the server's configured tags and any tags selected
+for that request. The requester tag is skipped for that dispatch, and SeerrNG
+logs a warning.
+
+### ChaptarrNG / Bookshelf Settings
+
+SeerrNG connects to ChaptarrNG, BookshelfNG, and other Readarr-compatible book
+backends through this shared settings section. No environment variable is
+needed on the SeerrNG container. For ChaptarrNG 0.9.941+, set
+`CHAPTARR__AUTH__SEERRAPIKEY` on the ChaptarrNG container and enter that key in
+the service form.
+
+One ChaptarrNG or BookshelfNG instance can manage ebooks and audiobooks in the
+same library. SeerrNG keeps ebook and audiobook routing separate, so add a
+service entry for each format you enable and mark one as the default for that
+format. Both entries can use the same backend URL and API key; this does not
+require two ChaptarrNG or BookshelfNG instances.
 
 Each BookshelfNG author can optionally set separate ebook and audiobook
 folders for future imports, upgrades, and renames. Existing files are not moved
@@ -91,9 +161,9 @@ profile when its override is unset. Use separate BookshelfNG instances only
 when you need isolated databases or different settings for the same author.
 
 Use the [Bookshelf Backend](/using-seerr/bookshelf-backend) guide for the
-recommended Docker Compose deployment. Hardcover is the default for new
-deployments, while existing Goodreads/softcover and other compatible metadata
-sources remain supported. Migration is optional.
+recommended ChaptarrNG Docker Compose deployment. Hardcover is the default for
+new deployments, while existing Goodreads/softcover and other compatible
+metadata sources remain supported. Migration is optional.
 
 Administrators can [preview and move ebook or audiobook paths](/using-seerr/bookshelf-media-path-migration)
 inside one BookshelfNG database. This tool does not merge split Bookshelf

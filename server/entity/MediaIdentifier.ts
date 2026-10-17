@@ -8,15 +8,19 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   Unique,
 } from 'typeorm';
 import Media from './Media';
+import MediaIdentifierSeasonMapping from './MediaIdentifierSeasonMapping';
 
 export enum MediaIdentifierProvider {
   TMDB = 'tmdb',
   TVDB = 'tvdb',
   IMDB = 'imdb',
+  MAL = 'mal',
+  ANILIST = 'anilist',
   MUSICBRAINZ = 'musicbrainz',
   LISTENBRAINZ = 'listenbrainz',
   HARDCOVER = 'hardcover',
@@ -28,6 +32,7 @@ export enum MediaIdentifierProvider {
   BOOKSHELF = 'bookshelf',
   AUDIOBOOKSHELF = 'audiobookshelf',
   COMICVINE = 'comicvine',
+  STASHDB = 'stashdb',
   MYLAR = 'mylar',
   KAPOWARR = 'kapowarr',
   LAZYLIBRARIAN = 'lazylibrarian',
@@ -53,6 +58,10 @@ export enum MediaIdentifierProvider {
   unique: true,
   where: `"provider" = 'sportarr'`,
 })
+@Index('UQ_media_identifier_canonical_adult', ['provider', 'value'], {
+  unique: true,
+  where: `"provider" = 'stashdb'`,
+})
 class MediaIdentifier {
   @PrimaryGeneratedColumn()
   public id: number;
@@ -66,6 +75,12 @@ class MediaIdentifier {
   })
   @Index('IDX_media_identifier_mediaId')
   public media: Media;
+
+  @OneToMany(
+    () => MediaIdentifierSeasonMapping,
+    (mapping) => mapping.mediaIdentifier
+  )
+  public seasonMappings: MediaIdentifierSeasonMapping[];
 
   @Column({ type: 'varchar' })
   public provider: MediaIdentifierProvider;

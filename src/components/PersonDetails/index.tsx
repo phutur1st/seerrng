@@ -244,7 +244,7 @@ const PersonDetails = () => {
           setCurrentMediaType(e.target.value as MediaType);
         }}
         value={currentMediaType}
-        className="rounded-r-only"
+        className="rounded-e-only"
       >
         <option value="all">{intl.formatMessage(globalMessages.all)}</option>
         <option value="movie">
@@ -282,6 +282,7 @@ const PersonDetails = () => {
                 mediaType={media.mediaType as 'movie' | 'tv'}
                 status={media.mediaInfo?.status}
                 status4k={media.mediaInfo?.status4k}
+                viewerRequestCoverage={media.mediaInfo?.viewerRequestCoverage}
                 inProgress={(media.mediaInfo?.downloadStatus ?? []).length > 0}
                 inProgress4k={
                   (media.mediaInfo?.downloadStatus4k ?? []).length > 0
@@ -329,6 +330,7 @@ const PersonDetails = () => {
                 mediaType={media.mediaType as 'movie' | 'tv'}
                 status={media.mediaInfo?.status}
                 status4k={media.mediaInfo?.status4k}
+                viewerRequestCoverage={media.mediaInfo?.viewerRequestCoverage}
                 inProgress={(media.mediaInfo?.downloadStatus ?? []).length > 0}
                 inProgress4k={
                   (media.mediaInfo?.downloadStatus4k ?? []).length > 0

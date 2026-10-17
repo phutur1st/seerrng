@@ -42,6 +42,18 @@ const createValidatedApp = (): Express => {
   app.get('/api/v1/discover/books', (req, res) =>
     res.status(200).json({ accepted: true, query: req.query })
   );
+  app.get('/api/v1/discover/watchlist', (req, res) =>
+    res.status(200).json({ accepted: true, query: req.query })
+  );
+  app.get('/api/v1/user/:userId/watchlist', (req, res) =>
+    res.status(200).json({ accepted: true, query: req.query })
+  );
+  app.get('/api/v1/discover/movies', (req, res) =>
+    res.status(200).json({ accepted: true, query: req.query })
+  );
+  app.get('/api/v1/discover/tv', (req, res) =>
+    res.status(200).json({ accepted: true, query: req.query })
+  );
   app.use(
     (
       error: { status?: number; message?: string },
@@ -116,6 +128,57 @@ describe('movie discovery outage fallback OpenAPI contract', () => {
   });
 });
 
+describe('movie and TV Discover filter OpenAPI contract', () => {
+  it('accepts fractional scores and provider exclusion for both catalogs', async () => {
+    const app = createValidatedApp();
+
+    for (const { path, filters } of [
+      {
+        path: '/discover/movies',
+        filters: {
+          genre: '18',
+          excludeGenre: 'true',
+          studio: '5',
+          excludeStudio: 'true',
+        },
+      },
+      {
+        path: '/discover/tv',
+        filters: {
+          genre: '18',
+          excludeGenre: 'true',
+          status: '3',
+          excludeStatus: 'true',
+        },
+      },
+    ]) {
+      const response = await request(app)
+        .get(`/api/v1${path}`)
+        .query({
+          voteAverageGte: 7.5,
+          watchProviders: '8|9',
+          watchProviderMode: 'exclude',
+          ...filters,
+        });
+
+      assert.strictEqual(
+        response.status,
+        200,
+        `${path} rejected the supported filter query: ${response.body.message}`
+      );
+    }
+  });
+
+  it('rejects scores outside the TMDB 0–10 range', async () => {
+    const response = await request(createValidatedApp())
+      .get('/api/v1/discover/movies')
+      .query({ voteAverageLte: 10.1 });
+
+    assert.strictEqual(response.status, 400);
+    assert.match(response.body.message, /voteAverageLte/);
+  });
+});
+
 describe('public TMDB list OpenAPI contract', () => {
   it('documents v4 item_count and mixed movie and series results', () => {
     const listResponse =
@@ -136,5 +199,39 @@ describe('public TMDB list OpenAPI contract', () => {
         { $ref: '#/components/schemas/TvResult' },
       ]
     );
+  });
+});
+
+describe('Watchlist filter OpenAPI contract', () => {
+  it('admits supported filters on Discover and profile watchlist routes', async () => {
+    const app = createValidatedApp();
+    const paths = ['/api/v1/discover/watchlist', '/api/v1/user/7/watchlist'];
+
+    for (const route of paths) {
+      const response = await request(app).get(route).query({
+        search: 'Arrival',
+        mediaType: 'movie',
+        sortBy: 'title-asc',
+      });
+
+      assert.equal(response.status, 200, response.body.message);
+      assert.equal(response.body.query.mediaType, 'movie');
+      assert.equal(response.body.query.sortBy, 'title-asc');
+    }
+  });
+
+  it('rejects unsupported Watchlist media types and sort fields', async () => {
+    const app = createValidatedApp();
+
+    for (const query of [
+      { mediaType: 'sports' },
+      { sortBy: 'popularity.desc' },
+    ]) {
+      const response = await request(app)
+        .get('/api/v1/discover/watchlist')
+        .query(query);
+
+      assert.equal(response.status, 400);
+    }
   });
 });

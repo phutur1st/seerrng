@@ -27,6 +27,7 @@ const messages = defineMessages('components.Settings.SettingsCategories', {
   audiobook: 'Audiobooks',
   comic: 'Comics',
   magazine: 'Magazines',
+  adult: 'Adult',
   retro: 'Emulation (Retro)',
   modern: 'Emulation (Modern)',
   game: 'PC Games',
@@ -37,6 +38,8 @@ const messages = defineMessages('components.Settings.SettingsCategories', {
   audiobookDescription: 'Allow audiobook discovery and requests.',
   comicDescription: 'Allow comic discovery and requests.',
   magazineDescription: 'Allow magazine discovery and requests.',
+  adultDescription:
+    'Allow adult-scene discovery and requests. Requires a configured Whisparr v3 service and adult-specific user permission.',
   retroDescription: 'Allow retro ROM discovery and requests.',
   modernDescription: 'Allow modern emulation ROM discovery and requests.',
   gameDescription: 'Allow PC game discovery and requests.',
@@ -60,6 +63,7 @@ const categories: {
   },
   { key: 'comic', label: 'comic', description: 'comicDescription' },
   { key: 'magazine', label: 'magazine', description: 'magazineDescription' },
+  { key: 'adult', label: 'adult', description: 'adultDescription' },
   { key: 'retro', label: 'retro', description: 'retroDescription' },
   { key: 'modern', label: 'modern', description: 'modernDescription' },
   { key: 'game', label: 'game', description: 'gameDescription' },
@@ -143,6 +147,7 @@ const SettingsCategories = () => {
                     label={intl.formatMessage(messages[label])}
                     description={intl.formatMessage(messages[description])}
                     labelClassName="checkbox-label"
+                    className="settings-form-row-compact-description"
                   >
                     <SettingsField
                       type="checkbox"

@@ -643,6 +643,39 @@ describe('GET /discover/movies', () => {
     assert.strictEqual(res.body.results[0].id, 456789);
     assert.strictEqual(res.body.results[0].title, 'Local HD Movie');
     assert.match(res.body.results[0].posterPath, /\/movie\/456789\/cover/);
+
+    const excluded = await agent.get(
+      '/discover/movies?availability=hd&genre=12&excludeGenre=true'
+    );
+    assert.strictEqual(excluded.status, 200);
+    assert.strictEqual(excluded.body.totalResults, 0);
+    assert.strictEqual(
+      (tmdbGet as { mock: { callCount: () => number } }).mock.callCount(),
+      0
+    );
+  });
+
+  it('rejects exclusions that local availability cannot evaluate', async () => {
+    const tmdbGet = mockPrivate(ExternalAPI.prototype, 'get', async () => {
+      throw new Error('TMDB must not be called for invalid exclusions');
+    });
+    const agent = await login();
+    const responses = [
+      await agent.get(
+        '/discover/movies?availability=hd&studio=5&excludeStudio=true'
+      ),
+      await agent.get('/discover/movies?availability=hd&studio=5'),
+      await agent.get(
+        '/discover/movies?availability=hd&watchProviders=8&watchProviderMode=exclude'
+      ),
+      await agent.get('/discover/movies?watchProviderMode=exclude'),
+      await agent.get('/discover/movies?status=3&excludeStatus=true'),
+    ];
+
+    assert.deepStrictEqual(
+      responses.map((response) => response.status),
+      [400, 400, 400, 400, 400]
+    );
     assert.strictEqual(
       (tmdbGet as { mock: { callCount: () => number } }).mock.callCount(),
       0
@@ -1000,6 +1033,12 @@ describe('GET /discover/movies', () => {
     const impossibleDateRes = await agent.get(
       '/discover/movies?primaryReleaseDateGte=2026-02-30'
     );
+    const outOfRangeScoreRes = await agent
+      .get('/discover/movies')
+      .query({ voteAverageGte: '10.1' });
+    const invalidProviderModeRes = await agent
+      .get('/discover/movies')
+      .query({ watchProviders: '8', watchProviderMode: 'negate' });
 
     assert.strictEqual(arrayRes.status, 400);
     assert.match(arrayRes.body.message, /Invalid discovery query/);
@@ -1007,6 +1046,13 @@ describe('GET /discover/movies', () => {
     assert.match(dateRes.body.message, /Invalid discovery query/);
     assert.strictEqual(impossibleDateRes.status, 400);
     assert.match(impossibleDateRes.body.message, /Invalid discovery query/);
+    assert.strictEqual(outOfRangeScoreRes.status, 400);
+    assert.match(outOfRangeScoreRes.body.message, /Invalid discovery query/);
+    assert.strictEqual(invalidProviderModeRes.status, 400);
+    assert.match(
+      invalidProviderModeRes.body.message,
+      /Invalid discovery query/
+    );
     assert.strictEqual(
       (tmdbGet as { mock: { callCount: () => number } }).mock.callCount(),
       0
@@ -1252,6 +1298,112 @@ describe('GET /discover/movies', () => {
     );
 
     assert.strictEqual(res.status, 200);
+  });
+
+  it('forwards fractional ratings and includes or excludes selected providers', async () => {
+    const calls: Record<string, unknown>[] = [];
+    mockPrivate(
+      ExternalAPI.prototype,
+      'get',
+      async (endpoint: unknown, options: unknown) => {
+        const requestOptions = options as {
+          params?: Record<string, unknown>;
+        };
+        assert.strictEqual(endpoint, '/discover/movie');
+        calls.push(requestOptions.params ?? {});
+
+        return {
+          page: 1,
+          total_pages: 1,
+          total_results: 0,
+          results: [],
+        };
+      }
+    );
+
+    const agent = await login();
+    const included = await agent.get('/discover/movies').query({
+      voteAverageGte: '7.5',
+      watchProviders: '8|9',
+      watchProviderMode: 'include',
+      watchRegion: 'CA',
+    });
+    const excluded = await agent.get('/discover/movies').query({
+      voteAverageLte: '8.4',
+      watchProviders: '8|9',
+      watchProviderMode: 'exclude',
+      watchRegion: 'CA',
+    });
+
+    assert.strictEqual(included.status, 200);
+    assert.strictEqual(excluded.status, 200);
+    assert.deepStrictEqual(
+      calls.map((params) => ({
+        minimum: params['vote_average.gte'],
+        maximum: params['vote_average.lte'],
+        include: params.with_watch_providers,
+        exclude: params.without_watch_providers,
+        region: params.watch_region,
+      })),
+      [
+        {
+          minimum: '7.5',
+          maximum: undefined,
+          include: '8|9',
+          exclude: undefined,
+          region: 'CA',
+        },
+        {
+          minimum: undefined,
+          maximum: '8.4',
+          include: undefined,
+          exclude: '8|9',
+          region: 'CA',
+        },
+      ]
+    );
+  });
+
+  it('forwards genre and movie studio exclusions to TMDB discovery', async () => {
+    let requestEndpoint: unknown;
+    let requestParams: Record<string, unknown> | undefined;
+    mockPrivate(
+      ExternalAPI.prototype,
+      'get',
+      async (endpoint: unknown, options: unknown) => {
+        const requestOptions = options as {
+          params?: Record<string, unknown>;
+        };
+        requestEndpoint = endpoint;
+        requestParams = requestOptions.params;
+
+        return {
+          page: 1,
+          total_pages: 1,
+          total_results: 0,
+          results: [],
+        };
+      }
+    );
+
+    const agent = await login();
+    const res = await agent.get('/discover/movies').query({
+      genre: '18',
+      excludeGenre: 'true',
+      studio: '5',
+      excludeStudio: 'true',
+    });
+
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(requestEndpoint, '/discover/movie');
+    assert.strictEqual(requestParams?.with_genres, undefined);
+    assert.strictEqual(
+      requestParams?.without_genres,
+      '18',
+      JSON.stringify(requestParams)
+    );
+    assert.strictEqual(requestParams?.with_companies, undefined);
+    assert.strictEqual(requestParams?.without_companies, '5');
   });
 
   it('rejects malformed or excessive keyword fan-out before provider lookup', async () => {
@@ -1590,6 +1742,48 @@ describe('GET /discover/movies', () => {
 });
 
 describe('GET /discover/tv', () => {
+  it('complements the selected TMDB status when status exclusion is active', async () => {
+    mockPrivate(
+      ExternalAPI.prototype,
+      'get',
+      async (endpoint: unknown, options: unknown) => {
+        const requestOptions = options as {
+          params?: { with_status?: string };
+        };
+        assert.strictEqual(endpoint, '/discover/tv');
+        assert.strictEqual(requestOptions.params?.with_status, '0|1|2|4|5');
+
+        return {
+          page: 1,
+          total_pages: 1,
+          total_results: 0,
+          results: [],
+        };
+      }
+    );
+
+    const agent = await login();
+    const res = await agent.get('/discover/tv?status=3&excludeStatus=true');
+
+    assert.strictEqual(res.status, 200);
+  });
+
+  it('rejects TV status exclusion for local availability before provider lookup', async () => {
+    const tmdbGet = mockPrivate(ExternalAPI.prototype, 'get', async () => {
+      throw new Error('TMDB must not be called for local status exclusion');
+    });
+    const agent = await login();
+    const res = await agent.get(
+      '/discover/tv?availability=4k&status=3&excludeStatus=true'
+    );
+
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(
+      (tmdbGet as { mock: { callCount: () => number } }).mock.callCount(),
+      0
+    );
+  });
+
   it('rejects malformed series genre IDs before provider lookup', async () => {
     mockPrivate(ExternalAPI.prototype, 'get', async () => {
       throw new Error('TMDB should not be called for malformed genre IDs');
@@ -1698,6 +1892,75 @@ describe('GET /discover/tv', () => {
     );
 
     assert.strictEqual(res.status, 200);
+  });
+
+  it('forwards fractional series thresholds and provider exclusions to TMDB', async () => {
+    mockPrivate(
+      ExternalAPI.prototype,
+      'get',
+      async (endpoint: unknown, options: unknown) => {
+        const requestOptions = options as {
+          params?: Record<string, unknown>;
+        };
+        assert.strictEqual(endpoint, '/discover/tv');
+        assert.strictEqual(requestOptions.params?.['vote_average.gte'], '6.7');
+        assert.strictEqual(
+          requestOptions.params?.without_watch_providers,
+          '8|9'
+        );
+        assert.strictEqual(
+          requestOptions.params?.with_watch_providers,
+          undefined
+        );
+        assert.strictEqual(requestOptions.params?.watch_region, 'CA');
+
+        return {
+          page: 1,
+          total_pages: 1,
+          total_results: 0,
+          results: [],
+        };
+      }
+    );
+
+    const agent = await login();
+    const res = await agent.get('/discover/tv').query({
+      voteAverageGte: '6.7',
+      watchProviders: '8|9',
+      watchProviderMode: 'exclude',
+      watchRegion: 'CA',
+    });
+
+    assert.strictEqual(res.status, 200);
+  });
+
+  it('rejects malformed provider IDs, malformed regions, and exclusion without a region', async () => {
+    const agent = await login();
+
+    const badProviders = await agent
+      .get('/discover/movies')
+      .query({ watchProviders: '8|abc', watchRegion: 'CA' });
+    const tooManyProviders = await agent.get('/discover/tv').query({
+      watchProviders: Array.from({ length: 51 }, (_, index) => index + 1).join(
+        '|'
+      ),
+      watchRegion: 'CA',
+    });
+    const badRegion = await agent
+      .get('/discover/movies')
+      .query({ watchProviders: '8', watchRegion: 'CANADA' });
+    const excludeWithoutRegion = await agent
+      .get('/discover/tv')
+      .query({ watchProviders: '8', watchProviderMode: 'exclude' });
+
+    for (const res of [
+      badProviders,
+      tooManyProviders,
+      badRegion,
+      excludeWithoutRegion,
+    ]) {
+      assert.strictEqual(res.status, 400);
+    }
   });
 
   it('rejects malformed network IDs before provider lookup', async () => {
@@ -5518,6 +5781,172 @@ describe('GET /discover/magazines', () => {
 });
 
 describe('GET /discover/watchlist', () => {
+  it('filters local items by title and media type and applies stable title sorting', async () => {
+    const userRepository = getRepository(User);
+    const admin = await userRepository.findOneOrFail({
+      where: { email: 'admin@seerr.dev' },
+    });
+    admin.plexToken = null;
+    await userRepository.save(admin);
+
+    await getRepository(Watchlist).save([
+      new Watchlist({
+        tmdbId: 9101,
+        mediaType: MediaType.MOVIE,
+        title: 'Alpha Movie',
+        requestedBy: admin,
+      }),
+      new Watchlist({
+        tmdbId: 9102,
+        mediaType: MediaType.MOVIE,
+        title: 'alpha 100%_ Match',
+        requestedBy: admin,
+      }),
+      new Watchlist({
+        tmdbId: 9103,
+        mediaType: MediaType.MOVIE,
+        title: '100xx Movie',
+        requestedBy: admin,
+      }),
+      new Watchlist({
+        tmdbId: 9104,
+        mediaType: MediaType.TV,
+        title: 'Alpha Series',
+        requestedBy: admin,
+      }),
+      new Watchlist({
+        externalId: 'OLwatchlistFilterW',
+        mediaType: MediaType.BOOK,
+        title: 'Alpha Book',
+        requestedBy: admin,
+      }),
+    ]);
+
+    const agent = await login();
+    const filtered = await agent.get('/discover/watchlist').query({
+      search: 'alpha',
+      mediaType: MediaType.MOVIE,
+      sortBy: 'title-asc',
+    });
+
+    assert.equal(filtered.status, 200);
+    assert.equal(filtered.body.filtersSupported, true);
+    assert.equal(filtered.body.totalResults, 2);
+    assert.deepEqual(
+      filtered.body.results.map((item: { title: string }) => item.title),
+      ['alpha 100%_ Match', 'Alpha Movie']
+    );
+
+    const escapedTitle = await agent
+      .get('/discover/watchlist')
+      .query({ search: '100%_' });
+
+    assert.equal(escapedTitle.status, 200);
+    assert.deepEqual(
+      escapedTitle.body.results.map((item: { title: string }) => item.title),
+      ['alpha 100%_ Match']
+    );
+  });
+
+  it('sorts recent additions first when selected and preserves saved order by default', async () => {
+    const userRepository = getRepository(User);
+    const admin = await userRepository.findOneOrFail({
+      where: { email: 'admin@seerr.dev' },
+    });
+    admin.plexToken = null;
+    await userRepository.save(admin);
+
+    await getRepository(Watchlist).save([
+      new Watchlist({
+        tmdbId: 9201,
+        mediaType: MediaType.MOVIE,
+        title: 'Added First',
+        createdAt: new Date('2020-01-01T00:00:00.000Z'),
+        requestedBy: admin,
+      }),
+      new Watchlist({
+        tmdbId: 9202,
+        mediaType: MediaType.MOVIE,
+        title: 'Added Second',
+        createdAt: new Date('2022-01-01T00:00:00.000Z'),
+        requestedBy: admin,
+      }),
+      new Watchlist({
+        tmdbId: 9203,
+        mediaType: MediaType.MOVIE,
+        title: 'Added Last',
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        requestedBy: admin,
+      }),
+    ]);
+
+    const agent = await login();
+    const recentlyAdded = await agent
+      .get('/discover/watchlist')
+      .query({ sortBy: 'added-desc' });
+    assert.deepEqual(
+      recentlyAdded.body.results.map((item: { title: string }) => item.title),
+      ['Added Last', 'Added Second', 'Added First']
+    );
+
+    const savedOrder = await agent.get('/discover/watchlist');
+    assert.deepEqual(
+      savedOrder.body.results.map((item: { title: string }) => item.title),
+      ['Added First', 'Added Second', 'Added Last']
+    );
+  });
+
+  it('keeps combined Plex watchlists unfiltered and reports filtering as unsupported', async () => {
+    mock.method(PlexTvAPI.prototype, 'getWatchlist', async () => ({
+      totalSize: 1,
+      items: [
+        {
+          ratingKey: 'plex-movie-key',
+          title: 'Plex Movie',
+          type: 'movie',
+          tmdbId: 123,
+        },
+      ],
+    }));
+
+    const userRepository = getRepository(User);
+    const admin = await userRepository.findOneOrFail({
+      where: { email: 'admin@seerr.dev' },
+    });
+    admin.plexToken = 'plex-token';
+    await userRepository.save(admin);
+    await getRepository(Watchlist).save(
+      new Watchlist({
+        externalId: 'OLwatchlistPlexW',
+        mediaType: MediaType.BOOK,
+        title: 'Local Book',
+        requestedBy: admin,
+      })
+    );
+
+    const agent = await login();
+    const response = await agent
+      .get('/discover/watchlist')
+      .query({ search: 'does not match', mediaType: MediaType.MOVIE });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.filtersSupported, false);
+    assert.deepEqual(
+      response.body.results.map((item: { title: string }) => item.title),
+      ['Local Book', 'Plex Movie']
+    );
+  });
+
+  it('rejects malformed watchlist filters before reading watchlist data', async () => {
+    const agent = await login();
+    const response = await agent.get('/discover/watchlist').query({
+      mediaType: 'sports',
+    });
+
+    assert.equal(response.status, 400);
+    assert.equal(response.body.message, 'Invalid watchlist filters.');
+  });
+
   it('includes local book and music watchlist items for Plex users', async () => {
     mock.method(PlexTvAPI.prototype, 'getWatchlist', async () => ({
       totalSize: 1,

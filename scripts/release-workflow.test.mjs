@@ -42,6 +42,21 @@ test('release assets build while image verification runs, then package channels 
   assert.equal(assetBuild.needs.includes('verify'), false);
   assert.equal(assetBuild.with.tag, '${{ inputs.tag || github.ref_name }}');
   assert.equal(assetBuild.permissions.actions, 'read');
+  assert.deepEqual(assetBuild.secrets, {
+    ANDROID_KEYSTORE_BASE64: '${{ secrets.ANDROID_KEYSTORE_BASE64 }}',
+    ANDROID_KEYSTORE_PASSWORD: '${{ secrets.ANDROID_KEYSTORE_PASSWORD }}',
+    ANDROID_KEY_ALIAS: '${{ secrets.ANDROID_KEY_ALIAS }}',
+    ANDROID_KEY_PASSWORD: '${{ secrets.ANDROID_KEY_PASSWORD }}',
+    IOS_DISTRIBUTION_CERTIFICATE_BASE64:
+      '${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}',
+    IOS_DISTRIBUTION_CERTIFICATE_PASSWORD:
+      '${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}',
+    IOS_TEAM_ID: '${{ secrets.IOS_TEAM_ID }}',
+    IOS_ADHOC_PROVISIONING_PROFILE_BASE64:
+      '${{ secrets.IOS_ADHOC_PROVISIONING_PROFILE_BASE64 }}',
+    IOS_APPSTORE_PROVISIONING_PROFILE_BASE64:
+      '${{ secrets.IOS_APPSTORE_PROVISIONING_PROFILE_BASE64 }}',
+  });
   assert.deepEqual(packageDispatch.needs, ['verify', 'build-release-assets']);
   assert.equal(packageDispatch['timeout-minutes'], 360);
   assert.match(dispatchScript, /--ref main/u);
@@ -123,7 +138,7 @@ test('release assets build while image verification runs, then package channels 
 });
 
 test('container workflows use the canonical lowercase GitHub Container Registry path', () => {
-  const expectedImage = 'ghcr.io/snapetech/seerrng';
+  const expectedImage = 'ghcr.io/snapetech-org/seerrng';
   for (const name of [
     'ci.yml',
     'helm.yml',
@@ -273,9 +288,20 @@ test('Chocolatey packages only verified Windows release archives', () => {
   const workflow = readWorkflow('release-chocolatey.yml');
   const job = workflow.jobs['publish-chocolatey'];
   const steps = job.steps.map((step) => step.run ?? '').join('\n');
+  const credentialStep = job.steps.find(
+    (step) => step.name === 'Require Chocolatey publisher credential'
+  );
+  const submitStep = job.steps.find(
+    (step) => step.name === 'Submit package to Chocolatey Community Repository'
+  );
 
   assert.equal(workflow.on.workflow_dispatch.inputs.tag.required, true);
   assert.equal(job['runs-on'], 'windows-latest');
+  assert.ok(credentialStep);
+  assert.match(credentialStep.run, /\[guid\]::TryParse/iu);
+  assert.ok(submitStep);
+  assert.match(submitStep.run, /ToString\('D'\)/u);
+  assert.match(submitStep.run, /--api-key \$apiKey/u);
   assert.match(
     steps,
     /merge-base --is-ancestor HEAD refs\/remotes\/origin\/main/u
@@ -337,6 +363,30 @@ test('all container vulnerability scans use an available pinned Trivy release', 
   );
 });
 
+test('Jellyfin CI tests incomplete startup responses before the live smoke test', () => {
+  const ci = readWorkflow('ci.yml');
+  const plugin = ci.jobs['jellyfin-plugin'];
+  const startupRetryTest = plugin.steps.find(
+    (step) => step.name === 'Test Jellyfin smoke-test startup retries'
+  );
+  const liveSmokeTest = plugin.steps.find(
+    (step) => step.name === 'Smoke test plugin in Jellyfin 10.11.11'
+  );
+
+  assert.ok(startupRetryTest);
+  assert.ok(liveSmokeTest);
+  assert.equal(startupRetryTest.if, undefined);
+  assert.match(
+    startupRetryTest.run,
+    /python3 -m unittest discover -s integrations\/jellyfin-plugin\/tests/u
+  );
+  assert.ok(
+    plugin.steps.indexOf(startupRetryTest) <
+      plugin.steps.indexOf(liveSmokeTest),
+    'the startup-response regression test must run before the Jellyfin container smoke test'
+  );
+});
+
 test('multi-architecture publishers perform the real build once and verify the index', () => {
   const ci = readWorkflow('ci.yml');
   const preview = readWorkflow('preview.yml');
@@ -345,43 +395,26 @@ test('multi-architecture publishers perform the real build once and verify the i
   assert.equal(ci.jobs.build, undefined);
   assert.equal(
     ci.jobs.publish.if,
-    "github.repository == 'snapetech/seerrng' && github.ref == 'refs/heads/main' && needs.engine-reconcile.result == 'success'"
+    "github.repository == 'snapetech/seerrng' && github.ref == 'refs/heads/main'"
   );
-  assert.equal(ci.jobs.publish.needs, 'engine-reconcile');
-  assert.equal(ci.on.workflow_dispatch.inputs.deploy_main.default, true);
-  assert.equal(ci.on.workflow_dispatch.inputs.deploy_main.type, 'boolean');
-  assert.equal(
-    ci.jobs.publish.outputs.image_digest,
-    '${{ steps.resolve-digest.outputs.image_digest }}'
-  );
-  assert.deepEqual(ci.jobs['deploy-main'].needs, [
-    'publish',
-    'preflight-deploy',
-    'engine-reconcile',
-    'scan-main-image',
+  assert.deepEqual(ci.jobs.publish.needs, [
+    'release-notes',
+    'i18n-and-tooling',
+    'test',
+    'unit-test',
+    'node-test',
+    'jellyfin-plugin',
+    'codeql',
+    'playwright',
+    'cypress',
+    'test-docs',
+    'docs-links',
+    'helm',
   ]);
-  assert.equal(
-    ci.jobs['preflight-deploy'].outputs.ready,
-    '${{ steps.verify-storage.outputs.ready }}'
-  );
-  assert.match(
-    ci.jobs['preflight-deploy'].steps.find(
-      (step) =>
-        step.name === 'Verify deployment storage and determine readiness'
-    ).run,
-    /live deployment will remain skipped until the host is repaired/u
-  );
-  assert.match(
-    ci.jobs['preflight-deploy'].steps.find(
-      (step) =>
-        step.name === 'Verify deployment storage and determine readiness'
-    ).run,
-    /ready=false/u
-  );
-  assert.equal(
-    ci.jobs['deploy-main'].if,
-    "github.repository == 'snapetech/seerrng' && github.ref == 'refs/heads/main' && needs.engine-reconcile.result == 'success' && needs.scan-main-image.result == 'success' && needs.publish.result == 'success' && needs.preflight-deploy.outputs.ready == 'true' && (github.event_name != 'workflow_dispatch' || inputs.deploy_main)"
-  );
+  assert.equal(ci.on.workflow_dispatch, null);
+  assert.equal(Object.hasOwn(ci.on, 'pull_request'), false);
+  assert.equal(ci.jobs['preflight-deploy'], undefined);
+  assert.equal(ci.jobs['deploy-main'], undefined);
   assert.match(
     ci.jobs.publish.steps.find(
       (step) => step.name === 'Build & Push (multi-arch, single tag)'
@@ -396,12 +429,9 @@ test('multi-architecture publishers perform the real build once and verify the i
   );
   assert.equal(
     ci.jobs['scan-main-image'].if,
-    "github.repository == 'snapetech/seerrng' && github.ref == 'refs/heads/main' && needs.engine-reconcile.result == 'success' && needs.publish.result == 'success'"
+    "github.repository == 'snapetech/seerrng' && github.ref == 'refs/heads/main' && needs.publish.result == 'success'"
   );
-  assert.deepEqual(ci.jobs['scan-main-image'].needs, [
-    'publish',
-    'engine-reconcile',
-  ]);
+  assert.deepEqual(ci.jobs['scan-main-image'].needs, ['publish']);
   assert.deepEqual(ci.jobs['scan-main-image'].strategy.matrix.include, [
     { platform: 'linux/amd64', suffix: 'amd64' },
     { platform: 'linux/arm64', suffix: 'arm64' },
@@ -533,6 +563,14 @@ test('release assets support trusted reuse and main-only manual dispatch', () =>
     'boolean'
   );
   assert.equal(workflowCall.inputs.reuse_windows_arm64_artifact.default, false);
+  for (const name of [
+    'ANDROID_KEYSTORE_BASE64',
+    'ANDROID_KEYSTORE_PASSWORD',
+    'ANDROID_KEY_ALIAS',
+    'ANDROID_KEY_PASSWORD',
+  ]) {
+    assert.equal(workflowCall.secrets[name].required, false);
+  }
   assert.match(
     resolve.steps.find((step) => step.name === 'Resolve version').env
       .RELEASE_TAG,
@@ -580,6 +618,16 @@ test('release recovery validates reusable artifacts and repairs the failed relea
   );
   assert.match(
     recoveryValidation.run,
+    /Build release assets \/ Build Android APK/u,
+    'recovery must validate that the signed Android artifact was built'
+  );
+  assert.match(
+    recoveryValidation.run,
+    /"seerrng-android"/u,
+    'recovery must require the Android artifact before reusing release assets'
+  );
+  assert.match(
+    recoveryValidation.run,
     /Build release assets \/ Upload release assets/u
   );
   assert.match(
@@ -602,6 +650,21 @@ test('release recovery validates reusable artifacts and repairs the failed relea
     'validate-main-tag',
     'create-draft-release',
   ]);
+  assert.deepEqual(assetBuild.secrets, {
+    ANDROID_KEYSTORE_BASE64: '${{ secrets.ANDROID_KEYSTORE_BASE64 }}',
+    ANDROID_KEYSTORE_PASSWORD: '${{ secrets.ANDROID_KEYSTORE_PASSWORD }}',
+    ANDROID_KEY_ALIAS: '${{ secrets.ANDROID_KEY_ALIAS }}',
+    ANDROID_KEY_PASSWORD: '${{ secrets.ANDROID_KEY_PASSWORD }}',
+    IOS_DISTRIBUTION_CERTIFICATE_BASE64:
+      '${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}',
+    IOS_DISTRIBUTION_CERTIFICATE_PASSWORD:
+      '${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}',
+    IOS_TEAM_ID: '${{ secrets.IOS_TEAM_ID }}',
+    IOS_ADHOC_PROVISIONING_PROFILE_BASE64:
+      '${{ secrets.IOS_ADHOC_PROVISIONING_PROFILE_BASE64 }}',
+    IOS_APPSTORE_PROVISIONING_PROFILE_BASE64:
+      '${{ secrets.IOS_APPSTORE_PROVISIONING_PROFILE_BASE64 }}',
+  });
   assert.match(
     assetBuild.with.reuse_windows_x64_artifact,
     /needs\.validate-main-tag\.outputs\.reuse_windows_x64_artifact/u
@@ -661,7 +724,17 @@ test('release assets build supported native archive platforms', () => {
   );
   const verifyInventory = publish.steps.find(
     (step) => step.name === 'Verify archive inventory and checksums'
-  ).run;
+  );
+  assert.match(
+    verifyInventory.env.IOS_ADHOC_SIGNING_ENABLED,
+    /vars\.IOS_ADHOC_SIGNING_ENABLED/u
+  );
+  assert.match(
+    verifyInventory.env.IOS_APPSTORE_SIGNING_ENABLED,
+    /vars\.IOS_APPSTORE_SIGNING_ENABLED/u
+  );
+  assert.match(verifyInventory.run, /\$\{IOS_ADHOC_SIGNING_ENABLED:-\}/u);
+  assert.match(verifyInventory.run, /\$\{IOS_APPSTORE_SIGNING_ENABLED:-\}/u);
   const archiveBuild = build.steps.find(
     (step) => step.name === 'Build archive'
   );
@@ -729,8 +802,111 @@ test('release assets build supported native archive platforms', () => {
   assert.deepEqual(publish.needs, [
     'resolve',
     'build',
+    'build-android',
+    'build-ios',
     'build-jellyfin-plugin',
   ]);
+  const androidBuild = assets.jobs['build-android'];
+  assert.equal(androidBuild.needs, 'resolve');
+  assert.equal(
+    androidBuild.steps.find(
+      (step) =>
+        step.name === 'Build, sign, and checksum the Android APK and AAB'
+    ).run,
+    "bash scripts/build-android-release.sh '${{ needs.resolve.outputs.tag }}' dist-release"
+  );
+  const androidPackageBuild = androidBuild.steps.find(
+    (step) => step.name === 'Build, sign, and checksum the Android APK and AAB'
+  );
+  assert.deepEqual(
+    Object.keys(androidPackageBuild.env).filter((name) =>
+      /admob|monetization/iu.test(name)
+    ),
+    []
+  );
+  assert.equal(
+    androidBuild.steps.find((step) =>
+      step.uses?.startsWith('actions/upload-artifact@')
+    ).with.name,
+    'seerrng-android'
+  );
+  const iosBuild = assets.jobs['build-ios'];
+  assert.equal(iosBuild.needs, 'resolve');
+  assert.equal(iosBuild['runs-on'], 'macos-26');
+  const iosToolchainCheck = iosBuild.steps.find(
+    (step) => step.name === 'Verify Xcode release toolchain'
+  ).run;
+  assert.match(iosToolchainCheck, /xcode_version_output=/u);
+  assert.doesNotMatch(iosToolchainCheck, /xcodebuild -version \|/u);
+  assert.equal(
+    iosBuild.steps.find(
+      (step) => step.name === 'Test and package iOS Simulator app'
+    ).run,
+    'bash scripts/build-ios-release.sh "$TAG" dist-release'
+  );
+  const iosClientWorkflow = readWorkflow('ios.yml');
+  assert.equal(iosClientWorkflow.jobs.ios['runs-on'], 'macos-26');
+  const iosClientToolchainCheck = iosClientWorkflow.jobs.ios.steps.find(
+    (step) => step.name === 'Verify Xcode release toolchain'
+  ).run;
+  assert.match(iosClientToolchainCheck, /xcode_version_output=/u);
+  assert.doesNotMatch(iosClientToolchainCheck, /xcodebuild -version \|/u);
+  assert.match(
+    iosClientWorkflow.jobs.ios.steps.find(
+      (step) => step.name === 'Inspect iOS Xcode project and scheme'
+    ).run,
+    /xcodebuild -list -project ios\/SeerrNG\.xcodeproj -scheme SeerrNG/u
+  );
+  assert.match(
+    iosClientWorkflow.jobs.ios.steps.find(
+      (step) =>
+        step.name === 'Run iOS unit and UI tests, then package Simulator app'
+    ).run,
+    /scripts\/build-ios-release\.sh/u
+  );
+  const iosScheme = fs.readFileSync(
+    path.join(
+      rootDirectory,
+      'ios/SeerrNG.xcodeproj/xcshareddata/xcschemes/SeerrNG.xcscheme'
+    ),
+    'utf8'
+  );
+  const iosProject = fs.readFileSync(
+    path.join(rootDirectory, 'ios/SeerrNG.xcodeproj/project.pbxproj'),
+    'utf8'
+  );
+  const iosInfoPlist = fs.readFileSync(
+    path.join(rootDirectory, 'ios/SeerrNG/Info.plist'),
+    'utf8'
+  );
+  assert.match(
+    iosProject,
+    /AA0000000000000000000003 \/\* Debug \*\/ = \{isa = XCBuildConfiguration; buildSettings = \{[^}]*ENABLE_TESTABILITY = YES;/u
+  );
+  assert.match(
+    iosInfoPlist,
+    /<key>CFBundleExecutable<\/key>\s*<string>\$\(EXECUTABLE_NAME\)<\/string>/u
+  );
+  const iosSigningScript = fs.readFileSync(
+    path.join(rootDirectory, 'scripts/build-ios-signed-ipa.sh'),
+    'utf8'
+  );
+  assert.match(iosSigningScript, /export_method='ad-hoc'/u);
+  assert.match(iosSigningScript, /export_method='app-store-connect'/u);
+  assert.match(iosSigningScript, /"method": export_method/u);
+  assert.match(
+    iosScheme,
+    /BlueprintIdentifier\s*=\s*"A10000000000000000000002"[\s\S]*?BuildableName\s*=\s*"SeerrNG\.app"/u
+  );
+  assert.match(
+    iosScheme,
+    /BlueprintIdentifier\s*=\s*"A10000000000000000000003"[\s\S]*?BuildableName\s*=\s*"SeerrNGTests\.xctest"/u
+  );
+  assert.match(
+    iosScheme,
+    /BlueprintIdentifier\s*=\s*"A10000000000000000000004"[\s\S]*?BuildableName\s*=\s*"SeerrNGUITests\.xctest"/u
+  );
+  assert.match(iosScheme, /<MacroExpansion>[\s\S]*?<\/MacroExpansion>/u);
   assert.equal(downloadAssets.with.path, 'dist-release/downloaded');
   assert.equal(downloadAssets.with['merge-multiple'], undefined);
   assert.match(flattenAssets.run, /Unexpected file in release artifact/u);
@@ -749,13 +925,16 @@ test('release assets build supported native archive platforms', () => {
   );
   assert.match(buildScript, /node -p 'process\.arch'/u);
   assert.doesNotMatch(buildScript, /uname -m/u);
-  assert.match(verifyInventory, /sha256sum -c/u);
+  assert.match(verifyInventory.run, /sha256sum -c/u);
   for (const archive of [
     'seerrng-${TAG}-macos-x64.tar.gz',
     'seerrng-${TAG}-windows-arm64.zip',
+    'seerrng-${TAG}-android.apk',
+    'seerrng-${TAG}-android.aab',
+    'seerrng-${TAG}-ios-simulator.zip',
   ]) {
     assert.ok(
-      verifyInventory.includes(`"${archive}"`),
+      verifyInventory.run.includes(`"${archive}"`),
       `expected the release-asset inventory check to require ${archive}`
     );
   }
@@ -767,12 +946,15 @@ test('release assets build supported native archive platforms', () => {
   for (const archive of [
     'seerrng-${TAG}-macos-x64.tar.gz',
     'seerrng-${TAG}-windows-arm64.zip',
+    'seerrng-${TAG}-ios-simulator.zip',
+    'seerrng-${TAG}-ios-simulator.sha256',
   ]) {
     assert.ok(
       requiredAssets.includes(`"${archive}"`),
       `expected the release gate to require ${archive}`
     );
   }
+  assert.match(requiredAssets, /seerrng-\$\{TAG\}-android-aab\.sha256/u);
 });
 
 test('tag preparation keeps Helm metadata aligned with the application release', () => {
@@ -915,20 +1097,52 @@ test('release asset checksums match the builder sidecar names', () => {
   );
   assert.match(assetsText, /archive_base="\$\{archive%\.tar\.gz\}"/u);
   assert.match(assetsText, /archive_base="\$\{archive_base%\.zip\}"/u);
+  assert.match(assetsText, /archive_base="\$\{archive_base%\.apk\}"/u);
+  assert.match(assetsText, /archive_base="\$\{archive_base%\.aab\}-aab"/u);
+  assert.match(assetsText, /checksum_base="\$\{checksum_base%\.aab\}-aab"/u);
 });
 
-test('pull-request CI publishes the exact release-note preview', () => {
+test('main CI validates release notes against the pushed commit', () => {
   const ci = readWorkflow('ci.yml');
   const validation = ci.jobs['release-notes'].steps.find(
     (step) => step.name === 'Validate release-note fragment or explicit opt-out'
   );
 
   assert.ok(validation);
+  assert.equal(validation.env.BASE_SHA, '${{ github.event.before }}');
   assert.equal(
     validation.env.PR_BODY,
-    "${{ github.event_name == 'pull_request' && github.event.pull_request.body || github.event.head_commit.message || '' }}"
+    "${{ github.event.head_commit.message || '' }}"
   );
+  assert.doesNotMatch(validation.run, /\$\{\{/u);
   assert.match(validation.run, /--summary-file "\$GITHUB_STEP_SUMMARY"/u);
+});
+
+test('main CI tooling checks fetch tags for changelog validation', () => {
+  const ci = readWorkflow('ci.yml');
+  const checkout = ci.jobs['i18n-and-tooling'].steps.find(
+    (step) => step.name === 'Checkout'
+  );
+
+  assert.equal(checkout?.with?.['fetch-depth'], 0);
+});
+
+test('Cypress uses Cloud-only grouping metadata only when recording', () => {
+  const workflow = readWorkflow('cypress.yml');
+  const steps = workflow.jobs['cypress-run'].steps;
+  const recordedRun = steps.find(
+    (step) => step.name === 'Run Cypress suite with Cypress Cloud'
+  );
+  const localRun = steps.find(
+    (step) => step.name === 'Run Cypress suite without Cypress Cloud'
+  );
+
+  assert.equal(recordedRun?.with?.record, true);
+  assert.ok(recordedRun?.with?.group);
+  assert.ok(recordedRun?.with?.['ci-build-id']);
+  assert.equal(localRun?.with?.record, false);
+  assert.equal(Object.hasOwn(localRun?.with ?? {}, 'group'), false);
+  assert.equal(Object.hasOwn(localRun?.with ?? {}, 'ci-build-id'), false);
 });
 
 test('tag preparation prepends the current changelog without replacing history', () => {
@@ -984,12 +1198,7 @@ test('fork images publish only validated same-repository main pushes to the owne
   for (const tag of tags)
     assert.ok(tag.startsWith('ghcr.io/phutur1st/seerrng:'));
   const ci = readWorkflow('ci.yml');
-  for (const id of [
-    'publish',
-    'preflight-deploy',
-    'scan-main-image',
-    'deploy-main',
-  ]) {
+  for (const id of ['publish', 'scan-main-image']) {
     assert.ok(
       ci.jobs[id].if.includes("github.repository == 'snapetech/seerrng'")
     );
@@ -1003,4 +1212,22 @@ test('fork images publish only validated same-repository main pushes to the owne
       "github.repository == 'snapetech/seerrng' &&"
     )
   );
+});
+
+test('git-cliff uses stable semantic-version tags as release boundaries', () => {
+  const cliff = fs.readFileSync(
+    path.join(rootDirectory, '.github', 'cliff.toml'),
+    'utf8'
+  );
+  const tagPatternLine = cliff.match(/^tag_pattern = (.+)$/mu)?.[1];
+
+  assert.ok(tagPatternLine);
+
+  const tagPattern = JSON.parse(tagPatternLine);
+  const matchesTag = new RegExp(tagPattern);
+
+  assert.equal(matchesTag.test('v3.63.0'), true);
+  assert.equal(matchesTag.test('3.63.0'), true);
+  assert.equal(matchesTag.test('mobile-v3.63.0-ci.36'), false);
+  assert.equal(matchesTag.test('v3.63.0-rc.1'), false);
 });

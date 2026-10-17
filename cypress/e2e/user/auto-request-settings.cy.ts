@@ -71,25 +71,33 @@ describe('Auto Request Settings', () => {
   });
 
   it('should see auto-request settings after being given permission', () => {
-    cy.env<{ USER_EMAIL: string }>(['USER_EMAIL']).then(({ USER_EMAIL }) => {
+    cy.env<{ ADMIN_EMAIL: string; USER_EMAIL: string }>([
+      'ADMIN_EMAIL',
+      'USER_EMAIL',
+    ]).then(({ ADMIN_EMAIL, USER_EMAIL }) => {
       return cy
         .request<{ results: { id: number; email: string }[] }>(
           '/api/v1/user?take=100'
         )
         .then(({ body }) => {
           const user = body.results.find(
-            (result) => result.email === USER_EMAIL
+            (result) =>
+              result.email === USER_EMAIL &&
+              result.email !== ADMIN_EMAIL &&
+              Number.isSafeInteger(Number(result.id)) &&
+              Number(result.id) > 1
           );
 
           if (!user) {
             throw new Error(
-              `Could not find the seeded Plex user ${USER_EMAIL}`
+              `No editable Plex user found for ${USER_EMAIL}; refusing to edit ${ADMIN_EMAIL}.`
             );
           }
+          const userId = Number(user.id);
 
           return cy
             .request<{ permissions: number }>(
-              `/api/v1/user/${user.id}/settings/permissions`
+              `/api/v1/user/${userId}/settings/permissions`
             )
             .then(({ body: permissionData }) => {
               return cy
@@ -100,9 +108,9 @@ describe('Auto Request Settings', () => {
                   watchlistSyncBooks?: boolean | null;
                   watchlistSyncComics?: boolean | null;
                   watchlistSyncMagazines?: boolean | null;
-                }>(`/api/v1/user/${user.id}/settings/main`)
+                }>(`/api/v1/user/${userId}/settings/main`)
                 .then(({ body: settings }) => {
-                  fixtureUserId = user.id;
+                  fixtureUserId = userId;
                   originalPermissions = permissionData.permissions;
                   originalUserSettings = {
                     watchlistSyncMovies: settings.watchlistSyncMovies,
@@ -112,17 +120,17 @@ describe('Auto Request Settings', () => {
                     watchlistSyncComics: settings.watchlistSyncComics,
                     watchlistSyncMagazines: settings.watchlistSyncMagazines,
                   };
-                  cy.intercept('GET', `/api/v1/user/${user.id}`).as(
+                  cy.intercept('GET', `/api/v1/user/${userId}`).as(
                     'fixtureUser'
                   );
                   cy.intercept(
                     'GET',
-                    `/api/v1/user/${user.id}/settings/permissions`
+                    `/api/v1/user/${userId}/settings/permissions`
                   ).as('fixturePermissions');
 
                   return cy.request(
                     'POST',
-                    `/api/v1/user/${user.id}/settings/permissions`,
+                    `/api/v1/user/${userId}/settings/permissions`,
                     { permissions: BASIC_REQUEST_PERMISSION }
                   );
                 });
@@ -130,14 +138,11 @@ describe('Auto Request Settings', () => {
             .its('status')
             .should('eq', 200)
             .then(() => {
-              visitUserEditPage(USER_EMAIL);
-              cy.location('pathname').should(
-                'eq',
-                `/users/${user.id}/settings`
-              );
+              cy.visit(`/users/${userId}/settings`);
+              cy.location('pathname').should('eq', `/users/${userId}/settings`);
               cy.wait('@fixtureUser')
                 .its('response.body.id')
-                .should('eq', user.id);
+                .should('eq', userId);
             });
         });
     });
@@ -169,8 +174,36 @@ describe('Auto Request Settings', () => {
     cy.get('#autorequestmovies').should('be.checked');
     cy.get('#autorequesttv').should('be.checked');
 
-    cy.get('[data-testid="settings-nav-desktop"]').contains('General').click();
-    cy.location('pathname').should('match', /\/settings\/main$/);
+    cy.then(() => {
+      const userId = fixtureUserId;
+      if (userId === null) {
+        throw new Error('No fixture user ID was recorded for settings checks.');
+      }
+
+      return cy
+        .request('POST', `/api/v1/user/${userId}/settings/main`, {
+          watchlistSyncMovies: false,
+          watchlistSyncTv: false,
+        })
+        .its('status')
+        .should('eq', 200)
+        .then(() => {
+          cy.intercept('GET', `/api/v1/user/${userId}/settings/main`).as(
+            'fixtureMainSettings'
+          );
+          cy.visit(`/users/${userId}/settings/main`);
+          cy.location('pathname').should(
+            'eq',
+            `/users/${userId}/settings/main`
+          );
+          return cy
+            .wait('@fixtureMainSettings')
+            .its('response.body.watchlistSyncMovies')
+            .should('eq', false);
+        });
+    });
+    cy.get('#watchlistSyncMovies').should('not.be.checked');
+    cy.get('#watchlistSyncTv').should('not.be.checked');
 
     cy.contains('Auto-Request Movies').should('exist');
     cy.contains('Auto-Request Series').should('exist');
@@ -182,9 +215,7 @@ describe('Auto Request Settings', () => {
     });
     cy.get('#watchlistSyncMovies').should(($checkbox) => {
       expect($checkbox.is(':checked')).to.eq(watchlistSyncMoviesAfterToggle);
-      expect($checkbox.is(':checked')).to.eq(
-        !(originalUserSettings?.watchlistSyncMovies ?? false)
-      );
+      expect($checkbox.is(':checked')).to.eq(true);
     });
     cy.get('#watchlistSyncTv').then(($checkbox) => {
       watchlistSyncTvAfterToggle = !$checkbox.is(':checked');
@@ -192,9 +223,7 @@ describe('Auto Request Settings', () => {
     });
     cy.get('#watchlistSyncTv').should(($checkbox) => {
       expect($checkbox.is(':checked')).to.eq(watchlistSyncTvAfterToggle);
-      expect($checkbox.is(':checked')).to.eq(
-        !(originalUserSettings?.watchlistSyncTv ?? false)
-      );
+      expect($checkbox.is(':checked')).to.eq(true);
     });
 
     cy.intercept('POST', '/api/v1/user/*/settings/main', (request) => {

@@ -1,4 +1,5 @@
 import SelectionCircle from '@app/components/Common/SelectionCircle';
+import { SavedServiceHostPicker } from '@app/components/Settings/SavedServiceHostPicker';
 import { useSetupConnectionSuggestion } from '@app/context/SetupConnectionsContext';
 import defineMessages from '@app/utils/defineMessages';
 import { detectProwlarrCategoryMatches } from '@app/utils/prowlarrCategories';
@@ -15,7 +16,9 @@ import useSWR, { mutate } from 'swr';
 const messages = defineMessages('components.SettingsProwlarr', {
   title: 'Prowlarr indexers',
   description:
-    'Connect your Prowlarr instance once to run category-aware manual searches across the indexers you already manage there.',
+    'Optional: connect Prowlarr to run category-aware manual searches from SeerrNG. Approved requests continue through your configured media managers and software providers.',
+  supportNote:
+    'This setting connects to Prowlarr only. NZBHydra2 is not currently supported here.',
   address: 'Hostname',
   port: 'Port',
   basePath: 'Base path',
@@ -54,6 +57,7 @@ const messages = defineMessages('components.SettingsProwlarr', {
   audiobook: 'Audiobooks',
   comic: 'Comics',
   magazine: 'Magazines',
+  adult: 'Adult',
   sports: 'Sports',
   retro: 'Retro ROMs',
   modern: 'Modern ROMs',
@@ -137,6 +141,7 @@ const categoryKeys: MediaCategoryKey[] = [
   'audiobook',
   'comic',
   'magazine',
+  'adult',
   'sports',
   'retro',
   'modern',
@@ -151,6 +156,7 @@ const categoryMessages: Record<MediaCategoryKey, keyof typeof messages> = {
   audiobook: 'audiobook',
   comic: 'comic',
   magazine: 'magazine',
+  adult: 'adult',
   sports: 'sports',
   retro: 'retro',
   modern: 'modern',
@@ -366,18 +372,30 @@ const SettingsProwlarr = () => {
         <p className="description mt-1">
           {intl.formatMessage(messages.description)}
         </p>
+        <p className="label-tip mt-1">
+          {intl.formatMessage(messages.supportNote)}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <label className="text-sm text-gray-200">
-          {intl.formatMessage(messages.address)}
-          <input
-            className="input input-lite mt-1 w-full"
-            autoComplete="off"
-            value={form.hostname}
-            onChange={(event) => updateForm({ hostname: event.target.value })}
-          />
-        </label>
+        <div className="text-sm text-gray-200">
+          <label htmlFor="prowlarr-hostname">
+            {intl.formatMessage(messages.address)}
+          </label>
+          <div className="mt-1 flex items-start gap-2">
+            <input
+              id="prowlarr-hostname"
+              className="input input-lite min-w-0 flex-1"
+              autoComplete="off"
+              value={form.hostname}
+              onChange={(event) => updateForm({ hostname: event.target.value })}
+            />
+            <SavedServiceHostPicker
+              selectedHost={form.hostname}
+              onSelect={(hostname) => updateForm({ hostname })}
+            />
+          </div>
+        </div>
         <label className="text-sm text-gray-200">
           {intl.formatMessage(messages.port)}
           <input

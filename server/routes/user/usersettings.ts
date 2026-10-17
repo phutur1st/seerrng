@@ -8,6 +8,10 @@ import { ApiErrorCode } from '@server/constants/error';
 import { MediaServerType } from '@server/constants/server';
 import { UserType } from '@server/constants/user';
 import { USER_SETTINGS_LIMITS } from '@server/constants/userSettings';
+import {
+  MOVIE_MATURITY_LIMITS,
+  TV_MATURITY_LIMITS,
+} from '@server/constants/videoMaturity';
 import { getRepository } from '@server/datasource';
 import { LinkedAccount } from '@server/entity/LinkedAccount';
 import { User } from '@server/entity/User';
@@ -15,6 +19,8 @@ import { ALL_NOTIFICATIONS, UserSettings } from '@server/entity/UserSettings';
 import type {
   CardTextVisibility,
   DetailDisclosureMediaType,
+  MovieMaturityLimit,
+  TvMaturityLimit,
   UserPreferredLanguages,
   UserRequestRootFolders,
   UserSettingsCardTextResponse,
@@ -23,6 +29,7 @@ import type {
   UserSettingsLinkedAccount,
   UserSettingsLinkedAccountResponse,
   UserSettingsNotificationsResponse,
+  UserVideoMaturityPolicyResponse,
 } from '@server/interfaces/api/userSettingsInterfaces';
 import {
   mediaFilterScopes,
@@ -34,6 +41,7 @@ import {
   getAuthAccountAdmissionResource,
   runAuthAccountAdmission,
 } from '@server/lib/authAccountAdmission';
+import { getExternalRuntimeConfig } from '@server/lib/externalRuntimeConfig';
 import { getJellyfinAuthAuthorityKey } from '@server/lib/mediaServerAuthority';
 import {
   MAX_PERMISSION_VALUE,
@@ -41,6 +49,10 @@ import {
   isValidPermissionValue,
 } from '@server/lib/permissions';
 import requestAdmissionCoordinator from '@server/lib/requestAdmission';
+import {
+  getRequestServiceKey,
+  parseRequestServiceKey,
+} from '@server/lib/requestServices';
 import { getSettings } from '@server/lib/settings';
 import {
   UserMutationActorUnauthorizedError,
@@ -445,6 +457,78 @@ const parseUserSettingsBodyObject = (
   }
 
   return { value: body as Record<string, unknown> };
+};
+
+const parseVideoMaturityPolicyBody = (
+  body: unknown
+): { value: Partial<UserVideoMaturityPolicyResponse> } | { error: string } => {
+  const parsedBody = parseUserSettingsBodyObject(body);
+  if ('error' in parsedBody) return parsedBody;
+
+  const value: Partial<UserVideoMaturityPolicyResponse> = {};
+  const movieKey = 'movieMaturityRatingLimit';
+  const tvKey = 'tvMaturityRatingLimit';
+  if (
+    Object.keys(parsedBody.value).some(
+      (key) => key !== movieKey && key !== tvKey
+    )
+  ) {
+    return { error: 'Only movie and TV maturity limits may be updated.' };
+  }
+
+  if (hasOwn(parsedBody.value, movieKey)) {
+    const raw = parsedBody.value[movieKey];
+    if (raw === null || raw === '') {
+      value.movieMaturityRatingLimit = null;
+    } else if (
+      typeof raw === 'string' &&
+      (MOVIE_MATURITY_LIMITS as readonly string[]).includes(raw)
+    ) {
+      value.movieMaturityRatingLimit = raw as MovieMaturityLimit;
+    } else {
+      return { error: 'Choose a valid US movie rating limit.' };
+    }
+  }
+
+  if (hasOwn(parsedBody.value, tvKey)) {
+    const raw = parsedBody.value[tvKey];
+    if (raw === null || raw === '') {
+      value.tvMaturityRatingLimit = null;
+    } else if (
+      typeof raw === 'string' &&
+      (TV_MATURITY_LIMITS as readonly string[]).includes(raw)
+    ) {
+      value.tvMaturityRatingLimit = raw as TvMaturityLimit;
+    } else {
+      return { error: 'Choose a valid US TV rating limit.' };
+    }
+  }
+
+  if (Object.keys(value).length === 0) {
+    return { error: 'Choose at least one maturity limit to update.' };
+  }
+
+  return { value };
+};
+
+const serializeVideoMaturityPolicy = (
+  settings?: UserSettings
+): UserVideoMaturityPolicyResponse => {
+  const movieLimit = settings?.movieMaturityRatingLimit;
+  const tvLimit = settings?.tvMaturityRatingLimit;
+
+  return {
+    movieMaturityRatingLimit:
+      typeof movieLimit === 'string' &&
+      (MOVIE_MATURITY_LIMITS as readonly string[]).includes(movieLimit)
+        ? (movieLimit as MovieMaturityLimit)
+        : null,
+    tvMaturityRatingLimit:
+      typeof tvLimit === 'string' &&
+      (TV_MATURITY_LIMITS as readonly string[]).includes(tvLimit)
+        ? (tvLimit as TvMaturityLimit)
+        : null,
+  };
 };
 
 const serializeCardTextVisibility = (
@@ -2750,7 +2834,10 @@ userSettingsRoutes.post<{ id: string }, UserSettingsNotificationsResponse>(
   }
 );
 
-userSettingsRoutes.get<{ id: string }, { permissions?: number }>(
+userSettingsRoutes.get<
+  { id: string },
+  { permissions?: number; requestServices?: string[] }
+>(
   '/permissions',
   isAuthenticated(Permission.MANAGE_USERS),
   async (req, res, next) => {
@@ -2775,7 +2862,10 @@ userSettingsRoutes.get<{ id: string }, { permissions?: number }>(
             return next({ status: 404, message: 'User not found.' });
           }
 
-          return res.status(200).json({ permissions: user.permissions });
+          return res.status(200).json({
+            permissions: user.permissions,
+            requestServices: user.requestServices ?? [],
+          });
         }
       );
     } catch (e) {
@@ -2789,8 +2879,8 @@ userSettingsRoutes.get<{ id: string }, { permissions?: number }>(
 
 userSettingsRoutes.post<
   { id: string },
-  { permissions?: number },
-  { permissions: number }
+  { permissions?: number; requestServices?: string[] },
+  { permissions: number; requestServices?: string[] }
 >(
   '/permissions',
   isAuthenticated(Permission.MANAGE_USERS),
@@ -2801,6 +2891,16 @@ userSettingsRoutes.post<
       return next({ status: 400, message: parsedBody.error });
     }
     const body = parsedBody.value;
+    if (
+      Object.keys(body).some(
+        (key) => key !== 'permissions' && key !== 'requestServices'
+      )
+    ) {
+      return next({
+        status: 400,
+        message: 'Request body contains invalid fields.',
+      });
+    }
     const parsedPermissions = parseOptionalNonNegativeInteger(
       body.permissions,
       MAX_PERMISSION_VALUE
@@ -2811,6 +2911,37 @@ userSettingsRoutes.post<
       !isValidPermissionValue(parsedPermissions)
     ) {
       return next({ status: 400, message: 'permissions is invalid.' });
+    }
+
+    let parsedRequestServices: string[] | undefined;
+    if (body.requestServices !== undefined) {
+      if (
+        !Array.isArray(body.requestServices) ||
+        body.requestServices.length > 100
+      ) {
+        return next({ status: 400, message: 'requestServices is invalid.' });
+      }
+      const serviceSettings = getExternalRuntimeConfig();
+      const availableServiceKeys = new Set([
+        ...serviceSettings.radarr.map((service) =>
+          getRequestServiceKey('radarr', service.id)
+        ),
+        ...serviceSettings.sonarr.map((service) =>
+          getRequestServiceKey('sonarr', service.id)
+        ),
+      ]);
+      const parsedServices = body.requestServices.map(parseRequestServiceKey);
+      if (
+        parsedServices.some((service) => service === undefined) ||
+        body.requestServices.some(
+          (service) =>
+            typeof service !== 'string' || !availableServiceKeys.has(service)
+        ) ||
+        new Set(body.requestServices).size !== body.requestServices.length
+      ) {
+        return next({ status: 400, message: 'requestServices is invalid.' });
+      }
+      parsedRequestServices = (body.requestServices as string[]).slice().sort();
     }
 
     try {
@@ -2849,6 +2980,9 @@ userSettingsRoutes.post<
           };
           const result = await userRepository.update(criteria, {
             permissions: parsedPermissions,
+            ...(parsedRequestServices !== undefined && {
+              requestServices: parsedRequestServices,
+            }),
           });
           return result.affected === 1
             ? ('updated' as const)
@@ -2872,7 +3006,12 @@ userSettingsRoutes.post<
         });
       }
 
-      return res.status(200).json({ permissions: parsedPermissions });
+      return res.status(200).json({
+        permissions: parsedPermissions,
+        ...(parsedRequestServices !== undefined && {
+          requestServices: parsedRequestServices,
+        }),
+      });
     } catch (e) {
       if (e instanceof UserMutationActorUnauthorizedError) {
         return next({
@@ -2994,6 +3133,110 @@ userSettingsRoutes.post<{ id: string }, unknown, Record<string, unknown>>(
           ? 'Access denied.'
           : 'Book home sections could not be saved.',
       });
+    }
+  }
+);
+
+userSettingsRoutes.get<{ id: string }, UserVideoMaturityPolicyResponse>(
+  '/maturity',
+  isAuthenticated(Permission.MANAGE_USERS),
+  async (req, res, next) => {
+    const userId = parseUserSettingsRouteId(req.params.id);
+    if (!userId) {
+      return next({ status: 404, message: 'User not found.' });
+    }
+
+    try {
+      return await runUserSecurityReadWithActor(
+        req.user!.id,
+        userId,
+        Permission.MANAGE_USERS,
+        async () => {
+          const user = await getRepository(User).findOne({
+            where: { id: userId },
+            relations: { settings: true },
+          });
+          if (!user) {
+            return next({ status: 404, message: 'User not found.' });
+          }
+
+          return res
+            .status(200)
+            .json(serializeVideoMaturityPolicy(user.settings));
+        }
+      );
+    } catch (error) {
+      if (error instanceof UserMutationActorUnauthorizedError) {
+        return next({ status: 403, message: 'Access denied.' });
+      }
+      return next({ status: 500, message: 'Unable to read maturity limits.' });
+    }
+  }
+);
+
+userSettingsRoutes.post<
+  { id: string },
+  UserVideoMaturityPolicyResponse,
+  Partial<UserVideoMaturityPolicyResponse>
+>(
+  '/maturity',
+  isAuthenticated(Permission.MANAGE_USERS),
+  async (req, res, next) => {
+    const parsedBody = parseVideoMaturityPolicyBody(req.body);
+    if ('error' in parsedBody) {
+      return next({ status: 400, message: parsedBody.error });
+    }
+
+    const userId = parseUserSettingsRouteId(req.params.id);
+    if (!userId) {
+      return next({ status: 404, message: 'User not found.' });
+    }
+
+    try {
+      return await runUserSecurityMutationWithActor(
+        req.user!.id,
+        userId,
+        Permission.MANAGE_USERS,
+        async (actor) => {
+          const userRepository = getRepository(User);
+          const user = await userRepository.findOne({
+            where: { id: userId },
+            relations: { settings: true },
+          });
+          if (!user) {
+            return next({ status: 404, message: 'User not found.' });
+          }
+          if (!canModifyUser(user, actor)) {
+            return next({
+              status: 403,
+              message:
+                "You do not have permission to modify this user's settings.",
+            });
+          }
+
+          if (!user.settings) {
+            user.settings = new UserSettings({ user });
+          }
+          if (hasOwn(parsedBody.value, 'movieMaturityRatingLimit')) {
+            user.settings.movieMaturityRatingLimit =
+              parsedBody.value.movieMaturityRatingLimit ?? null;
+          }
+          if (hasOwn(parsedBody.value, 'tvMaturityRatingLimit')) {
+            user.settings.tvMaturityRatingLimit =
+              parsedBody.value.tvMaturityRatingLimit ?? null;
+          }
+
+          const savedUser = await userRepository.save(user);
+          return res
+            .status(200)
+            .json(serializeVideoMaturityPolicy(savedUser.settings));
+        }
+      );
+    } catch (error) {
+      if (error instanceof UserMutationActorUnauthorizedError) {
+        return next({ status: 403, message: 'Access denied.' });
+      }
+      return next({ status: 500, message: 'Unable to save maturity limits.' });
     }
   }
 );

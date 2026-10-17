@@ -8,8 +8,7 @@ disabled push URL. Do not create pull requests or publish to upstream.
 
 The starting source is SeerrNG 3.58.0, commit
 `b9b752a8606e8f5436b50147cd3a64ae03893f04`. Changes are on
-`hom3lab/bookshelf-fixes` and are published to this fork's `main` for its existing
-validation engine. Keep the branch based on upstream without rewriting published
+`hom3lab/bookshelf-fixes` and are published to this fork's `main` for its native CI checks. Keep the branch based on upstream without rewriting published
 history:
 
 ```sh
@@ -67,15 +66,12 @@ is not a live PostgreSQL integration test.
 
 Server/client type checks and workflow boundary checks are separate from rendered
 UI or live-provider evidence. No tests target production configurations, databases,
-queues, or accounts. The complete Mode 2 validation engine runs on the exact
-commit pushed to this fork's `main`. Its successful result is required before
-image publication; focused tests or plan discovery alone are not a completed
-gate. Visual inspection of the source-built cards and live verification of a
-fork image remain separate evidence to collect when a preview/deployment exists.
-
-The local Mode 1 plan was inspected: 665 discovered test files before the final
-regressions were added. Linux CI owns the complete platform-specific inventory;
-that local discovery count is not an executed or passing test count.
+queues, or accounts. As explicitly selected by the maintainer on October 17,
+2026, the fork adopts upstream's native CI and retires the validation engine.
+The exact main commit must pass `SeerrNG CI` before `Hom3lab image` publishes.
+Local checks, visual inspection, and live-provider evidence remain distinct.
+See the [October 17 integration record](hom3lab-upstream-integration-20261017.md)
+for current source, checks, and remaining gates.
 
 ## October 13 upstream integration candidate
 

@@ -42,7 +42,7 @@ concurrency:
 
 env:
   DOCKER_HUB: snapetech/seerrng
-  GHCR_IMAGE: ghcr.io/snapetech/seerrng
+  GHCR_IMAGE: ghcr.io/snapetech-org/seerrng
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
@@ -137,6 +137,8 @@ jobs:
               "Build release assets / Build macos arm64",
               "Build release assets / Build macos x64",
               "Build release assets / Build windows arm64",
+              "Build release assets / Build Android APK",
+              "Build release assets / Build iOS Simulator release package",
               "Build release assets / Build optional Jellyfin plugin"
             ] - [.jobs[] | select(.conclusion == "success") | .name]) | length == 0)
           ' <<<"$jobs" >/dev/null; then
@@ -154,6 +156,8 @@ jobs:
               "Build release assets / Build macos x64",
               "Build release assets / Build windows x64",
               "Build release assets / Build windows arm64",
+              "Build release assets / Build Android APK",
+              "Build release assets / Build iOS Simulator release package",
               "Build release assets / Build optional Jellyfin plugin",
               "Create draft release"
             ] - [.jobs[] | select(.conclusion == "success") | .name]) | length == 0)
@@ -179,6 +183,8 @@ jobs:
               "Build release assets / Build macos x64",
               "Build release assets / Build windows x64",
               "Build release assets / Build windows arm64",
+              "Build release assets / Build Android APK",
+              "Build release assets / Build iOS Simulator release package",
               "Build release assets / Build optional Jellyfin plugin",
               "Build release assets / Upload release assets"
             ] - [.jobs[] | select(.conclusion == "success") | .name]) | length == 0)
@@ -201,6 +207,7 @@ jobs:
               "seerrng-macos-x64",
               "seerrng-windows-x64",
               "seerrng-windows-arm64",
+              "seerrng-android",
               "seerrng-jellyfin-plugin"
             ]'
           else
@@ -210,6 +217,7 @@ jobs:
               "seerrng-macos-arm64",
               "seerrng-macos-x64",
               "seerrng-windows-arm64",
+              "seerrng-android",
               "seerrng-jellyfin-plugin"
             ]'
           fi
@@ -224,7 +232,7 @@ jobs:
     name: Generate changelog
     needs: validate-main-tag
     timeout-minutes: 10
-    runs-on: [self-hosted, Linux, X64, seerrng]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
@@ -238,7 +246,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: 'package.json'
           package-manager-cache: false
@@ -287,7 +295,7 @@ jobs:
   create-draft-release:
     name: Create draft release
     timeout-minutes: 10
-    runs-on: [self-hosted, Linux, X64, seerrng]
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     needs: changelog
@@ -323,7 +331,7 @@ jobs:
     name: Publish multi-arch manifests
     needs: [validate-main-tag, create-draft-release]
     timeout-minutes: 90
-    runs-on: [self-hosted, Linux, X64, seerrng]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -559,7 +567,7 @@ jobs:
 
       - name: Upload SARIF to code scanning
         if: always()
-        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           sarif_file: trivy-release-${{ matrix.suffix }}.sarif
           category: trivy-release-${{ matrix.suffix }}
@@ -658,7 +666,7 @@ jobs:
           done < "$RUNNER_TEMP/seerrng-platform-digests"
 
       - name: Upload SBOMs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sboms-${{ env.VERSION }}
           path: '*.sbom'
@@ -741,7 +749,7 @@ jobs:
     needs:
       [create-draft-release, verify, build-release-assets, dispatch-package-channels]
     timeout-minutes: 10
-    runs-on: [self-hosted, Linux, X64, seerrng]
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
@@ -783,6 +791,16 @@ jobs:
       reuse_from_run_id: ${{ inputs.reuse_from_run_id || '' }}
       reuse_windows_x64_artifact: ${{ needs.validate-main-tag.outputs.reuse_windows_x64_artifact == 'true' }}
       reuse_windows_arm64_artifact: ${{ needs.validate-main-tag.outputs.reuse_windows_arm64_artifact == 'true' }}
+    secrets:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+      IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+      IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+      IOS_ADHOC_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_ADHOC_PROVISIONING_PROFILE_BASE64 }}
+      IOS_APPSTORE_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROVISIONING_PROFILE_BASE64 }}
     permissions:
       actions: read
       contents: write
@@ -934,6 +952,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_WORKFLOW_TOKEN || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           TAG: ${{ inputs.tag || github.ref_name }}
+          IOS_ADHOC_SIGNING_ENABLED: ${{ vars.IOS_ADHOC_SIGNING_ENABLED }}
+          IOS_APPSTORE_SIGNING_ENABLED: ${{ vars.IOS_APPSTORE_SIGNING_ENABLED }}
         run: |
           set -euo pipefail
           if [[ "$TAG" == *-* ]]; then
@@ -956,6 +976,8 @@ jobs:
               "seerrng-${TAG}-windows-x64.sha256"
               "seerrng-${TAG}-windows-arm64.zip"
               "seerrng-${TAG}-windows-arm64.sha256"
+              "seerrng-${TAG}-ios-simulator.zip"
+              "seerrng-${TAG}-ios-simulator.sha256"
               "seerrng_${version}_amd64.deb"
               "seerrng_${version}_amd64.deb.sha256"
               "SeerrNG-${version}-x86_64.AppImage"
@@ -963,6 +985,18 @@ jobs:
               "SeerrNG-${version}-x86_64.flatpak"
               "SeerrNG-${version}-x86_64.flatpak.sha256"
             )
+            required+=(
+              "seerrng-${TAG}-android.apk"
+              "seerrng-${TAG}-android.sha256"
+              "seerrng-${TAG}-android.aab"
+              "seerrng-${TAG}-android-aab.sha256"
+            )
+            if [[ "$IOS_ADHOC_SIGNING_ENABLED" == 'true' ]]; then
+              required+=("seerrng-${TAG}-ios-adhoc.ipa" "seerrng-${TAG}-ios-adhoc.sha256")
+            fi
+            if [[ "$IOS_APPSTORE_SIGNING_ENABLED" == 'true' ]]; then
+              required+=("seerrng-${TAG}-ios-appstore.ipa" "seerrng-${TAG}-ios-appstore.sha256")
+            fi
             missing=()
             for asset in "${required[@]}"; do
               grep -Fxq "$asset" <<<"$assets" || missing+=("$asset")
@@ -986,7 +1020,7 @@ jobs:
     needs:
       [changelog, publish, publish-release, dispatch-package-channels]
     timeout-minutes: 10
-    runs-on: [self-hosted, Linux, X64, seerrng]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
@@ -1070,7 +1104,7 @@ jobs:
     name: Correct published Discord security notes
     if: github.repository == 'snapetech/seerrng' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.announce_security_correction == true
     timeout-minutes: 10
-    runs-on: [self-hosted, Linux, X64, seerrng]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     env:

@@ -311,7 +311,7 @@ describe('ROMarrNG software acquisition integration', () => {
 
   it('previews platform matches and saves a manual override', () => {
     cy.viewport(1280, 720);
-    cy.visit('/settings/services');
+    cy.visit('/settings/services?serviceCategory=tools-other');
     cy.wait('@overrideRuleSettings')
       .its('response.statusCode')
       .should('eq', 200);
@@ -336,10 +336,12 @@ describe('ROMarrNG software acquisition integration', () => {
       });
     });
     cy.contains('h3', 'Software acquisition').should('be.visible');
+    cy.contains('button[aria-pressed="false"]', 'TV & Movies').click();
     cy.contains('h4', 'Optional Sportarr DVR link').should('be.visible');
     cy.contains(
       'Enable and configure IPTV Tunerr to connect its sports feeds.'
     ).should('be.visible');
+    cy.contains('button[aria-pressed="false"]', 'System').click();
     cy.contains('h4', 'ROMarrNG to IGDB platform matching', {
       timeout: 10000,
     }).scrollIntoView();

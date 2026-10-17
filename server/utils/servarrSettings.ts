@@ -10,6 +10,7 @@ import type {
   ReadarrSettings,
   SonarrSettings,
   SportarrSettings,
+  WhisparrSettings,
 } from '@server/lib/settings';
 import {
   normalizeServiceHostname,
@@ -338,6 +339,60 @@ const parseDvrSettings = (
   };
 };
 
+export const parseWhisparrSettings = (
+  body: unknown,
+  current?: WhisparrSettings
+): { value: WhisparrSettings } | { error: string } => {
+  if (
+    body &&
+    typeof body === 'object' &&
+    !Array.isArray(body) &&
+    (body as Partial<DVRSettings>).is4k === true
+  ) {
+    return { error: 'Whisparr does not support a 4K service type.' };
+  }
+
+  const parsed = parseDvrSettings(body, current);
+  if ('error' in parsed) return parsed;
+  return { value: { ...parsed.value, is4k: false } };
+};
+
+const parseServiceRequestButtonSettings = (
+  body: unknown
+):
+  | {
+      value: Pick<
+        RadarrSettings | SonarrSettings,
+        'requestButtonLabel' | 'requestButtonAnimeOnly'
+      >;
+    }
+  | { error: string } => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { error: 'settings must be an object.' };
+  }
+
+  const settings = body as Partial<RadarrSettings | SonarrSettings>;
+  const requestButtonLabel = parseOptionalServiceString(
+    settings.requestButtonLabel,
+    'requestButtonLabel',
+    40
+  );
+  if ('error' in requestButtonLabel) return requestButtonLabel;
+
+  const requestButtonAnimeOnly = parseServiceBoolean(
+    settings.requestButtonAnimeOnly,
+    'requestButtonAnimeOnly'
+  );
+  if ('error' in requestButtonAnimeOnly) return requestButtonAnimeOnly;
+
+  return {
+    value: {
+      requestButtonLabel: requestButtonLabel.value?.trim() || undefined,
+      requestButtonAnimeOnly: requestButtonAnimeOnly.value,
+    },
+  };
+};
+
 export const parseRadarrSettings = (
   body: unknown,
   current?: RadarrSettings
@@ -345,6 +400,8 @@ export const parseRadarrSettings = (
   const parsed = parseDvrSettings(body, current);
   if ('error' in parsed) return parsed;
   const settings = body as Partial<RadarrSettings>;
+  const requestButton = parseServiceRequestButtonSettings(body);
+  if ('error' in requestButton) return requestButton;
 
   const minimumAvailability = parseRequiredServiceString(
     settings.minimumAvailability,
@@ -355,6 +412,7 @@ export const parseRadarrSettings = (
   return {
     value: {
       ...parsed.value,
+      ...requestButton.value,
       minimumAvailability: minimumAvailability.value,
     },
   };
@@ -367,6 +425,8 @@ export const parseSonarrSettings = (
   const parsed = parseDvrSettings(body, current);
   if ('error' in parsed) return parsed;
   const settings = body as Partial<SonarrSettings>;
+  const requestButton = parseServiceRequestButtonSettings(body);
+  if ('error' in requestButton) return requestButton;
 
   const seriesTypes = ['standard', 'daily', 'anime'] as const;
   const seriesType =
@@ -423,7 +483,9 @@ export const parseSonarrSettings = (
   if ('error' in enableSeasonFolders) return enableSeasonFolders;
 
   const monitorNewItems =
-    settings.monitorNewItems === 'all' || settings.monitorNewItems === 'none'
+    settings.monitorNewItems === 'all' ||
+    settings.monitorNewItems === 'none' ||
+    settings.monitorNewItems === 'latest'
       ? settings.monitorNewItems
       : undefined;
 
@@ -434,6 +496,7 @@ export const parseSonarrSettings = (
   return {
     value: {
       ...parsed.value,
+      ...requestButton.value,
       seriesType,
       animeSeriesType,
       activeAnimeProfileId: activeAnimeProfileId.value,
@@ -446,6 +509,29 @@ export const parseSonarrSettings = (
       monitorNewItems,
     },
   };
+};
+
+export const resolveSonarrMonitorNewItems = (
+  setting: SonarrSettings['monitorNewItems'],
+  requestedSeasonNumbers: readonly number[],
+  availableSeasonNumbers: readonly number[]
+): 'all' | 'none' => {
+  if (setting !== 'latest') {
+    return setting;
+  }
+
+  const latestRegularSeasonNumber = availableSeasonNumbers.reduce(
+    (latest, seasonNumber) =>
+      Number.isSafeInteger(seasonNumber) && seasonNumber > latest
+        ? seasonNumber
+        : latest,
+    0
+  );
+
+  return latestRegularSeasonNumber > 0 &&
+    requestedSeasonNumbers.includes(latestRegularSeasonNumber)
+    ? 'all'
+    : 'none';
 };
 
 export const parseSportarrSettings = (

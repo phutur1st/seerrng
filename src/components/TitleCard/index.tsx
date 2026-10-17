@@ -46,6 +46,7 @@ import {
 import { StarIcon as SolidStarIcon } from '@heroicons/react/24/solid';
 import { MediaStatus } from '@server/constants/media';
 import type { Watchlist } from '@server/entity/Watchlist';
+import type { ViewerRequestCoverage } from '@server/lib/viewerRequestCoverage';
 import type { AlbumResult, MediaType } from '@server/models/Search';
 import type { SportarrLibraryState } from '@server/models/Sportarr';
 import axios from 'axios';
@@ -97,6 +98,9 @@ interface TitleCardProps {
   availableQualities?: ('MP3' | 'FLAC')[];
   qualityStatuses?: AlbumResult['qualityStatuses'];
   sportarrState?: SportarrLibraryState;
+  discoverNavigationContextId?: string;
+  onOpen?: () => void;
+  viewerRequestCoverage?: ViewerRequestCoverage;
 }
 
 const messages = defineMessages('components.TitleCard', {
@@ -167,6 +171,9 @@ const TitleCard = ({
   availableQualities,
   qualityStatuses,
   sportarrState,
+  discoverNavigationContextId,
+  onOpen,
+  viewerRequestCoverage,
 }: TitleCardProps) => {
   const isTouch = useIsTouch();
   const router = useRouter();
@@ -204,6 +211,8 @@ const TitleCard = ({
     inProgress4k,
     availableQualities,
     qualityStatuses,
+    viewerHasRequestedStandard: viewerRequestCoverage?.standard,
+    viewerHasRequested4k: viewerRequestCoverage?.fourK,
   });
   const { primary: primaryStatusBadge, secondary: secondaryStatusBadge } =
     getTitleCardStatusBadgeSlots(statusBadges);
@@ -626,6 +635,24 @@ const TitleCard = ({
                   : isSports
                     ? `/sportarr/${encodeApiPathSegment(canonicalId)}`
                     : `/artist/${encodeApiPathSegment(canonicalId)}`;
+  const detailHrefWithDiscoverContext =
+    typeof detailHref === 'string' &&
+    discoverNavigationContextId &&
+    (mediaType === 'movie' || mediaType === 'tv')
+      ? {
+          pathname: mediaType === 'movie' ? '/movie/[movieId]' : '/tv/[tvId]',
+          query: {
+            [mediaType === 'movie' ? 'movieId' : 'tvId']: String(id),
+            discoverContext: discoverNavigationContextId,
+          },
+        }
+      : detailHref;
+  const detailAsWithDiscoverContext =
+    typeof detailHref === 'string' &&
+    discoverNavigationContextId &&
+    (mediaType === 'movie' || mediaType === 'tv')
+      ? `${detailHref}?discoverContext=${encodeURIComponent(discoverNavigationContextId)}`
+      : undefined;
   const displayImage = getTmdbPosterImageUrl(artwork);
   const supplementalPoster = getTmdbPosterImageUrl(
     fallbackImage ?? posterFallbackDetails?.supplementalMetadata?.posterUrl
@@ -864,17 +891,17 @@ const TitleCard = ({
     </div>
   );
   const blocklistControl = showHideButton && (
-    <Tooltip
-      content={intl.formatMessage(
-        isUpdating
-          ? messages.blocklistUpdatingDescription
-          : isBlocklisted
-            ? messages.blocklistRemoveDescription
-            : messages.blocklistAddDescription,
-        { title }
-      )}
-    >
-      <div data-poster-region="blocklist-slot">
+    <div data-poster-region="blocklist-slot">
+      <Tooltip
+        content={intl.formatMessage(
+          isUpdating
+            ? messages.blocklistUpdatingDescription
+            : isBlocklisted
+              ? messages.blocklistRemoveDescription
+              : messages.blocklistAddDescription,
+          { title }
+        )}
+      >
         <button
           type="button"
           className="poster-control poster-control-blocklist app-control-shadow-exempt"
@@ -903,8 +930,8 @@ const TitleCard = ({
             <EyeSlashIcon aria-hidden="true" />
           )}
         </button>
-      </div>
-    </Tooltip>
+      </Tooltip>
+    </div>
   );
 
   return (
@@ -1065,6 +1092,9 @@ const TitleCard = ({
                       status={primaryStatusBadge.status}
                       quality={primaryStatusBadge.quality}
                       inProgress={primaryStatusBadge.inProgress}
+                      viewerHasRequestedCopy={
+                        primaryStatusBadge.viewerHasRequestedCopy
+                      }
                       shrink
                     />
                   )}
@@ -1072,17 +1102,17 @@ const TitleCard = ({
               </div>
               <div data-poster-region="control-row">
                 {watchlistPreview ? (
-                  <Tooltip
-                    content={intl.formatMessage(
-                      watchlistPreviewDisabled
-                        ? messages.watchlistPreviewDisabled
-                        : previewWatchlisted
-                          ? messages.watchlistPreviewRemove
-                          : messages.watchlistPreviewAdd,
-                      { title }
-                    )}
-                  >
-                    <div data-poster-region="watchlist-slot">
+                  <div data-poster-region="watchlist-slot">
+                    <Tooltip
+                      content={intl.formatMessage(
+                        watchlistPreviewDisabled
+                          ? messages.watchlistPreviewDisabled
+                          : previewWatchlisted
+                            ? messages.watchlistPreviewRemove
+                            : messages.watchlistPreviewAdd,
+                        { title }
+                      )}
+                    >
                       <button
                         className="poster-control poster-control-watchlist poster-control-icon"
                         type="button"
@@ -1106,8 +1136,8 @@ const TitleCard = ({
                           <StarIcon aria-hidden="true" />
                         )}
                       </button>
-                    </div>
-                  </Tooltip>
+                    </Tooltip>
+                  </div>
                 ) : (
                   associationControls
                 )}
@@ -1117,6 +1147,9 @@ const TitleCard = ({
                       status={secondaryStatusBadge.status}
                       quality={secondaryStatusBadge.quality}
                       inProgress={secondaryStatusBadge.inProgress}
+                      viewerHasRequestedCopy={
+                        secondaryStatusBadge.viewerHasRequestedCopy
+                      }
                       shrink
                     />
                   )}
@@ -1145,14 +1178,14 @@ const TitleCard = ({
                   {canUseWatchlistActions &&
                     !watchlistPreview &&
                     user?.userType !== UserType.PLEX && (
-                      <Tooltip
-                        content={
-                          toggleWatchlist
-                            ? addWatchlistDescription
-                            : removeWatchlistDescription
-                        }
-                      >
-                        <div data-poster-region="watchlist-slot">
+                      <div data-poster-region="watchlist-slot">
+                        <Tooltip
+                          content={
+                            toggleWatchlist
+                              ? addWatchlistDescription
+                              : removeWatchlistDescription
+                          }
+                        >
                           {toggleWatchlist ? (
                             <Button
                               aria-busy={isUpdating}
@@ -1181,8 +1214,8 @@ const TitleCard = ({
                               <MinusCircleIcon />
                             </Button>
                           )}
-                        </div>
-                      </Tooltip>
+                        </Tooltip>
+                      </div>
                     )}
                 </div>
               </div>
@@ -1215,8 +1248,10 @@ const TitleCard = ({
           >
             <div data-poster-region="overlay">
               <Link
-                href={detailHref}
+                href={detailHrefWithDiscoverContext}
+                as={detailAsWithDiscoverContext}
                 prefetch={false}
+                onClick={onOpen}
                 data-poster-region="detail-link"
                 data-poster-detail={showFullDetailOverlay ? 'full' : 'compact'}
                 data-poster-has-action={
@@ -1300,7 +1335,6 @@ const TitleCard = ({
         </div>
       </div>
       {showDetail &&
-        !isTouch &&
         (mediaType === 'movie' ||
           mediaType === 'tv' ||
           mediaType === 'album' ||

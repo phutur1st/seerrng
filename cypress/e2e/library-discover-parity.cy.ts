@@ -751,11 +751,14 @@ describe('Books and Music discover parity', () => {
     cy.visit('/settings/services');
 
     cy.contains('h3', 'Radarr Settings').should('be.visible');
+    cy.contains('button[aria-pressed="false"]', 'Music').click();
     cy.contains('h3', 'Lidarr Settings').scrollIntoView().should('be.visible');
-    cy.contains('h3', 'Bookshelf Settings')
+    cy.contains('button[aria-pressed="false"]', 'Audiobooks & Books').click();
+    cy.contains('h3', 'ChaptarrNG / Bookshelf Settings')
       .scrollIntoView()
       .should('be.visible');
 
+    cy.contains('button[aria-pressed="false"]', 'Music').click();
     cy.contains('button', 'Add Lidarr Server').click();
     cy.contains('[data-testid=modal-title]', 'Add New Lidarr Server').should(
       'be.visible'
@@ -779,25 +782,30 @@ describe('Books and Music discover parity', () => {
       .should('be.visible');
     cy.get('[data-testid=modal-cancel-button]').click();
 
-    cy.contains('button', 'Add Bookshelf Server').click();
-    cy.contains('[data-testid=modal-title]', 'Add New Bookshelf Server').should(
-      'be.visible'
+    cy.contains('button[aria-pressed="false"]', 'Audiobooks & Books').click();
+    cy.contains('button', 'Add ChaptarrNG Server').click();
+    cy.contains('[data-testid=modal-title]', 'Add ChaptarrNG Server').should(
+      'exist'
     );
     cy.contains(
-      'Bookshelf is the recommended book backend. Readarr-compatible servers, including Chaptarr, can also be used. For Chaptarr, set Book Format to match the configured root folder; Seerr sends that format explicitly on every request.'
+      'ChaptarrNG is the maintained book backend for new installs. Existing BookshelfNG and other Readarr-compatible servers remain supported during migration. Set Book Format to match the configured root folder; Seerr sends that format explicitly on every request.'
     ).should('be.visible');
     cy.contains('a', 'Bookshelf Hardcover migration guide')
       .should(
         'have.attr',
         'href',
-        'https://github.com/snapetech/seerrng/blob/main/docs/using-seerr/bookshelf-hardcover-migration.md'
+        'https://github.com/snapetech-org/seerrng/blob/main/docs/using-seerr/bookshelf-hardcover-migration.md'
       )
       .and('have.attr', 'target', '_blank');
     cy.contains('label', 'Book Format').should('be.visible');
     cy.get('select[name=serviceType]').should('be.visible');
     assertDialogFieldDescription(
       'API Key',
-      'Find the key in Bookshelf or Readarr under Settings > General > Security > API Key'
+      'Find the key in ChaptarrNG under Settings > General > Security > API Key'
+    );
+    assertDialogFieldDescription(
+      'API Key',
+      'For ChaptarrNG 0.9.941+, set CHAPTARR__AUTH__SEERRAPIKEY in the ChaptarrNG container'
     );
     assertDialogFieldDescription(
       'URL Base',
@@ -850,19 +858,19 @@ describe('Books and Music discover parity', () => {
     ]);
     cy.intercept('GET', '/api/v1/overrideRule', []);
 
-    cy.visit('/settings/services');
+    cy.visit('/settings/services?serviceCategory=audiobooks-books');
 
-    cy.contains('h3', 'Bookshelf Settings')
+    cy.contains('h3', 'ChaptarrNG / Bookshelf Settings')
       .scrollIntoView()
       .should('be.visible');
     cy.contains(
       'Your Book and Audiobook connections use different addresses.'
     ).should('be.visible');
-    cy.contains('a', 'Bookshelf deployment options')
+    cy.contains('a', 'Book backend deployment options')
       .should(
         'have.attr',
         'href',
-        'https://github.com/snapetech/seerrng/blob/main/docs/using-seerr/bookshelf-backend.md'
+        'https://github.com/snapetech-org/seerrng/blob/main/docs/using-seerr/bookshelf-backend.md'
       )
       .and('have.attr', 'target', '_blank')
       .and('have.attr', 'rel', 'noopener noreferrer');
@@ -906,21 +914,24 @@ describe('Books and Music discover parity', () => {
     ]);
     cy.intercept('GET', '/api/v1/overrideRule', []);
 
-    cy.visit('/settings/services');
+    cy.visit('/settings/services?serviceCategory=music');
 
     cy.contains(
       'At least one Lidarr server must be marked as default in order for music requests to be processed.'
     )
       .scrollIntoView()
       .should('be.visible');
-    cy.contains('series requests').should('not.exist');
+    cy.get('[data-settings-category="music"]')
+      .contains('series requests')
+      .should('not.exist');
+    cy.contains('button[aria-pressed="false"]', 'Audiobooks & Books').click();
     cy.contains(
-      'At least one Bookshelf server must be marked as default in order for book requests to be processed.'
+      'At least one book server must be marked as default in order for book requests to be processed.'
     )
       .scrollIntoView()
       .should('be.visible');
     cy.contains(
-      'At least one Bookshelf server must be marked as default in order for audiobook requests to be processed.'
+      'At least one book server must be marked as default in order for audiobook requests to be processed.'
     )
       .scrollIntoView()
       .should('be.visible');

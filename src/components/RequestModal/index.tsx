@@ -1,7 +1,7 @@
 import useSettings from '@app/hooks/useSettings';
 import { Permission, useUser } from '@app/hooks/useUser';
 import { Transition } from '@headlessui/react';
-import type { MediaStatus } from '@server/constants/media';
+import type { MediaRequestStatus, MediaStatus } from '@server/constants/media';
 import type { MediaRequest } from '@server/entity/MediaRequest';
 import type { NonFunctionProperties } from '@server/interfaces/api/common';
 import dynamic from 'next/dynamic';
@@ -16,6 +16,10 @@ const ComicRequestModal = dynamic(
 );
 const MagazineRequestModal = dynamic(
   () => import('@app/components/RequestModal/MagazineRequestModal'),
+  { ssr: false }
+);
+const AdultRequestModal = dynamic(
+  () => import('@app/components/RequestModal/AdultRequestModal'),
   { ssr: false }
 );
 const SportarrRequestModal = dynamic(
@@ -49,12 +53,17 @@ interface RequestModalProps {
     | 'book'
     | 'comic'
     | 'magazine'
+    | 'adult'
     | 'sports';
   tmdbId?: number;
   mbId?: string;
   bookId?: string;
   comicId?: string;
   magazineTitle?: string;
+  adultId?: string;
+  adultRequestId?: number;
+  adultRequestStatus?: MediaRequestStatus;
+  initialServerId?: number;
   sportarrLeagueId?: string;
   sportarrTitle?: string;
   initialBookFormat?: 'ebook' | 'audiobook' | 'both';
@@ -76,6 +85,10 @@ const RequestModal = ({
   bookId,
   comicId,
   magazineTitle,
+  adultId,
+  adultRequestId,
+  adultRequestStatus,
+  initialServerId,
   sportarrLeagueId,
   sportarrTitle,
   initialBookFormat,
@@ -155,6 +168,17 @@ const RequestModal = ({
       ) : type === 'magazine' && magazineTitle ? (
         <MagazineRequestModal
           magazineTitle={magazineTitle}
+          onComplete={onComplete}
+          onCancel={onCancel}
+          onUpdating={onUpdating}
+          editRequest={editRequest}
+        />
+      ) : type === 'adult' && adultId ? (
+        <AdultRequestModal
+          adultId={adultId}
+          adultRequestId={adultRequestId}
+          adultRequestStatus={adultRequestStatus}
+          initialServerId={initialServerId}
           onComplete={onComplete}
           onCancel={onCancel}
           onUpdating={onUpdating}

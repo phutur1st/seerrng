@@ -1,5 +1,9 @@
 import type { BookHomeSectionPreference } from '@server/constants/bookHomeSections';
 import type {
+  MovieMaturityLimit,
+  TvMaturityLimit,
+} from '@server/constants/videoMaturity';
+import type {
   NotificationAgentKey,
   PublicOidcProvider,
 } from '@server/lib/settings';
@@ -35,6 +39,7 @@ export const mediaFilterValues = [
   'audiobook',
   'comic',
   'magazine',
+  'adult',
   'sports',
   'author',
   'software',
@@ -94,6 +99,16 @@ export interface UserSettingsDetailDisclosureResponse {
 export type UserSettingsDetailDisclosuresByMedia = Partial<
   Record<DetailDisclosureMediaType, UserSettingsDetailDisclosureResponse>
 >;
+
+export type {
+  MovieMaturityLimit,
+  TvMaturityLimit,
+} from '@server/constants/videoMaturity';
+
+export interface UserVideoMaturityPolicyResponse {
+  movieMaturityRatingLimit: MovieMaturityLimit | null;
+  tvMaturityRatingLimit: TvMaturityLimit | null;
+}
 
 export interface UserSettingsGeneralResponse {
   username?: string;

@@ -6,6 +6,10 @@ import MediaTypeBadge, {
 } from '@app/components/Common/MediaTypeBadge';
 import { getIssueMediaAndFormatLabel } from '@app/components/IssueDetails/issueMediaFormat';
 import {
+  getIssueAffectedSummary,
+  issueAffectedSummaryMessages,
+} from '@app/components/IssueList/IssueItem/issueAffectedSummary';
+import {
   getIssueSubtypeOptionsForMediaType,
   issueOptions,
 } from '@app/components/IssueModal/constants';
@@ -69,6 +73,7 @@ const messages = defineMessages('components.IssueList.IssueItem', {
   openarrFormat: 'Open {format} in {arr}',
   ebook: 'Book',
   audiobook: 'Audiobook',
+  affectedSeasons: 'Affected Seasons',
 });
 
 type IssueTitle =
@@ -301,9 +306,23 @@ const IssueItem = ({
     (opt) => opt.issueType === issue?.issueType
   );
   const issueSubtypeOption =
-    issue && issue.media.mediaType !== 'sports'
+    issue &&
+    issue.media.mediaType !== 'sports' &&
+    issue.media.mediaType !== MediaType.ADULT
       ? getIssueSubtypeOptionsForMediaType(issue.media.mediaType).find(
           (option) => option.value === issue.issueSubtype
+        )
+      : undefined;
+  const affectedSeasonSummary =
+    issue.media.mediaType === MediaType.TV
+      ? getIssueAffectedSummary(
+          issue,
+          (title as TvDetails).seasons.map((season) => season.seasonNumber),
+          (message, values) =>
+            intl.formatMessage(
+              issueAffectedSummaryMessages[message],
+              values as Record<string, number> | undefined
+            )
         )
       : undefined;
 
@@ -330,7 +349,8 @@ const IssueItem = ({
   );
   const mediaLabel = getIssueMediaAndFormatLabel(
     issue.media.mediaType,
-    issue.is4k
+    issue.is4k,
+    intl
   );
   const issueServiceLinks = [
     issue.media.serviceUrl
@@ -508,6 +528,14 @@ const IssueItem = ({
                   <dd className="m-0 truncate">
                     {intl.formatMessage(issueSubtypeOption.name)}
                   </dd>
+                </>
+              )}
+              {affectedSeasonSummary !== undefined && (
+                <>
+                  <dt className="font-medium text-gray-100">
+                    {intl.formatMessage(messages.affectedSeasons)}:
+                  </dt>
+                  <dd className="m-0 truncate">{affectedSeasonSummary}</dd>
                 </>
               )}
               <dt className="font-medium text-gray-100">

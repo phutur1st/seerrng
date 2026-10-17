@@ -1,3 +1,4 @@
+import { OtherUserAvailabilityMode } from '@server/constants/availability';
 import {
   DEFAULT_ENABLED_MEDIA_CATEGORIES,
   type EnabledMediaCategories,
@@ -330,11 +331,21 @@ export interface DVRSettings {
   overrideRule: number[];
 }
 
-export interface RadarrSettings extends DVRSettings {
+export interface ServiceRequestButtonSettings {
+  requestButtonLabel?: string;
+  requestButtonAnimeOnly?: boolean;
+}
+
+export interface RadarrSettings
+  extends DVRSettings, ServiceRequestButtonSettings {
   minimumAvailability: string;
 }
 
-export interface SonarrSettings extends DVRSettings {
+/** Whisparr's scene-focused v3 API uses Radarr-shaped service settings. */
+export type WhisparrSettings = DVRSettings;
+
+export interface SonarrSettings
+  extends DVRSettings, ServiceRequestButtonSettings {
   seriesType: 'standard' | 'daily' | 'anime';
   animeSeriesType: 'standard' | 'daily' | 'anime';
   activeAnimeProfileId?: number;
@@ -344,7 +355,7 @@ export interface SonarrSettings extends DVRSettings {
   activeLanguageProfileId?: number;
   animeTags?: number[];
   enableSeasonFolders: boolean;
-  monitorNewItems: 'all' | 'none';
+  monitorNewItems: 'all' | 'none' | 'latest';
 }
 
 export interface SportarrSettings {
@@ -442,6 +453,25 @@ export interface MetadataSettings {
   anime: MetadataProviderType;
 }
 
+export interface CoverArtArchiveSettings {
+  maxConcurrentRequests: number;
+  maxRequestsPerSecond: number;
+}
+
+export interface MusicMetadataSettings {
+  coverArtArchive: CoverArtArchiveSettings;
+}
+
+export const MAX_COVER_ART_ARCHIVE_CONCURRENT_REQUESTS = 5;
+export const MAX_COVER_ART_ARCHIVE_REQUESTS_PER_SECOND = 50;
+
+export const DEFAULT_MUSIC_METADATA_SETTINGS: MusicMetadataSettings = {
+  coverArtArchive: {
+    maxConcurrentRequests: MAX_COVER_ART_ARCHIVE_CONCURRENT_REQUESTS,
+    maxRequestsPerSecond: MAX_COVER_ART_ARCHIVE_REQUESTS_PER_SECOND,
+  },
+};
+
 export type DownloadPathService =
   'radarr' | 'sonarr' | 'readarr' | 'lazylibrarian' | 'kapowarr' | 'backissue';
 
@@ -465,6 +495,8 @@ export interface ProxySettings {
 
 export interface MainSettings {
   apiKey: string;
+  /** Saved hostname/IP presets shared by service connection forms. */
+  connectionHosts?: SavedConnectionHost[];
   downloadPathMappings: DownloadPathMapping[];
   applicationTitle: string;
   applicationUrl: string;
@@ -478,12 +510,14 @@ export interface MainSettings {
     book: Quota;
     comic: Quota;
     magazine: Quota;
+    adult: Quota;
     software: Quota;
   };
   enabledMediaCategories: EnabledMediaCategories;
   hideAvailable: boolean;
   hideBlocklisted: boolean;
   hideRequested: boolean;
+  otherUsersAvailability: OtherUserAvailabilityMode;
   localLogin: boolean;
   mediaServerLogin: boolean;
   oidcLogin: boolean;
@@ -497,6 +531,7 @@ export interface MainSettings {
   blocklistedTagsLimit: number;
   mediaServerType: number;
   partialRequestsEnabled: boolean;
+  tvSeasonWatchGateEnabled: boolean;
   personMovieBulkRequestsEnabled: boolean;
   enableSpecialEpisodes: boolean;
   locale: string;
@@ -509,6 +544,11 @@ export interface MainSettings {
   /** Metron API token. Used only as a fallback when ComicVine search fails. */
   metronToken?: string;
   googleBooksApiKey?: string;
+}
+
+export interface SavedConnectionHost {
+  name: string;
+  hostname: string;
 }
 
 export interface ProxySettings {
@@ -548,6 +588,7 @@ interface FullPublicSettings extends PublicSettings {
   hideAvailable: boolean;
   hideBlocklisted: boolean;
   hideRequested: boolean;
+  otherUsersAvailability: OtherUserAvailabilityMode;
   localLogin: boolean;
   mediaServerLogin: boolean;
   movie4kEnabled: boolean;
@@ -559,10 +600,12 @@ interface FullPublicSettings extends PublicSettings {
   readmeabookEnabled: boolean;
   comicsEnabled: boolean;
   magazinesEnabled: boolean;
+  adultEnabled: boolean;
   sportsEnabled: boolean;
   softwareEnabled: boolean;
   romarrEnabled: boolean;
   emulationCatalogEnabled: boolean;
+  swipeEnabled: boolean;
   enabledMediaCategories: EnabledMediaCategories;
   discoverRegion: string;
   streamingRegion: string;
@@ -572,6 +615,7 @@ interface FullPublicSettings extends PublicSettings {
   jellyfinForgotPasswordUrl?: string;
   jellyfinServerName?: string;
   partialRequestsEnabled: boolean;
+  tvSeasonWatchGateEnabled: boolean;
   personMovieBulkRequestsEnabled: boolean;
   enableSpecialEpisodes: boolean;
   cacheImages: boolean;
@@ -610,6 +654,10 @@ export interface NotificationAgentSlack extends NotificationAgentConfig {
   options: {
     webhookUrl: string;
     locale: AvailableLocale;
+    requestActionsEnabled?: boolean;
+    workspaceId?: string;
+    signingSecret?: string;
+    requestManagerMappings?: string;
   };
 }
 
@@ -760,6 +808,7 @@ export type JobId =
   | 'kapowarr-scan'
   | 'backissue-scan'
   | 'magazine-scan'
+  | 'adult-scan'
   | 'download-sync'
   | 'software-request-reconciliation'
   | 'live-tv-sync'
@@ -801,6 +850,7 @@ export interface AllSettings {
   oidc: OidcSettings;
   tautulli: TautulliSettings;
   radarr: RadarrSettings[];
+  whisparr: WhisparrSettings[];
   sonarr: SonarrSettings[];
   sportarr: SportarrSettings[];
   lidarr: LidarrSettings[];
@@ -826,6 +876,7 @@ export interface AllSettings {
   jobs: Record<JobId, JobSettings>;
   network: NetworkSettings;
   metadataSettings: MetadataSettings;
+  musicMetadataSettings: MusicMetadataSettings;
   migrations: string[];
 }
 
@@ -854,6 +905,7 @@ class Settings {
       vapidPublic: '',
       main: {
         apiKey: '',
+        connectionHosts: [],
         downloadPathMappings: [],
         applicationTitle: 'Seerr',
         applicationUrl: '',
@@ -867,12 +919,14 @@ class Settings {
           book: {},
           comic: {},
           magazine: {},
+          adult: {},
           software: {},
         },
         enabledMediaCategories: { ...DEFAULT_ENABLED_MEDIA_CATEGORIES },
         hideAvailable: false,
         hideBlocklisted: false,
         hideRequested: false,
+        otherUsersAvailability: OtherUserAvailabilityMode.SHOW,
         localLogin: true,
         mediaServerLogin: true,
         oidcLogin: false,
@@ -886,6 +940,7 @@ class Settings {
         blocklistedTagsLimit: 50,
         mediaServerType: MediaServerType.NOT_CONFIGURED,
         partialRequestsEnabled: true,
+        tvSeasonWatchGateEnabled: false,
         personMovieBulkRequestsEnabled: false,
         enableSpecialEpisodes: false,
         locale: 'en',
@@ -927,7 +982,9 @@ class Settings {
         tv: MetadataProviderType.TMDB,
         anime: MetadataProviderType.TMDB,
       },
+      musicMetadataSettings: structuredClone(DEFAULT_MUSIC_METADATA_SETTINGS),
       radarr: [],
+      whisparr: [],
       sonarr: [],
       sportarr: [],
       lidarr: [],
@@ -1014,6 +1071,10 @@ class Settings {
             options: {
               webhookUrl: '',
               locale: 'en',
+              requestActionsEnabled: false,
+              workspaceId: '',
+              signingSecret: '',
+              requestManagerMappings: '',
             },
           },
           telegram: {
@@ -1142,6 +1203,9 @@ class Settings {
         'magazine-scan': {
           schedule: '0 30 5 * * *',
         },
+        'adult-scan': {
+          schedule: '0 45 5 * * *',
+        },
         'availability-sync': {
           schedule: '0 0 5 * * *',
         },
@@ -1195,6 +1259,7 @@ class Settings {
           keyFile: '',
           caFile: '',
           redirectHttpToHttps: false,
+          showProvidedCertificateNotice: true,
           allowHttpAuth: true,
           httpAuthAcknowledged: true,
         },
@@ -1361,6 +1426,17 @@ class Settings {
     );
   }
 
+  get musicMetadataSettings(): MusicMetadataSettings {
+    return this.data.musicMetadataSettings;
+  }
+
+  set musicMetadataSettings(data: MusicMetadataSettings) {
+    this.data.musicMetadataSettings = mergeSettings(
+      this.data.musicMetadataSettings,
+      data
+    );
+  }
+
   public replaceSection<K extends keyof AllSettings>(
     section: K,
     value: AllSettings[K]
@@ -1424,6 +1500,14 @@ class Settings {
 
   set radarr(data: RadarrSettings[]) {
     this.data.radarr = data;
+  }
+
+  get whisparr(): WhisparrSettings[] {
+    return this.data.whisparr;
+  }
+
+  set whisparr(data: WhisparrSettings[]) {
+    this.data.whisparr = data;
   }
 
   get lidarr(): LidarrSettings[] {
@@ -1601,6 +1685,7 @@ class Settings {
       hideAvailable: this.data.main.hideAvailable,
       hideBlocklisted: this.data.main.hideBlocklisted,
       hideRequested: this.data.main.hideRequested,
+      otherUsersAvailability: this.data.main.otherUsersAvailability,
       localLogin: this.data.main.localLogin,
       mediaServerLogin: this.data.main.mediaServerLogin,
       jellyfinExternalHost: this.data.jellyfin.externalHostname,
@@ -1625,6 +1710,7 @@ class Settings {
         this.data.kapowarr.length > 0 ||
         this.data.backissue.length > 0,
       magazinesEnabled: this.data.lazylibrarian.length > 0,
+      adultEnabled: this.data.whisparr.length > 0,
       sportsEnabled: this.data.sportarr.length > 0,
       softwareEnabled: Boolean(
         this.data.softwareAcquisition.questarr.hostname &&
@@ -1642,6 +1728,7 @@ class Settings {
           (this.data.softwareAcquisition.questarr.hostname &&
             this.data.softwareAcquisition.questarr.apiKey))
       ),
+      swipeEnabled: this.data.swipe.enabled !== false,
       enabledMediaCategories: {
         ...DEFAULT_ENABLED_MEDIA_CATEGORIES,
         ...this.data.main.enabledMediaCategories,
@@ -1651,6 +1738,7 @@ class Settings {
       originalLanguage: this.data.main.originalLanguage,
       mediaServerType: this.main.mediaServerType,
       partialRequestsEnabled: this.data.main.partialRequestsEnabled,
+      tvSeasonWatchGateEnabled: this.data.main.tvSeasonWatchGateEnabled,
       personMovieBulkRequestsEnabled:
         this.data.main.personMovieBulkRequestsEnabled,
       enableSpecialEpisodes: this.data.main.enableSpecialEpisodes,
@@ -1874,12 +1962,14 @@ class Settings {
           book: {},
           comic: {},
           magazine: {},
+          adult: {},
           software: {},
         },
         enabledMediaCategories: { ...DEFAULT_ENABLED_MEDIA_CATEGORIES },
         hideAvailable: false,
         hideBlocklisted: false,
         hideRequested: false,
+        otherUsersAvailability: OtherUserAvailabilityMode.SHOW,
         localLogin: true,
         mediaServerLogin: true,
         oidcLogin: false,
@@ -1893,6 +1983,7 @@ class Settings {
         blocklistedTagsLimit: 50,
         mediaServerType: MediaServerType.NOT_CONFIGURED,
         partialRequestsEnabled: true,
+        tvSeasonWatchGateEnabled: false,
         personMovieBulkRequestsEnabled: false,
         enableSpecialEpisodes: false,
         locale: 'en',
@@ -1928,7 +2019,9 @@ class Settings {
         tv: MetadataProviderType.TMDB,
         anime: MetadataProviderType.TMDB,
       },
+      musicMetadataSettings: structuredClone(DEFAULT_MUSIC_METADATA_SETTINGS),
       radarr: [],
+      whisparr: [],
       sonarr: [],
       sportarr: [],
       lidarr: [],
@@ -2015,6 +2108,10 @@ class Settings {
             options: {
               webhookUrl: '',
               locale: 'en',
+              requestActionsEnabled: false,
+              workspaceId: '',
+              signingSecret: '',
+              requestManagerMappings: '',
             },
           },
           telegram: {
@@ -2142,6 +2239,9 @@ class Settings {
         'magazine-scan': {
           schedule: '0 30 5 * * *',
         },
+        'adult-scan': {
+          schedule: '0 45 5 * * *',
+        },
         'availability-sync': {
           schedule: '0 0 5 * * *',
         },
@@ -2195,6 +2295,7 @@ class Settings {
           keyFile: '',
           caFile: '',
           redirectHttpToHttps: false,
+          showProvidedCertificateNotice: true,
           allowHttpAuth: true,
           httpAuthAcknowledged: true,
         },

@@ -8,10 +8,12 @@ export interface OptionalServiceAvailability {
   readmeabookEnabled?: boolean;
   comicsEnabled: boolean;
   magazinesEnabled?: boolean;
+  adultEnabled?: boolean;
   sportsEnabled?: boolean;
   softwareEnabled?: boolean;
   romarrEnabled?: boolean;
   emulationCatalogEnabled?: boolean;
+  swipeEnabled?: boolean;
   enabledMediaCategories?: Partial<Record<MediaCategoryKey, boolean>>;
 }
 
@@ -123,6 +125,10 @@ export const isOptionalCatalogPathEnabled = (
   path: string,
   availability: OptionalServiceAvailability
 ): boolean => {
+  if (path === '/swipe' || path.startsWith('/swipe/')) {
+    return availability.swipeEnabled !== false;
+  }
+
   if (
     path === '/discover/movies' ||
     path.startsWith('/discover/movies/') ||
@@ -182,6 +188,17 @@ export const isOptionalCatalogPathEnabled = (
     return (
       Boolean(availability.sportsEnabled) &&
       isConfiguredMediaCategoryEnabled('sports', availability)
+    );
+  }
+
+  if (
+    path === '/discover/adult' ||
+    path.startsWith('/discover/adult/') ||
+    path.startsWith('/adult/')
+  ) {
+    return (
+      Boolean(availability.adultEnabled) &&
+      isConfiguredMediaCategoryEnabled('adult', availability)
     );
   }
 

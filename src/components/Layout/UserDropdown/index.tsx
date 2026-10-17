@@ -13,6 +13,7 @@ import { CogIcon, UserIcon } from '@heroicons/react/24/solid';
 import axios from 'axios';
 import type { LinkProps } from 'next/link';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { forwardRef } from 'react';
 import { useIntl } from 'react-intl';
 
@@ -27,6 +28,7 @@ const messages = defineMessages('components.Layout.UserDropdown', {
   settings: 'Settings',
   requests: 'Requests',
   signout: 'Sign Out',
+  userMenu: 'User menu',
 });
 
 const ForwardedLink = forwardRef<
@@ -45,6 +47,7 @@ ForwardedLink.displayName = 'ForwardedLink';
 const UserDropdown = () => {
   const intl = useIntl();
   const { user, revalidate } = useUser();
+  const router = useRouter();
   const { clearSession } = useNativeRuntime();
 
   const logout = async () => {
@@ -84,7 +87,8 @@ const UserDropdown = () => {
 
     if (response.data?.status === 'ok') {
       clearSession();
-      revalidate();
+      await revalidate(undefined, false);
+      await router.replace('/login');
     }
   };
 
@@ -94,7 +98,7 @@ const UserDropdown = () => {
         <MenuButton
           className="flex max-w-xs items-center rounded-full text-sm ring-1 ring-gray-700 hover:ring-gray-500 focus:ring-gray-500 focus:outline-none"
           data-testid="user-menu"
-          aria-label="User menu"
+          aria-label={intl.formatMessage(messages.userMenu)}
         >
           <CachedImage
             type="avatar"
@@ -108,7 +112,7 @@ const UserDropdown = () => {
       </div>
       <MenuItems
         transition
-        className="absolute right-0 z-50 mt-2 w-72 origin-top-right rounded-md shadow-lg transition duration-100 ease-out data-closed:scale-95 data-closed:opacity-0"
+        className="absolute end-0 z-50 mt-2 w-72 rounded-md shadow-lg transition duration-100 ease-out data-closed:scale-95 data-closed:opacity-0"
       >
         <div className="app-user-menu-surface divide-y divide-gray-700 rounded-md ring-1 ring-gray-700 backdrop-blur">
           <div className="flex flex-col space-y-4 px-4 py-4">

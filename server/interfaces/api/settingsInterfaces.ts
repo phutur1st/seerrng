@@ -1,3 +1,4 @@
+import type { OtherUserAvailabilityMode } from '@server/constants/availability';
 import type { EnabledMediaCategories } from '@server/constants/mediaCategories';
 import type { PublicOidcProvider } from '@server/lib/settings';
 import type { DnsEntries, DnsStats } from 'dns-caching';
@@ -34,6 +35,7 @@ export interface PublicSettingsResponse {
   hideAvailable: boolean;
   hideBlocklisted: boolean;
   hideRequested: boolean;
+  otherUsersAvailability: OtherUserAvailabilityMode;
   localLogin: boolean;
   mediaServerLogin: boolean;
   movie4kEnabled: boolean;
@@ -45,16 +47,19 @@ export interface PublicSettingsResponse {
   readmeabookEnabled?: boolean;
   comicsEnabled: boolean;
   magazinesEnabled: boolean;
+  adultEnabled: boolean;
   sportsEnabled: boolean;
   softwareEnabled: boolean;
   romarrEnabled?: boolean;
   emulationCatalogEnabled?: boolean;
+  swipeEnabled?: boolean;
   enabledMediaCategories?: EnabledMediaCategories;
   discoverRegion: string;
   streamingRegion: string;
   originalLanguage: string;
   mediaServerType: number;
   partialRequestsEnabled: boolean;
+  tvSeasonWatchGateEnabled: boolean;
   personMovieBulkRequestsEnabled: boolean;
   enableSpecialEpisodes: boolean;
   cacheImages: boolean;
@@ -111,6 +116,7 @@ export interface TlsStatusResponse {
   configuredHttpsPort: number | null;
   configuredHttpAuthAllowed: boolean;
   configuredRedirectsHttpToHttps: boolean;
+  showProvidedCertificateNotice?: boolean;
   environmentOverrides: string[];
   pendingRestart: boolean;
   setupRequired: boolean;

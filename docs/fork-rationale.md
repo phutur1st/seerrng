@@ -1,123 +1,61 @@
 ---
-title: Why SeerrNG Is a Fork
-description: SeerrNG's purpose, cross-media scope, upstream relationship, and the conditions that could let upstream equivalents replace the fork.
+title: SeerrNG fork retirement criteria
+description: Public checklist for the behavior and release evidence needed before SeerrNG's core fork can be retired.
 ---
 
-# Why SeerrNG Is a Fork
+# What upstream needs before SeerrNG can disappear
 
-**Confidence:** High for SeerrNG's stated purpose and the integrations documented
-in this repository. Whether an upstream project will accept any particular
-change is unknown and remains that project's decision.
+**Last reviewed: October 16, 2026.**
 
-## Purpose
+SeerrNG is maintained as a separate fork so it can add cross-media workflows
+and adapt selected Seerr changes for its users. This matrix records what a
+supported replacement would need to preserve before SeerrNG users could move
+off the core fork. SeerrNG is a fork of Seerr maintained by snapetech; linked
+Seerr issues and pull requests identify compatibility context and do not imply
+that the referenced work has shipped. Upstream does not need to accept the same
+patches: a maintained extension, adapter, or compatible service can satisfy a
+gate if it provides the behavior users rely on.
 
-SeerrNG is a maintained fork of Seerr. We forked to move quickly on a broad
-expansion beyond movies and television, and to build and test workflows that
-span media types with different catalogs, formats, providers, and acquisition
-services. A separate release line lets us validate those ideas with users
-without making upstream Seerr responsible for our experimental scope or
-development pace.
+The rows describe retirement requirements, not current upstream coverage.
+Source links provide public context only; they do not mean upstream has shipped
+the behavior. Work that has not shipped in a supported SeerrNG release is not
+a user-facing retirement blocker unless it is adopted before the move. Close a
+gate only after its replacement is available in a supported release and the
+required migration and operator path have been checked.
 
-The fork is a place to develop useful capabilities, learn from their operation,
-and offer changes upstream when they fit. It is not a claim that Seerr should
-adopt every feature or follow SeerrNG's full product direction. Seerr remains
-the foundation for inherited movie and television requests, users, media-server
-behavior, and deployment patterns. We continue to preserve its attribution and
-the licenses of upstream and third-party work; see the [NOTICE.md policy](https://github.com/snapetech/seerrng/blob/main/NOTICE.md).
+## Retirement matrix
 
-## What SeerrNG Carries
-
-SeerrNG brings discovery, requests, approvals, availability, and status into a
-single interface across movies and television, music, ebooks and audiobooks,
-comics, magazines, emulation ROMs, and PC games. It connects those workflows to
-catalogs and specialized services while keeping request ownership, permissions,
-notifications, and status visible in one place.
-
-The maturity of each category varies. Some workflows are established; others
-continue to evolve as catalogs, metadata, providers, and real-world library
-behavior are tested. The [repository README](https://github.com/snapetech/seerrng#documentation)
-and guides linked from this documentation describe current operator-facing behavior.
-
-## Companion Services and SeerrNG-Specific Changes
-
-BookshelfNG, ChaptarrNG, QuestarrNG, and ROMarrNG are separately deployed
-applications, not code bundled into SeerrNG or direct npm dependencies. SeerrNG
-connects to them through provider APIs. The fork-specific work is primarily at
-that integration boundary: each side needs to preserve the identity, choices,
-permissions, and lifecycle of a request as it moves from SeerrNG into an
-acquisition service and back.
-
-| Area | SeerrNG-specific integration work | Why it is needed |
+| Gate | Replacement must provide | Evidence before closing the gate |
 | --- | --- | --- |
-| Books and audiobooks | Capability discovery; format-scoped routes and status; durable provider identity; paged library reads; pending-import progress, retry, and cancellation; and restricted service credentials. | A single book may be requested as an ebook, audiobook, or both. The integration must keep the selected format and provider record attached to the request and avoid granting an integration broad administrative access. |
-| PC games | A versioned provider contract that carries the request ID, exact IGDB identity, and selected operating system and architecture through acquisition, status, retry, cancellation, and authenticated request-scoped file delivery. | A game title alone does not identify the selected PC build or the request that owns its download. SeerrNG needs status recovery and safe delivery for the right requester. |
-| Emulation ROMs | Stable catalog identities, caller-owned request IDs, per-request status and actions, library lookup, restricted access, and bounded, path-checked file delivery. | A generic name-and-platform request does not preserve catalog identity, make retries idempotent, or provide the request-level controls and file boundaries SeerrNG needs. |
-| Music, comics, and magazines | Integrations with existing catalogs and automation services, with category-specific discovery and service routing in SeerrNG. | These categories need distinct metadata and provider behavior; they do not all require a new SeerrNG companion fork. |
+| Media scope | The categories SeerrNG users still rely on: movies, series, music, ebooks and audiobooks, comics, magazines, emulation ROMs, and PC games. A supported extension or service can supply a category. | Each needed category can be discovered, requested, approved, acquired or delivered, scanned, and tracked without a SeerrNG-only core patch. |
+| Music metadata providers | Administrators can check MusicBrainz and Cover Art Archive connectivity and set bounded Cover Art Archive request-rate and concurrency limits. Source context includes Seerr [PR #3110](https://github.com/seerr-team/seerr/pull/3110) and [PR #3116](https://github.com/seerr-team/seerr/pull/3116). | Provider checks report current connectivity independently, do not alter artwork caches, and enforce configured limits across concurrent requests and validated redirects without weakening URL validation or recovery. |
+| Web Push device identity | A user's separate devices retain separate subscriptions even when their browser signatures match. Endpoint rotation replaces only the matching subscription, and logout or disable actions on a shared browser remain account-scoped. Source context includes Seerr [issue #2660](https://github.com/seerr-team/seerr/issues/2660) and [PR #3142](https://github.com/seerr-team/seerr/pull/3142). | Checks cover sibling devices with identical signatures, endpoint rotation with a changed signature, same-endpoint key refresh, and cross-user logout or disable behavior. |
+| Discover filters and lists | Movie and series discovery supports tenth-point ratings, region-aware streaming inclusion and exclusion, genre exclusions, movie-studio and series-status exclusions, public TMDB lists, and shareable filter state. Source context includes Seerr [PR #3607](https://github.com/seerr-team/seerr/pull/3607), [PR #626](https://github.com/seerr-team/seerr/pull/626), [issue #898](https://github.com/seerr-team/seerr/issues/898), [PR #3166](https://github.com/seerr-team/seerr/pull/3166), and [issue #3090](https://github.com/seerr-team/seerr/issues/3090). | Checks cover movie and series catalogs, contextual search, local availability, URL validation and restoration, filtering and pagination. Any supported extension also provides the shared shelf customization users rely on. |
+| Discover result navigation and ratings | Details opened from a loaded list can move through its visible filtered order, return to the same list position, and show rating details to touch and desktop users. Source context includes Seerr [issue #3015](https://github.com/seerr-team/seerr/issues/3015), [PR #3122](https://github.com/seerr-team/seerr/pull/3122), [PR #3154](https://github.com/seerr-team/seerr/pull/3154), and [issue #1269](https://github.com/seerr-team/seerr/issues/1269). | Browser checks cover filtered order, list boundaries, browser-back behavior, direct detail links, brief versus sustained hover, touch controls, partial provider results, and narrow screens. |
+| Tooltips and download details | Help and interactive download details support keyboard and touch input, fit within the viewport, and keep long details scrollable. Source context includes Seerr [PR #3562](https://github.com/seerr-team/seerr/pull/3562). | Checks cover keyboard focus, touch activation, placement near viewport edges, narrow screens, and scrolling within long download details. |
+| Subject-tag visibility | Users can hide or show potentially revealing Subject Tags across Movie and Series pages, with their choice isolated to the correct account. Source context includes Seerr [issue #2651](https://github.com/seerr-team/seerr/issues/2651) and [PR #3071](https://github.com/seerr-team/seerr/pull/3071). | The preference survives navigation and reloads, applies to both detail types, and preserves tag search links when tags are shown. |
+| TV availability and scanner behavior | Completed series remain available when their regular seasons are complete, even if an orphaned unknown season record exists. Scans distinguish confirmed removal from incomplete or failed provider checks. Source context includes Seerr [PR #3148](https://github.com/seerr-team/seerr/pull/3148). | Regression checks cover orphaned seasons, HD and 4K rollups, specials, provider identity changes, failed scans, and removal only after confirmed absence. |
+| Sonarr anime profiles | Administrators can set and review an anime quality profile. If that profile is missing or cannot be checked at dispatch time, an approved anime request can use the standard profile on the same Sonarr service. Source context includes Seerr [issue #3159](https://github.com/seerr-team/seerr/issues/3159) and [PR #3160](https://github.com/seerr-team/seerr/pull/3160). | Checks cover profile creation and edits, missing or unavailable profiles, recovery at dispatch, and isolation across multiple Sonarr services. |
+| Sonarr future-season monitoring | Administrators can choose All, None, or Latest Season Requested. The last mode monitors future seasons only when a request includes the latest regular season; specials and older-only requests do not qualify. Automatic search remains separate. Source context includes Seerr [issue #3152](https://github.com/seerr-team/seerr/issues/3152) and [PR #3157](https://github.com/seerr-team/seerr/pull/3157). | Checks cover latest, older-only, special-only, and missing-season metadata, and confirm the setting round-trips while automatic-search behavior remains independent. |
+| Sonarr API and season orders | Sonarr v3/v4 and v5 remain supported. For v5, metadata language and season order are explicit request choices; manual season repair verifies standard seasons against TVDB and alternate orders against the selected Sonarr series. | Checks cover version detection, per-endpoint fallback, focused updates that preserve Sonarr-owned metadata, and mappings isolated by service, quality, and season order. |
+| Request destinations and variants | Movie and series requests can target labeled Radarr and Sonarr instances. Per-user grants, quality choices, destination-specific availability, and request history stay attached to the selected service. Other media preserve selected book format, game platform, and other request variants. Source context includes Seerr [PR #3560](https://github.com/seerr-team/seerr/pull/3560). | Checks cover permission enforcement, duplicate prevention, multiple services, scans, retries, and availability on each selected destination. |
+| Previous-season watch gate | Administrators can require playback of the immediately previous regular TV season before later seasons are requested. The requester’s linked Plex, Jellyfin, or Emby watch history is used; uncertain playback state fails closed, and authorized managers can override the gate. Source context includes Seerr [issue #3590](https://github.com/seerr-team/seerr/issues/3590). | Checks cover partial and full-season requests, specials and empty seasons, missing library or playback data, watch-state changes, and permission-checked overrides. |
+| Watchlist filters and ordering | Local watchlists support title search, media-type filters, and stable sorting. Combined Plex lists retain Plex order and do not claim that remote pages were fully filtered or sorted. Deliberate Plex Watchlist removals do not trigger repeated auto-requests while the item remains removed. Source context includes Seerr [PR #3506](https://github.com/seerr-team/seerr/pull/3506). | Checks cover user isolation, pagination, local ordering, combined Plex results, and the remove/re-add auto-request cycle. |
+| Request availability subscriptions | A signed-in user can privately follow another user's active movie or series request and receive one notice through their own enabled agents and Media Available preference. Following does not create a request or reveal the requester. Source context includes Seerr [issue #3091](https://github.com/seerr-team/seerr/issues/3091) and [issue #375](https://github.com/seerr-team/seerr/issues/375). | Checks cover self-only API access, idempotent follow and cancellation, multiple request owners, notification preferences, durable delivery, privacy, and cleanup after decline, failure, or deletion. |
+| Slack actions and quota approvals | Slack approval or decline actions use a mapped SeerrNG account and the same current permission checks as the web app. Requests over quota follow an explicit manager approval path without silently bypassing configured limits. Source context for Slack actions includes Seerr [issue #3554](https://github.com/seerr-team/seerr/issues/3554). | Checks cover signature and freshness validation, account mapping, authorization, one serialized request transition, and correct quota accounting for approval, decline, cancellation, and retry. |
+| Query scale and data volume | Request details, status pages, and library summaries stay responsive for large catalogs and histories without multiplying independent collections or issuing one lookup per record. Source context includes Seerr [issue #3515](https://github.com/seerr-team/seerr/issues/3515). | Representative large datasets show bounded row and query growth, correct pagination, and acceptable response time across filtered views. |
+| TV identity and request recovery | Missing or conflicting TVDB identity and season numbering do not discard requests or silently select another series. Eligible requests can be repaired with a verified TVDB series and explicit season mapping scoped to the selected Sonarr service and quality. Source context includes Seerr [issues #3488](https://github.com/seerr-team/seerr/issues/3488), [PR #3489](https://github.com/seerr-team/seerr/pull/3489), [PR #3490](https://github.com/seerr-team/seerr/pull/3490), [PR #3495](https://github.com/seerr-team/seerr/pull/3495), and [PR #3496](https://github.com/seerr-team/seerr/pull/3496). | Checks cover missing, ambiguous, and unavailable metadata; verified season lists; retained request identity and history; destination and quality isolation; mapped dispatch; and safe retry after recovery. |
+| Request failure explanations | Dispatch failures use bounded categories instead of storing raw provider messages. Standard status history is localized, while useful custom service diagnostics remain intact. A temporary requester-tag lookup or creation failure does not block Radarr/Sonarr dispatch or discard configured and request-selected tags. Source context includes Seerr [PR #2681](https://github.com/seerr-team/seerr/pull/2681), [issue #2664](https://github.com/seerr-team/seerr/issues/2664), [PR #3493](https://github.com/seerr-team/seerr/pull/3493), and [PR #3494](https://github.com/seerr-team/seerr/pull/3494). | Checks confirm the documented category set, no raw provider text leakage, stale reasons clear after recovery, failure explanations and recovery actions are accessible and permission-checked, and optional tag failures leave acquisition available with a warning. |
+| Media-server protocols and user sync | Plex, Jellyfin, and Emby authorization remains compatible. Optional import sync can refresh selected linked Jellyfin or Emby names and avatars while preserving SeerrNG-owned email, credentials, and permissions. Recently added Jellyfin seasons and episodes resolve through their parent series. Source context includes Seerr [PR #3502](https://github.com/seerr-team/seerr/pull/3502), [PR #3503](https://github.com/seerr-team/seerr/pull/3503), [PR #3514](https://github.com/seerr-team/seerr/pull/3514), [issue #2764](https://github.com/seerr-team/seerr/issues/2764), [issue #3547](https://github.com/seerr-team/seerr/issues/3547), and [PR #3551](https://github.com/seerr-team/seerr/pull/3551). | Integration checks cover current authorization headers, logout and private-avatar access, opt-in profile refresh, preserved local account data, and recent items with missing-parent cases. |
+| Availability and request lifecycle | Availability is accurate per user, quality, format, and service destination. Ownership, status history, retry, cancellation, and verified file delivery survive provider updates and restarts. Displaying a shared copy does not claim that the viewer's media-server account can play it. | Checks cover multiple users and destinations, provider failures, scans and restarts, private library access, and recovery without duplicate or lost requests. |
+| Permissions and security | Authorization, scoped integration credentials, validated external requests, safe file delivery, and path handling remain at least as strong as SeerrNG's. | Security review and regression coverage show that existing permission and data boundaries hold across the replacement path. |
+| Data and API transition | A supported path preserves or intentionally transforms requests, user preferences, permissions, provider links, API clients, and other state operators need. | A representative SeerrNG backup upgrades to the supported replacement in a disposable environment. Data integrity, client compatibility, rollback, and recovery are documented and verified. |
+| Release and operator support | Installation, configuration, backup, upgrade, rollback, troubleshooting, and support guidance cover the deployment channels SeerrNG users rely on. | Operators can move from a supported SeerrNG release to a supported replacement using documented steps and a tested recovery path. |
+| Companion services | BookshelfNG, ChaptarrNG, QuestarrNG, and ROMarrNG remain usable through supported APIs, adapters, or extensions. Retiring SeerrNG does not itself retire a companion project. | Each companion integration needed by users has a maintained compatibility path; companion-fork retirement stays a separate decision with its own criteria. |
 
-These contracts also rely on security properties such as scoped credentials,
-validated external targets, authorization at the request boundary, and safe
-file access. The exact capabilities, upstream comparisons, and replacement
-criteria for the four maintained companion forks are tracked in [Maintained
-dependency forks](./using-seerr/dependency-forks.md). Those comparisons are
-point-in-time records and should be checked against the linked upstream
-releases before changing a dependency.
-
-## Working With Upstream Projects
-
-Upstream projects may take SeerrNG work in whole, in part, or in spirit. We can
-contribute a complete implementation, a smaller reusable component, tests and
-documentation, or a description of the underlying idea. We will preserve
-authorship, provenance, existing license notices, and each project's
-contribution requirements, and we will adapt a proposal to the receiving
-project's design and review process.
-
-We have not yet had many upstream conversations. Development has moved quickly,
-and we have been uncertain how best to present the breadth of the changes and
-their origins across several related projects. We are making the rationale and
-integration boundaries clearer now, and welcome conversations with Seerr or
-companion-project maintainers. Questions, design feedback, and concerns about
-compatibility, scope, security, attribution, or provenance are welcome through
-[SeerrNG Discussions](https://github.com/snapetech/seerrng/discussions) or
-[SeerrNG Issues](https://github.com/snapetech/seerrng/issues). Each upstream
-project decides what it wants to accept and on what terms.
-
-## What Could Let SeerrNG Stop Being a Required Fork
-
-The fork could stop being necessary when a supported upstream Seerr release,
-maintained extension, or equivalent adapter provides the behavior SeerrNG and
-its users rely on. The source of that behavior can be upstream code, a partial
-contribution, a plugin boundary, or a compatible external service. The
-important test is equivalent behavior in a supported release, not whether the
-same patches appear in upstream.
-
-Before retiring the fork, the replacement path would need to:
-
-1. Cover the media categories and workflows users still rely on, or provide a
-   supported extension point that supplies them without a divergent core fork.
-2. Preserve stable catalog and provider identity, selected format or platform,
-   request ownership, status history, retry and cancellation behavior, and
-   recovery after provider or application restarts.
-3. Keep equivalent permission and security boundaries, including scoped
-   integration credentials, validated external requests, authorized file
-   delivery, and safe path handling.
-4. Provide a tested data and API transition for requests, user preferences,
-   permissions, provider links, and other persisted state that operators need
-   to retain.
-5. Pass SeerrNG's compatibility checks against an exact supported release,
-   with documented upgrade, rollback, and support guidance for operators.
-6. Account for remaining fork-owned operational needs such as packaging,
-   releases, setup instructions, and maintenance of any companion integrations.
-
-An upstream feature branch or an unmerged proposal would not be enough. The
-replacement must be released, maintained, secured, and usable by existing
-SeerrNG deployments. Retiring the SeerrNG core fork would also not require
-retiring every companion fork: each has its own standalone users and its own
-replacement criteria in the [dependency-fork guide](./using-seerr/dependency-forks.md).
-
-## Review Status
-
-This page records the project's intent and current integration shape. Feature
-and dependency details change as SeerrNG and upstream projects develop; update
-the linked guides when contracts or supported releases change. Confidence is
-high for the intent and repository-documented behaviors summarized here, and
-unknown for the decisions or timelines of upstream maintainers.
+The matrix is a retirement checklist, not a claim that a particular upstream
+release already satisfies it. A fork, extension, adapter, or compatible
+service can replace a gate once the behavior is supported and the evidence is
+available. The [documentation index](./README.md) links to current operator
+guides; [NOTICE.md](https://github.com/snapetech-org/seerrng/blob/main/NOTICE.md)
+records project attribution.

@@ -4,7 +4,7 @@ import useSettings from '@app/hooks/useSettings';
 import type { User } from '@app/hooks/useUser';
 import { Permission } from '@app/hooks/useUser';
 import defineMessages from '@app/utils/defineMessages';
-import { MediaServerType } from '@server/constants/server';
+import { MediaServerType, ServerType } from '@server/constants/server';
 import { useIntl } from 'react-intl';
 
 export const messages = defineMessages('components.PermissionEdit', {
@@ -40,6 +40,9 @@ export const messages = defineMessages('components.PermissionEdit', {
   requestSports: 'Request Sports',
   requestSportsDescription:
     'Grant permission to submit sports league requests through Sportarr.',
+  requestAdult: 'Request Adult Media',
+  requestAdultDescription:
+    'Explicitly grant this user access to discover and request adult scenes through Whisparr.',
   autoapprove: 'Auto-Approve',
   autoapproveDescription:
     'Grant automatic approval for all non-4K media requests.',
@@ -61,6 +64,9 @@ export const messages = defineMessages('components.PermissionEdit', {
   autoapproveSports: 'Auto-Approve Sports',
   autoapproveSportsDescription:
     'Grant automatic approval for sports league requests.',
+  autoapproveAdult: 'Auto-Approve Adult Media',
+  autoapproveAdultDescription:
+    'Grant automatic approval for adult scene requests. This is separate from general auto-approval.',
   autoapprove4k: 'Auto-Approve 4K',
   autoapprove4kDescription:
     'Grant automatic approval for all 4K media requests.',
@@ -190,20 +196,20 @@ export const PermissionEdit = ({
           name: intl.formatMessage(messages.viewwatchlists, {
             mediaServerName:
               settings.currentSettings.mediaServerType === MediaServerType.PLEX
-                ? 'Plex'
+                ? ServerType.PLEX
                 : settings.currentSettings.mediaServerType ===
                     MediaServerType.JELLYFIN
-                  ? 'Jellyfin'
-                  : 'Emby',
+                  ? ServerType.JELLYFIN
+                  : ServerType.EMBY,
           }),
           description: intl.formatMessage(messages.viewwatchlistsDescription, {
             mediaServerName:
               settings.currentSettings.mediaServerType === MediaServerType.PLEX
-                ? 'Plex'
+                ? ServerType.PLEX
                 : settings.currentSettings.mediaServerType ===
                     MediaServerType.JELLYFIN
-                  ? 'Jellyfin'
-                  : 'Emby',
+                  ? ServerType.JELLYFIN
+                  : ServerType.EMBY,
           }),
           permission: Permission.WATCHLIST_VIEW,
         },
@@ -361,6 +367,19 @@ export const PermissionEdit = ({
           ],
         },
       ],
+    },
+    {
+      id: 'request-adult',
+      name: intl.formatMessage(messages.requestAdult),
+      description: intl.formatMessage(messages.requestAdultDescription),
+      permission: Permission.REQUEST_ADULT,
+    },
+    {
+      id: 'autoapprove-adult',
+      name: intl.formatMessage(messages.autoapproveAdult),
+      description: intl.formatMessage(messages.autoapproveAdultDescription),
+      permission: Permission.AUTO_APPROVE_ADULT,
+      requires: [{ permissions: [Permission.REQUEST_ADULT] }],
     },
     {
       id: 'autorequest',
