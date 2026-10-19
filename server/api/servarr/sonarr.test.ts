@@ -926,6 +926,72 @@ describe('SonarrAPI exact episode requests', () => {
     assert.ok(!('languageProfileId' in createPayload));
   });
 
+  for (const episodeSelections of [
+    undefined,
+    [{ seasonNumber: 1, episodeNumbers: [2] }],
+  ]) {
+    it(`preserves v5 lookup defaults for a new ${episodeSelections ? 'episode' : 'season'} request`, async () => {
+      const api = buildSonarr('v5');
+      mock.method(api, 'getSeriesByTvdbId', async () =>
+        series({
+          id: undefined,
+          language: { id: 1, name: 'English' },
+          seasonTypes: [
+            { name: 'DVD Order', type: 'dvd', seasonNumbers: [1] },
+            { name: 'Aired Order', type: 'official', seasonNumbers: [1] },
+          ],
+          seasons: [{ seasonNumber: 1, monitored: false }],
+        })
+      );
+      const post = mock.method(
+        getAxios(api),
+        'post',
+        async (_url: string, payload: Record<string, unknown>) => {
+          // Match the live v5 validation contract rather than accepting an
+          // incomplete payload in the fixture.
+          assert.deepEqual(payload.language, { id: 1, name: 'English' });
+          assert.equal(payload.seasonType, 'official');
+          return { data: series({ id: 99 }) };
+        }
+      );
+      const apply = mock.method(
+        api,
+        'applyEpisodeSelections' as never,
+        async () => undefined
+      );
+      await api.addSeries({
+        tvdbid: 100,
+        title: 'Test Series',
+        profileId: 7,
+        languageProfileId: 1,
+        seasons: [1],
+        seasonFolder: true,
+        rootFolderPath: '/tv',
+        seriesType: 'standard',
+        tags: [6],
+        searchNow: true,
+        episodeSelections,
+      });
+      const payload = post.mock.calls[0].arguments[1] as Record<
+        string,
+        unknown
+      >;
+      assert.equal(payload.qualityProfileId, 7);
+      assert.deepEqual(payload.tags, [6]);
+      assert.equal(payload.rootFolderPath, '/tv');
+      assert.equal('languageProfileId' in payload, false);
+      assert.deepEqual(payload.seasons, [
+        { seasonNumber: 1, monitored: !episodeSelections },
+      ]);
+      assert.equal(
+        (payload.addOptions as Record<string, unknown>)
+          .searchForMissingEpisodes,
+        !episodeSelections
+      );
+      assert.equal(apply.mock.calls.length, episodeSelections ? 1 : 0);
+    });
+  }
+
   it('adds v5 metadata language and season order to a new series', async () => {
     const api = buildSonarr('v5');
     mock.method(api, 'getSeriesByTvdbId', async () =>

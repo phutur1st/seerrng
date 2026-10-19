@@ -33,6 +33,8 @@ The rules describe asset roles, not particular pages, title strings, example med
 
 Cross-media candidate, edition, continuation, cover thumbnail, related-tool and choice-group roles also live in `src/styles/globals.css`. They consume the existing card spacing, copy and theme variables; components select the semantic role without duplicating its geometry.
 
+Responsive media detail body, information column, action column and action-panel roles also live in `src/styles/globals.css`, alongside settings content typography and control rules. Components select these roles; CSS modules must not become competing owners.
+
 This map identifies owners, not a whitelist of every valid class. Follow the existing family for the asset and verify its cascade before proposing another family.
 
 ## 3. Typography and copy

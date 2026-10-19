@@ -25,6 +25,7 @@ import {
   reconcileRequestedMusicAvailability,
 } from '@server/lib/musicAvailability';
 import logger from '@server/logger';
+import { readarrServiceSupportsFormat } from '@server/utils/readarrService';
 import type { EntityManager, Repository } from 'typeorm';
 import { In, MoreThan } from 'typeorm';
 import { isIncompleteRequestStatus } from './requestStatusIncomplete';
@@ -72,6 +73,8 @@ export type RequestStatusMessageKey =
   | 'bookUnavailable'
   | 'bookQueueFailed'
   | 'bookCouldNotAccept'
+  | 'binderyDeclined'
+  | 'binderyRequestMissing'
   | 'comicUnavailable'
   | 'comicQueueFailed'
   | 'comicCouldNotAccept'
@@ -95,7 +98,9 @@ export type RequestStatusMessageKey =
   | 'preparingEbook'
   | 'preparingAudiobook'
   | 'waitingForBookshelf'
+  | 'waitingForBinderyApproval'
   | 'preparingBookshelfSearch'
+  | 'preparingBookServiceAcquisition'
   | 'requestRetried'
   | 'approvedForProcessing';
 
@@ -126,6 +131,7 @@ export interface RequestStatusSnapshot {
 interface BookSearchSnapshot {
   state?: BookRequestSearch['state'];
   pendingImports: NonNullable<RequestStatusSnapshot['bookImportProgresses']>;
+  binderyRequestPending?: boolean;
 }
 
 export interface RequestStatusHistoryItem {
@@ -242,6 +248,7 @@ type StatusOptions = {
   downloads?: DownloadingItem[];
   dispatchPending?: boolean;
   bookSearchState?: BookRequestSearch['state'];
+  binderyRequestPending?: boolean;
   bookImportProgresses?: RequestStatusSnapshot['bookImportProgresses'];
   musicSearchTime?: Date | null;
   servarrHistory?: ServarrHistoryEvidence;
@@ -775,7 +782,7 @@ const getServiceName = (request: RequestLike): string | null => {
               : request.media.serviceId;
           return (
             server.id === serviceId &&
-            (server.serviceType ?? 'ebook') === format
+            readarrServiceSupportsFormat(server, format)
           );
         })?.name
       );
@@ -857,8 +864,16 @@ const REQUEST_STATUS_MESSAGE_KEYS = new Map<string, RequestStatusMessageKey>([
     'bookUnavailable',
   ],
   [
-    'The connected book service reported a download or import failure. Check its queue or logs for the cause, fix it there, then retry here.',
+    'The connected book service reported a download or import problem. Ask an administrator to check its queue or logs, fix the issue there, then retry the request.',
     'bookQueueFailed',
+  ],
+  [
+    'Bindery declined this request. Ask an administrator to review it in Bindery, then retry here if the book is still wanted.',
+    'binderyDeclined',
+  ],
+  [
+    'Bindery no longer has the linked request. Ask an administrator to check Bindery, then retry here if the book is still wanted.',
+    'binderyRequestMissing',
   ],
   [
     'The connected book service could not accept this request. Check its connection and metadata provider settings, then retry.',
@@ -921,8 +936,16 @@ const REQUEST_STATUS_MESSAGE_KEYS = new Map<string, RequestStatusMessageKey>([
     'waitingForBookshelf',
   ],
   [
+    'Waiting for Bindery to approve this request. Enable Auto-approve requests for this account in Bindery if acquisition should start immediately.',
+    'waitingForBinderyApproval',
+  ],
+  [
     'SeerrNG is preparing a Bookshelf search for this title. Availability will update after a library scan finds the book.',
     'preparingBookshelfSearch',
+  ],
+  [
+    'The connected book service is handling acquisition for this title. SeerrNG will update availability when the book appears in its library.',
+    'preparingBookServiceAcquisition',
   ],
   [
     'The request was retried and is waiting to be dispatched.',
@@ -1041,13 +1064,16 @@ const getStageFromRequest = (
   }
   if (options.bookSearchState === 'pending') {
     const pendingFormat = options.bookImportProgresses?.[0]?.format;
+    const message = options.binderyRequestPending
+      ? 'Waiting for Bindery to approve this request. Enable Auto-approve requests for this account in Bindery if acquisition should start immediately.'
+      : pendingFormat
+        ? `ChaptarrNG is preparing the requested ${pendingFormat === 'audiobook' ? 'audiobook' : 'ebook'} while it imports the author.`
+        : 'Waiting for Bookshelf to prepare the requested book.';
     return {
       stage: RequestStatusStage.SEARCHING,
       queueFailure: false,
       downloads,
-      message: pendingFormat
-        ? `ChaptarrNG is preparing the requested ${pendingFormat === 'audiobook' ? 'audiobook' : 'ebook'} while it imports the author.`
-        : 'Waiting for Bookshelf to prepare the requested book.',
+      message,
     };
   }
   if (options.bookSearchState === 'monitoring') {
@@ -1056,7 +1082,7 @@ const getStageFromRequest = (
       queueFailure: false,
       downloads,
       message:
-        'SeerrNG is preparing a Bookshelf search for this title. Availability will update after a library scan finds the book.',
+        'The connected book service is handling acquisition for this title. SeerrNG will update availability when the book appears in its library.',
     };
   }
 
@@ -1293,6 +1319,7 @@ const getBookSearchSnapshot = async (
     select: {
       state: true,
       providerManagedSearch: true,
+      binderyRequestId: true,
       format: true,
       pendingId: true,
       pendingAttemptCount: true,
@@ -1319,6 +1346,9 @@ const getBookSearchSnapshot = async (
             : undefined;
   return {
     state,
+    binderyRequestPending: trackedSearches.some(
+      (record) => record.state === 'pending' && record.binderyRequestId != null
+    ),
     pendingImports: trackedSearches
       .filter(
         (record) => record.state === 'pending' && record.pendingId != null
@@ -1479,6 +1509,7 @@ export const recordRequestStatus = async (
     latestEvent: latestEvent ?? undefined,
     dispatchPending,
     bookSearchState: bookSearch.state,
+    binderyRequestPending: bookSearch.binderyRequestPending,
     bookImportProgresses: bookSearch.pendingImports,
     resetTerminalOverride: options.resetTerminalOverride,
   });
@@ -1715,6 +1746,7 @@ const getBookSearchStates = async (
       requestId: true,
       state: true,
       providerManagedSearch: true,
+      binderyRequestId: true,
       format: true,
       pendingId: true,
       pendingAttemptCount: true,
@@ -1768,6 +1800,9 @@ const getBookSearchStates = async (
           ? nextState
           : current.state,
       pendingImports,
+      binderyRequestPending:
+        current?.binderyRequestPending === true ||
+        (record.state === 'pending' && record.binderyRequestId != null),
     });
   }
   return states;
@@ -1784,6 +1819,7 @@ const mapRequestStatusItem = async (
     latestEvent,
     dispatchPending,
     bookSearchState: bookSearch?.state,
+    binderyRequestPending: bookSearch?.binderyRequestPending,
     bookImportProgresses: bookSearch?.pendingImports,
   });
   if (persist) {

@@ -22,8 +22,12 @@ For BookshelfNG's SeerrNG-specific API behavior, see
 [BookshelfNG interoperability](#bookshelfng-interoperability).
 
 BookshelfNG's planned retirement in favor of ChaptarrNG is not released yet.
-No populated-library converter or old-channel bridge is available, so keep the
-existing BookshelfNG database and installation until the
+ChaptarrNG `v0.9.977` includes single-database SQLite preview and conversion
+tools, but production apply remains frozen pending migration, rollback,
+feature-parity, and installation-channel acceptance. Draft ChaptarrNG PR #131
+adds further migration support and has passed synthetic populated-data checks;
+that candidate is unpublished. No legacy identity bridge has been published
+or enabled, so keep the existing BookshelfNG database and installation until the
 [feature, migration, and distribution gates](https://github.com/snapetech-org/bookshelfng/blob/main/docs/maintainers/chaptarr-consolidation.md)
 pass. BookshelfNG's retirement gate is its capabilities validated in
 ChaptarrNG. The later ChaptarrNG-to-Chaptarr gate is separate: all BookshelfNG
@@ -190,14 +194,45 @@ to the same ChaptarrNG instance, and cancels the pending author import only
 when no other request depends on it.
 
 The ChaptarrNG integration contract and restricted service key are covered by
-tests in both repositories. The ChaptarrNG repository also includes a
-cross-container Compose smoke test that runs SeerrNG's compiled API adapter
-against a locally built ChaptarrNG image, checks the format-scoped paged
-library, and verifies that administrative and unrelated command routes reject
-the SeerrNG credential. Run it with the instructions in
+tests in both repositories. ChaptarrNG's repeatable Compose smoke starts a
+disposable BookshelfNG migration-158 fixture against a locally built candidate
+image, verifies normal-startup conversion, checks that SeerrNG reads both
+migrated formats through the format-scoped API, verifies the restricted-key
+boundary, and exercises a pending request lifecycle. It uses synthetic
+placeholder media and does not establish operator-data or M4B processing
+acceptance. Run it with the instructions in
 [ChaptarrNG's SeerrNG integration guide](https://github.com/snapetech-org/chaptarrng/blob/main/docs/SEERRNG_INTEGRATION.md).
 Pin the ChaptarrNG image version in reproducible deployments because its
 Readarr-compatible surface can change between releases.
+
+### Troubleshoot a missing or failed ChaptarrNG book
+
+Start with the request's current status and history in SeerrNG. SeerrNG records
+the request, format, service destination, and the lifecycle information the
+backend exposes. It does not copy raw service logs into requester-facing
+status because those can include server paths or other private details.
+
+For a search or download issue, have an administrator check the matching
+ebook or audiobook service entry, then inspect the book in ChaptarrNG:
+
+1. Confirm the requested title and format are monitored. Seeing the author in
+   ChaptarrNG does not mean the requested title is monitored; other books from
+   that author may be catalogued without being searched.
+2. Run an interactive search for that exact book in ChaptarrNG and review the
+   selected metadata, profile, and root folder.
+3. Check ChaptarrNG's indexer results, download client, activity, and logs to
+   see whether a release was found, sent to the client, and imported. If you
+   use Prowlarr, confirm its enabled indexers and credentials are healthy from
+   ChaptarrNG's side as well.
+4. If you copied a file into the library yourself, use ChaptarrNG's manual
+   import to identify and organize it, then run SeerrNG's book availability
+   scan.
+
+Household members can keep requesting in SeerrNG; they do not need accounts in
+ChaptarrNG, Prowlarr, or the download client. These tools remain administrator
+integrations. SeerrNG cannot improve a backend's source coverage or change its
+search profile, so use the backend's diagnostics and logs when results are
+missing.
 
 ## Audiobookshelf availability
 
@@ -281,8 +316,10 @@ BACKUP_DIR=/path/to/private-backups \
 ```
 
 Apply writes an independent config archive and the converter keeps the original
-`readarr.db`. It supports one BookshelfNG migration-158 SQLite database;
-PostgreSQL, older schemas, and split ebook/audiobook databases are not accepted.
+`readarr.db`. The published `v0.9.977` helper accepts one supported SQLite
+source database and refuses PostgreSQL, pre-migration-14 databases, and split
+ebook/audiobook databases. PR #131 contains an unpublished older-schema and
+single-schema PostgreSQL candidate; neither is approved for operator use.
 The helper does not start ChaptarrNG or rewrite a Compose file. Point the regular
 ChaptarrNG service at the converted config directory and preserve media/download
 mounts, the saved port and URL base, and any environment-only credentials.
@@ -523,6 +560,13 @@ For the validated deployment, the important in-container paths were:
 
 ## Installer Script
 
+> **Migration is frozen for now.** ChaptarrNG `v0.9.977` is the latest
+> published release, and BookshelfNG issue #144 keeps production cutover gated
+> on feature parity, representative data and rollback, and installation-channel
+> acceptance. Use the migration helper for read-only preview only. Do not pass
+> `--apply` or start ChaptarrNG against BookshelfNG appdata. Keep the existing
+> BookshelfNG service running until the retirement gates close.
+
 For a new deployment, use the SeerrNG setup assistant to create the standard
 ChaptarrNG stack:
 
@@ -546,8 +590,8 @@ promoting a database. Fill each `mediaType` with `audiobook`, `ebook`, or
 and rerun preview before applying. The same standard ChaptarrNG image reads
 that map during preview, apply, and normal startup.
 
-After reviewing the report and stopping BookshelfNG, apply with an independent
-backup location:
+After issue #144 is closed and production cutover is approved, review the
+report, stop BookshelfNG, and apply with an independent backup location:
 
 ```bash
 BOOKSHELF_EBOOKS_CONFIG_DIR=/path/to/bookshelf-config \

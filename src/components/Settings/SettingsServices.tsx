@@ -59,6 +59,7 @@ import type {
   SportarrSettings,
   WhisparrSettings,
 } from '@server/lib/settings';
+import { readarrServiceSupportsFormat } from '@server/utils/readarrService';
 import axios from 'axios';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
@@ -97,6 +98,9 @@ const RadarrModal = dynamic(
 const ReadarrModal = dynamic(
   () => import('@app/components/Settings/ReadarrModal')
 );
+const BinderyModal = dynamic(
+  () => import('@app/components/Settings/BinderyModal')
+);
 const SonarrModal = dynamic(
   () => import('@app/components/Settings/SonarrModal')
 );
@@ -116,6 +120,10 @@ const messages = defineMessages('components.Settings', {
   serviceCategoryMusic: 'Music',
   serviceCategoryTools: 'System',
   serviceCategories: 'Service categories',
+  fourKDisabledTitle: 'Global 4K support is off',
+  fourKDisabledDescription:
+    'The 4K Server badge is a saved classification for a separate Radarr or Sonarr instance; it does not turn 4K on. Enable the global setting to restore 4K request options and separate availability tracking.',
+  fourKSettingsLink: 'Open 4K settings',
   noSetupCategories:
     'No request categories are enabled. You can finish setup now and add service connections after enabling a category in Settings.',
   spotifyPlaylistSettings:
@@ -129,7 +137,7 @@ const messages = defineMessages('components.Settings', {
   whisparrsettings: 'Whisparr Settings',
   sportarrsettings: 'Sportarr Settings',
   lidarrsettings: 'Lidarr Settings',
-  readarrsettings: 'ChaptarrNG / Bookshelf Settings',
+  readarrsettings: 'Bookshelf and Bindery Settings',
   audiobookshelfsettings: 'Audiobookshelf Availability',
   audiobookshelfDescription:
     'Optionally sync an Audiobookshelf book library so SeerrNG can recognize matching audiobooks that are already available. This connection is read-only and does not send acquisition requests.',
@@ -147,7 +155,7 @@ const messages = defineMessages('components.Settings', {
   musicServiceSettingsDescription:
     'Configure your {serverType} server(s) below. You can connect multiple {serverType} servers, but only one of them can be marked as default. Administrators are able to override the server used to process new requests prior to approval.',
   bookServiceSettingsDescription:
-    'Connect ChaptarrNG, BookshelfNG, or another Readarr-compatible service here. Add one connection for each book format you use. Book and Audiobook connections can point to the same instance with a different Book Format selected on each. Administrators can override the server before approval.',
+    'Connect ChaptarrNG, BookshelfNG, another Readarr-compatible service, or Bindery. Bindery can handle ebooks, audiobooks, or both through one connection. Administrators can override the server before approval.',
   bookServiceApiKeyDescription:
     'No variable is needed on the SeerrNG container. For ChaptarrNG 0.9.941+, set CHAPTARR__AUTH__SEERRAPIKEY on the ChaptarrNG container, then enter that key in this connection.',
   bookFreshSetup:
@@ -175,6 +183,12 @@ const messages = defineMessages('components.Settings', {
   addWhisparr: 'Connect Whisparr Server',
   adultServiceSettingsDescription:
     'Connect the scene-focused Whisparr v3 Eros branch. Adult media uses its own request permission and stays out of ordinary movie discovery.',
+  whisparrEmpty:
+    'No Whisparr servers are connected. Connect one to enable the Adult category.',
+  whisparrLoadError: 'Whisparr server settings could not be loaded.',
+  whisparrLoadErrorHelp:
+    'Retry to check saved connections before adding another server.',
+  retryWhisparr: 'Retry',
   addSportarr: 'Connect Sportarr Server',
   sportarrDescription:
     'Search and request sports leagues in Sportarr. Sportarr uses its own root folder and monitoring defaults when SeerrNG adds a league.',
@@ -182,6 +196,8 @@ const messages = defineMessages('components.Settings', {
     'Choose one Sportarr server as the default destination for sports requests.',
   addlidarr: 'Add Lidarr Server',
   addreadarr: 'Add ChaptarrNG Server',
+  addbindery: 'Add Bindery Server',
+  bothBookFormats: 'Book and Audiobook',
   addmylar: 'Add Mylar Server',
   addkapowarr: 'Add Kapowarr Server',
   addbackissue: 'Add BackIssue Server',
@@ -259,7 +275,8 @@ interface ServerInstanceProps {
   isComics?: boolean;
   isMagazines?: boolean;
   isAdult?: boolean;
-  serviceFormat?: 'ebook' | 'audiobook';
+  serviceFormat?: 'ebook' | 'audiobook' | 'both';
+  isBindery?: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }
@@ -303,6 +320,7 @@ const ServerInstance = ({
   isSportarr = false,
   isLidarr = false,
   isReadarr = false,
+  isBindery = false,
   isAudiobookshelf = false,
   isComics = false,
   isMagazines = false,
@@ -379,12 +397,15 @@ const ServerInstance = ({
                 }
               >
                 {intl.formatMessage(
-                  serviceFormat === 'audiobook'
-                    ? messages.audiobook
-                    : messages.ebook
+                  serviceFormat === 'both'
+                    ? messages.bothBookFormats
+                    : serviceFormat === 'audiobook'
+                      ? messages.audiobook
+                      : messages.ebook
                 )}
               </Badge>
             )}
+            {isBindery && <Badge badgeType="success">Bindery</Badge>}
             {isAudiobookshelf && (
               <Badge badgeType="warning">
                 {intl.formatMessage(messages.audiobook)}
@@ -528,6 +549,7 @@ const SettingsServices = ({
   const {
     data: whisparrData,
     error: whisparrError,
+    isValidating: whisparrIsValidating,
     mutate: revalidateWhisparr,
   } = useSWR<WhisparrSettings[]>('/api/v1/settings/whisparr');
   const {
@@ -621,6 +643,10 @@ const SettingsServices = ({
     open: false,
     readarr: null,
   });
+  const [editBinderyModal, setEditBinderyModal] = useState<{
+    open: boolean;
+    bindery: ReadarrSettings | null;
+  }>({ open: false, bindery: null });
   const [editAudiobookshelfModal, setEditAudiobookshelfModal] = useState(false);
   const [editNavidromeModal, setEditNavidromeModal] = useState(false);
   const [editJellystatModal, setEditJellystatModal] = useState(false);
@@ -693,18 +719,19 @@ const SettingsServices = ({
     [intl, lidarrData?.length, radarrData?.length, sonarrData?.length]
   );
   useSettingsPageAction(newOverrideRuleAction);
-  const hasReadarrEbook = readarrData?.some(
-    (readarr) => (readarr.serviceType ?? 'ebook') === 'ebook'
+  const hasReadarrEbook = readarrData?.some((readarr) =>
+    readarrServiceSupportsFormat(readarr, 'ebook')
   );
   const hasDefaultReadarrEbook = readarrData?.some(
     (readarr) =>
-      (readarr.serviceType ?? 'ebook') === 'ebook' && readarr.isDefault
+      readarrServiceSupportsFormat(readarr, 'ebook') && readarr.isDefault
   );
-  const hasReadarrAudiobook = readarrData?.some(
-    (readarr) => readarr.serviceType === 'audiobook'
+  const hasReadarrAudiobook = readarrData?.some((readarr) =>
+    readarrServiceSupportsFormat(readarr, 'audiobook')
   );
   const hasDefaultReadarrAudiobook = readarrData?.some(
-    (readarr) => readarr.serviceType === 'audiobook' && readarr.isDefault
+    (readarr) =>
+      readarrServiceSupportsFormat(readarr, 'audiobook') && readarr.isDefault
   );
   const missingBookFormat =
     hasReadarrEbook && !hasReadarrAudiobook
@@ -712,14 +739,19 @@ const SettingsServices = ({
       : hasReadarrAudiobook && !hasReadarrEbook
         ? 'ebook'
         : undefined;
+  const readarrCompatibleConnections =
+    readarrData?.filter((readarr) => readarr.backend !== 'bindery') ?? [];
   const bookConnectionToCopy =
-    readarrData?.find((readarr) => readarr.isDefault) ?? readarrData?.[0];
+    readarrCompatibleConnections.find((readarr) => readarr.isDefault) ??
+    readarrCompatibleConnections[0];
   const ebookConnections =
-    readarrData?.filter(
-      (readarr) => (readarr.serviceType ?? 'ebook') === 'ebook'
+    readarrData?.filter((readarr) =>
+      readarrServiceSupportsFormat(readarr, 'ebook')
     ) ?? [];
   const audiobookConnections =
-    readarrData?.filter((readarr) => readarr.serviceType === 'audiobook') ?? [];
+    readarrData?.filter((readarr) =>
+      readarrServiceSupportsFormat(readarr, 'audiobook')
+    ) ?? [];
   const hasSharedBookshelf = ebookConnections.some((ebook) =>
     audiobookConnections.some(
       (audiobook) =>
@@ -967,6 +999,23 @@ const SettingsServices = ({
         hidden={activeServiceCategory !== 'tv-movies'}
         className={activeServiceCategory === 'tv-movies' ? '' : 'hidden'}
       >
+        {!currentSettings.enable4k && (showMovieServices || showTvServices) && (
+          <Alert
+            type="info"
+            title={intl.formatMessage(messages.fourKDisabledTitle)}
+          >
+            <p>{intl.formatMessage(messages.fourKDisabledDescription)}</p>
+            <Button
+              as="a"
+              href="/settings/main?settingsSearchTarget=enable4k#enable4k"
+              buttonType="default"
+              buttonSize="standard"
+              className="mt-3"
+            >
+              {intl.formatMessage(messages.fourKSettingsLink)}
+            </Button>
+          </Alert>
+        )}
         <div className="mb-6" hidden={!showMovieServices}>
           <h3 className="heading">
             {intl.formatMessage(messages.radarrsettings)}
@@ -1052,6 +1101,17 @@ const SettingsServices = ({
               revalidateReadarr();
               mutate('/api/v1/settings/public');
               setEditReadarrModal({ open: false, readarr: null });
+            }}
+          />
+        )}
+        {editBinderyModal.open && (
+          <BinderyModal
+            settings={editBinderyModal.bindery}
+            onClose={() => setEditBinderyModal({ open: false, bindery: null })}
+            onSave={() => {
+              revalidateReadarr();
+              mutate('/api/v1/settings/public');
+              setEditBinderyModal({ open: false, bindery: null });
             }}
           />
         )}
@@ -1210,6 +1270,7 @@ const SettingsServices = ({
                     })}
                   />
                 ) : (
+                  currentSettings.enable4k &&
                   radarrData.some((radarr) => radarr.is4k) &&
                   !radarrData.some(
                     (radarr) => radarr.isDefault && radarr.is4k
@@ -1275,44 +1336,71 @@ const SettingsServices = ({
           className="app-card-sub section settings-service-section"
           hidden={!showAdultServices}
         >
-          {!whisparrData && !whisparrError && <LoadingSpinner />}
-          {whisparrData && !whisparrError && (
-            <>
-              {whisparrData.length > 0 &&
-                !whisparrData.some((service) => service.isDefault) && (
-                  <Alert
-                    title={intl.formatMessage(messages.noDefaultServer, {
-                      serverType: 'Whisparr',
-                      mediaType: intl.formatMessage(messages.mediaTypeAdult),
-                    })}
-                  />
-                )}
-              <ul className="settings-service-grid">
-                {whisparrData.map((service) => (
-                  <ServerInstance
-                    key={`whisparr-config-${service.id}`}
-                    name={service.name}
-                    hostname={service.hostname}
-                    port={service.port}
-                    profileName={service.activeProfileName}
-                    isSSL={service.useSsl}
-                    isDefault={service.isDefault}
-                    isAdult
-                    externalUrl={service.externalUrl}
-                    onEdit={() =>
-                      setEditWhisparrModal({ open: true, whisparr: service })
-                    }
-                    onDelete={() =>
-                      setDeleteServerModal({
-                        open: true,
-                        serverId: service.id,
-                        type: 'whisparr',
-                      })
-                    }
-                  />
-                ))}
-                <li className="col-span-1 h-32 rounded-lg border-2 border-dashed border-gray-400 shadow sm:h-44">
-                  <div className="flex h-full w-full items-center justify-center">
+          {!whisparrData && (!whisparrError || whisparrIsValidating) && (
+            <LoadingSpinner />
+          )}
+          {whisparrError && (
+            <Alert
+              type="error"
+              title={intl.formatMessage(messages.whisparrLoadError)}
+            >
+              <p className="mb-3">
+                {intl.formatMessage(messages.whisparrLoadErrorHelp)}
+              </p>
+              <Button
+                buttonType="default"
+                buttonSize="sm"
+                disabled={whisparrIsValidating}
+                onClick={() => void revalidateWhisparr()}
+              >
+                {intl.formatMessage(messages.retryWhisparr)}
+              </Button>
+            </Alert>
+          )}
+          {whisparrData?.length === 0 && !whisparrError && (
+            <p className="description mb-4">
+              {intl.formatMessage(messages.whisparrEmpty)}
+            </p>
+          )}
+          {whisparrData &&
+            whisparrData.length > 0 &&
+            !whisparrData.some((service) => service.isDefault) && (
+              <Alert
+                title={intl.formatMessage(messages.noDefaultServer, {
+                  serverType: 'Whisparr',
+                  mediaType: intl.formatMessage(messages.mediaTypeAdult),
+                })}
+              />
+            )}
+          {(whisparrData || whisparrError) && (
+            <ul className="settings-service-grid">
+              {whisparrData?.map((service) => (
+                <ServerInstance
+                  key={`whisparr-config-${service.id}`}
+                  name={service.name}
+                  hostname={service.hostname}
+                  port={service.port}
+                  profileName={service.activeProfileName}
+                  isSSL={service.useSsl}
+                  isDefault={service.isDefault}
+                  isAdult
+                  externalUrl={service.externalUrl}
+                  onEdit={() =>
+                    setEditWhisparrModal({ open: true, whisparr: service })
+                  }
+                  onDelete={() =>
+                    setDeleteServerModal({
+                      open: true,
+                      serverId: service.id,
+                      type: 'whisparr',
+                    })
+                  }
+                />
+              ))}
+              {((whisparrData && !whisparrError) ||
+                (whisparrError && !whisparrData && !whisparrIsValidating)) && (
+                <li className="settings-service-add-card">
+                  <div className="settings-service-add-card-content">
                     <Button
                       buttonType="success"
                       buttonSize="standard"
@@ -1321,13 +1409,16 @@ const SettingsServices = ({
                         setEditWhisparrModal({ open: true, whisparr: null })
                       }
                     >
-                      <PlusIcon />
+                      <PlusIcon
+                        className="settings-service-add-icon"
+                        aria-hidden="true"
+                      />
                       <span>{intl.formatMessage(messages.addWhisparr)}</span>
                     </Button>
                   </div>
                 </li>
-              </ul>
-            </>
+              )}
+            </ul>
           )}
         </div>
         <div className="mt-10 mb-6" hidden={!showTvServices}>
@@ -1369,6 +1460,7 @@ const SettingsServices = ({
                     })}
                   />
                 ) : (
+                  currentSettings.enable4k &&
                   sonarrData.some((sonarr) => sonarr.is4k) &&
                   !sonarrData.some(
                     (sonarr) => sonarr.isDefault && sonarr.is4k
@@ -1688,10 +1780,15 @@ const SettingsServices = ({
                     profileName={readarr.activeProfileName}
                     isSSL={readarr.useSsl}
                     isReadarr={true}
+                    isBindery={readarr.backend === 'bindery'}
                     serviceFormat={readarr.serviceType ?? 'ebook'}
                     isDefault={readarr.isDefault}
                     externalUrl={readarr.externalUrl}
-                    onEdit={() => setEditReadarrModal({ open: true, readarr })}
+                    onEdit={() =>
+                      readarr.backend === 'bindery'
+                        ? setEditBinderyModal({ open: true, bindery: readarr })
+                        : setEditReadarrModal({ open: true, readarr })
+                    }
                     onDelete={() =>
                       setDeleteServerModal({
                         open: true,
@@ -1712,6 +1809,20 @@ const SettingsServices = ({
                     >
                       <PlusIcon />
                       <span>{intl.formatMessage(messages.addreadarr)}</span>
+                    </Button>
+                  </div>
+                </li>
+                <li className="col-span-1 h-32 rounded-lg border-2 border-dashed border-gray-400 shadow sm:h-44">
+                  <div className="flex h-full w-full items-center justify-center">
+                    <Button
+                      buttonType="success"
+                      buttonSize="standard"
+                      onClick={() =>
+                        setEditBinderyModal({ open: true, bindery: null })
+                      }
+                    >
+                      <PlusIcon />
+                      <span>{intl.formatMessage(messages.addbindery)}</span>
                     </Button>
                   </div>
                 </li>

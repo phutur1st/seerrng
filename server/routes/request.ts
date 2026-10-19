@@ -5,6 +5,7 @@ import SonarrAPI from '@server/api/servarr/sonarr';
 import SportarrAPI from '@server/api/servarr/sportarr';
 import TheMovieDb from '@server/api/themoviedb';
 import Tvdb from '@server/api/tvdb';
+import { EPISODE_QUEUE_ACCESS_STATUS } from '@server/constants/episodeQueueAccess';
 import {
   MediaRequestFailureReason,
   MediaRequestStatus,
@@ -101,6 +102,7 @@ import { normalizeStashDbId } from '@server/lib/stashdbIdentity';
 import {
   TvSeasonWatchGateError,
   enforceTvSeasonWatchGate,
+  isTvSeasonWatchGateEnabledForUser,
 } from '@server/lib/tvSeasonWatchGate';
 import {
   UserMutationActorUnauthorizedError,
@@ -597,6 +599,12 @@ const getWatchAheadEligibilityError = (
   if (requestUser.id !== actorId) {
     return 'Only the request owner can enable the requested episode queue.';
   }
+  if (
+    requestUser.episodeQueueAccessStatus !==
+    EPISODE_QUEUE_ACCESS_STATUS.APPROVED
+  ) {
+    return 'Request Episode Queue access from your profile and wait for approval.';
+  }
   if (!hasMediaRequestPermission(requestUser, MediaType.TV, is4k)) {
     return 'Your account does not have permission to request TV.';
   }
@@ -1085,6 +1093,29 @@ const sanitizeMediaRequestBody = (
         },
       };
     }
+  }
+
+  if (
+    bodyObject.watchAheadUsesUserDefault !== undefined &&
+    typeof bodyObject.watchAheadUsesUserDefault !== 'boolean'
+  ) {
+    return {
+      error: {
+        status: 400,
+        message: 'watchAheadUsesUserDefault must be a boolean.',
+      },
+    };
+  }
+  if (
+    bodyObject.watchAheadUsesUserDefault !== undefined &&
+    mediaType !== MediaType.TV
+  ) {
+    return {
+      error: {
+        status: 400,
+        message: 'watchAheadUsesUserDefault is only valid for TV requests.',
+      },
+    };
   }
 
   if (mediaType === MediaType.MUSIC && bodyObject.mediaId !== undefined) {
@@ -1605,6 +1636,8 @@ const sanitizeMediaRequestBody = (
     seasonRequests: seasonRequests.value,
     watchAheadEpisodeCount: bodyObject.watchAheadEpisodeCount as
       number | undefined,
+    watchAheadUsesUserDefault: bodyObject.watchAheadUsesUserDefault as
+      boolean | undefined,
     requestQuotaApproval: bodyObject.requestQuotaApproval as
       boolean | undefined,
   } as MediaRequestBody;
@@ -2171,7 +2204,9 @@ requestRoutes.get<
     const sonarrSettings = canHydrateServiceProfiles ? settings.sonarr : [];
     const radarrSettings = canHydrateServiceProfiles ? settings.radarr : [];
     const lidarrSettings = canHydrateServiceProfiles ? settings.lidarr : [];
-    const readarrSettings = canHydrateServiceProfiles ? settings.readarr : [];
+    const readarrSettings = canHydrateServiceProfiles
+      ? settings.readarr.filter((service) => service.backend !== 'bindery')
+      : [];
     const sportarrSettings = canHydrateServiceProfiles ? settings.sportarr : [];
     const referencedProfileServiceIds = new Map<MediaType, Set<number>>();
     for (const item of requests) {
@@ -2335,7 +2370,8 @@ requestRoutes.get<
                 new ReadarrAPI({
                   apiKey: current.apiKey,
                   url: ReadarrAPI.buildUrl(current, '/api/v1'),
-                  mediaType: current.serviceType ?? 'ebook',
+                  mediaType:
+                    current.serviceType === 'audiobook' ? 'audiobook' : 'ebook',
                 }).getProfiles()
             ).catch((error) => {
               logRequestServiceProfileFailure(
@@ -3829,7 +3865,8 @@ requestRoutes.put<{ requestId: string }>(
       if (!requestId) {
         return next({ status: 404, message: 'Request not found.' });
       }
-      const body = req.body as { episodeCount?: unknown } | undefined;
+      const body = req.body as
+        { episodeCount?: unknown; useUserDefault?: unknown } | undefined;
       const episodeCount = body?.episodeCount;
       if (
         !Number.isSafeInteger(episodeCount) ||
@@ -3841,7 +3878,17 @@ requestRoutes.put<{ requestId: string }>(
           message: 'episodeCount must be an integer from 0 to 5.',
         });
       }
+      if (
+        body?.useUserDefault !== undefined &&
+        typeof body.useUserDefault !== 'boolean'
+      ) {
+        return next({
+          status: 400,
+          message: 'useUserDefault must be a boolean.',
+        });
+      }
       const parsedEpisodeCount = Number(episodeCount);
+      const usesUserDefault = body?.useUserDefault === true;
 
       const requestRepository = getRepository(MediaRequest);
       const initialRequest = await requestRepository.findOne({
@@ -3901,7 +3948,11 @@ requestRoutes.put<{ requestId: string }>(
                     });
                   }
 
-                  if (parsedEpisodeCount > 0) {
+                  const nextEpisodeCount = usesUserDefault
+                    ? (current.requestedBy.settings
+                        ?.episodeQueueDefaultEpisodeCount ?? 0)
+                    : parsedEpisodeCount;
+                  if (nextEpisodeCount > 0) {
                     if (
                       ![
                         MediaRequestStatus.PENDING,
@@ -3939,9 +3990,12 @@ requestRoutes.put<{ requestId: string }>(
 
                   const previousEpisodeCount =
                     current.watchAheadEpisodeCount ?? 0;
-                  const changed = previousEpisodeCount !== parsedEpisodeCount;
+                  const changed =
+                    previousEpisodeCount !== nextEpisodeCount ||
+                    current.watchAheadUsesUserDefault !== usesUserDefault;
                   await repository.update(current.id, {
-                    watchAheadEpisodeCount: parsedEpisodeCount,
+                    watchAheadEpisodeCount: nextEpisodeCount,
+                    watchAheadUsesUserDefault: usesUserDefault,
                     ...(changed
                       ? {
                           watchAheadLastSeason: null,
@@ -3972,7 +4026,9 @@ requestRoutes.put<{ requestId: string }>(
                               : RequestStatusStage.APPROVED;
                     const historyMessage = `Episode queue changed from ${formatEpisodeQueueSetting(
                       previousEpisodeCount
-                    )} to ${formatEpisodeQueueSetting(parsedEpisodeCount)}.`;
+                    )} to ${formatEpisodeQueueSetting(nextEpisodeCount)}${
+                      usesUserDefault ? ' (account default)' : ''
+                    }.`;
 
                     await statusEventRepository.insert(
                       new MediaRequestStatusEvent({
@@ -4315,7 +4371,10 @@ requestRoutes.put<{ requestId: string }>(
                         body.format ?? request.bookFormat ?? 'ebook';
                     }
                   } else if (request.type === MediaType.TV) {
-                    if (body.watchAheadEpisodeCount !== undefined) {
+                    if (
+                      body.watchAheadEpisodeCount !== undefined ||
+                      body.watchAheadUsesUserDefault !== undefined
+                    ) {
                       if (requestUser.id !== actor.id) {
                         return next({
                           status: 403,
@@ -4323,7 +4382,15 @@ requestRoutes.put<{ requestId: string }>(
                             'Only the request owner can change the requested episode queue.',
                         });
                       }
-                      if (body.watchAheadEpisodeCount > 0) {
+                      const usesUserDefault =
+                        body.watchAheadUsesUserDefault ??
+                        request.watchAheadUsesUserDefault;
+                      const nextEpisodeCount = usesUserDefault
+                        ? (requestUser.settings
+                            ?.episodeQueueDefaultEpisodeCount ?? 0)
+                        : (body.watchAheadEpisodeCount ??
+                          request.watchAheadEpisodeCount);
+                      if (nextEpisodeCount > 0) {
                         const eligibilityError = getWatchAheadEligibilityError(
                           requestUser,
                           actor.id,
@@ -4349,10 +4416,10 @@ requestRoutes.put<{ requestId: string }>(
                         }
                       }
                       const watchAheadChanged =
-                        request.watchAheadEpisodeCount !==
-                        body.watchAheadEpisodeCount;
-                      request.watchAheadEpisodeCount =
-                        body.watchAheadEpisodeCount;
+                        request.watchAheadEpisodeCount !== nextEpisodeCount ||
+                        request.watchAheadUsesUserDefault !== usesUserDefault;
+                      request.watchAheadEpisodeCount = nextEpisodeCount;
+                      request.watchAheadUsesUserDefault = usesUserDefault;
                       if (watchAheadChanged) {
                         request.watchAheadLastSeason = null;
                         request.watchAheadLastEpisode = null;
@@ -4558,7 +4625,7 @@ requestRoutes.put<{ requestId: string }>(
                       : newSeasonSelections;
 
                     if (
-                      getSettings().main.tvSeasonWatchGateEnabled &&
+                      isTvSeasonWatchGateEnabledForUser(request.requestedBy) &&
                       seasonWatchGateSelections.some(
                         ({ seasonNumber }) => seasonNumber > 1
                       ) &&

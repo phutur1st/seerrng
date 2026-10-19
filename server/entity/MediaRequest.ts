@@ -9,6 +9,7 @@ import WhisparrAPI from '@server/api/servarr/whisparr';
 import TheMovieDb from '@server/api/themoviedb';
 import { ANIME_KEYWORD_ID } from '@server/api/themoviedb/constants';
 import type { TmdbKeyword } from '@server/api/themoviedb/interfaces';
+import { EPISODE_QUEUE_ACCESS_STATUS } from '@server/constants/episodeQueueAccess';
 import type { MediaRequestFailureReason } from '@server/constants/media';
 import {
   MediaRequestStatus,
@@ -81,6 +82,7 @@ import { normalizeStashDbId } from '@server/lib/stashdbIdentity';
 import {
   enforceTvSeasonWatchGate,
   filterTvSeasonSelectionsByWatchGate,
+  isTvSeasonWatchGateEnabledForUser,
 } from '@server/lib/tvSeasonWatchGate';
 import {
   isUserCredentialVersionCurrent,
@@ -99,6 +101,7 @@ import {
   getPreferredLanguage,
   languageNameMatchesCode,
 } from '@server/utils/preferredLanguage';
+import { readarrServiceSupportsFormat } from '@server/utils/readarrService';
 import {
   AfterLoad,
   Column,
@@ -423,6 +426,18 @@ export class MediaRequest {
     options: InternalMediaRequestOptions = {}
   ): Promise<MediaRequest> {
     requestBody = { ...requestBody, is4k: requestBody.is4k ?? false };
+    if (
+      requestBody.is4k &&
+      (requestBody.mediaType === MediaType.MOVIE ||
+        requestBody.mediaType === MediaType.TV) &&
+      getSettings().main.enable4k === false
+    ) {
+      return Promise.reject(
+        new RequestPermissionError(
+          '4K movie and TV requests are disabled by the administrator.'
+        )
+      );
+    }
     if (requestBody.mediaType === MediaType.ADULT) {
       const stashDbId = normalizeStashDbId(String(requestBody.mediaId ?? ''));
       if (!stashDbId) {
@@ -543,7 +558,7 @@ export class MediaRequest {
       );
     }
     if (
-      getSettings().main.tvSeasonWatchGateEnabled &&
+      isTvSeasonWatchGateEnabledForUser(requestUser) &&
       requestBody.mediaType === MediaType.TV &&
       !user.hasPermission([Permission.MANAGE_REQUESTS, Permission.ADMIN], {
         type: 'or',
@@ -554,10 +569,13 @@ export class MediaRequest {
       // linked account fields needed for the server-side watch check.
       const requestUserWithPlaybackCredentials = await userRepository
         .createQueryBuilder('user')
+        .leftJoin('user.settings', 'userSettings')
         .addSelect([
           'user.plexToken',
           'user.jellyfinAuthToken',
           'user.jellyfinDeviceId',
+          'userSettings.id',
+          'userSettings.episodeQueueDefaultEpisodeCount',
         ])
         .where('user.id = :requestUserId', { requestUserId: requestUser.id })
         .getOne();
@@ -568,7 +586,13 @@ export class MediaRequest {
       requestUser = requestUserWithPlaybackCredentials;
     }
 
-    const watchAheadEpisodeCount = requestBody.watchAheadEpisodeCount ?? 0;
+    const watchAheadUsesUserDefault =
+      requestBody.watchAheadUsesUserDefault ??
+      (requestBody.watchAheadEpisodeCount === undefined &&
+        requestUser.id === user.id);
+    let watchAheadEpisodeCount = watchAheadUsesUserDefault
+      ? (requestUser.settings?.episodeQueueDefaultEpisodeCount ?? 0)
+      : (requestBody.watchAheadEpisodeCount ?? 0);
     if (
       !Number.isSafeInteger(watchAheadEpisodeCount) ||
       watchAheadEpisodeCount < 0 ||
@@ -579,16 +603,36 @@ export class MediaRequest {
       );
     }
     if (watchAheadEpisodeCount > 0) {
-      if (
+      const eligibilityError =
         requestBody.mediaType !== MediaType.TV ||
-        requestUser.id !== user.id ||
+        requestUser.episodeQueueAccessStatus !==
+          EPISODE_QUEUE_ACCESS_STATUS.APPROVED ||
+        !hasMediaRequestPermission(
+          requestUser,
+          MediaType.TV,
+          Boolean(requestBody.is4k)
+        ) ||
         !hasWatchAheadMediaServerLink(
           requestUser,
           settings.main.mediaServerType
-        )
+        );
+      if (watchAheadUsesUserDefault && eligibilityError) {
+        watchAheadEpisodeCount = 0;
+      } else if (
+        requestBody.mediaType !== MediaType.TV ||
+        (!watchAheadUsesUserDefault && requestUser.id !== user.id) ||
+        eligibilityError
       ) {
         throw new RequestPermissionError(
           'The requested episode queue can only be enabled by the linked owner of a TV request.'
+        );
+      }
+      if (
+        requestBody.seasonRequests?.length !== 1 ||
+        requestBody.seasonRequests[0].episodeNumbers?.length !== 1
+      ) {
+        throw new RequestPermissionError(
+          'Episode Queue requests must specify exactly one starting episode.'
         );
       }
     }
@@ -722,8 +766,10 @@ export class MediaRequest {
       }
       if (
         requestBody.mediaType === MediaType.BOOK &&
-        ((selectedService as ReadarrSettings).serviceType ?? 'ebook') !==
-          (requestBody.format === 'audiobook' ? 'audiobook' : 'ebook')
+        !readarrServiceSupportsFormat(
+          selectedService as ReadarrSettings,
+          requestBody.format === 'audiobook' ? 'audiobook' : 'ebook'
+        )
       ) {
         throw new ServiceConfigurationError(
           `Selected Bookshelf server is not configured for ${
@@ -979,16 +1025,22 @@ export class MediaRequest {
       const bookshelfCatalogServiceId = parseBookshelfBookId(
         requestBody.mediaId?.toString() ?? ''
       )?.serviceId;
+      const selectedBookshelf =
+        useAdvancedOptions && requestBody.serverId != null
+          ? settings.readarr.find(
+              (service) => service.id === requestBody.serverId
+            )
+          : undefined;
       const defaultBookshelfFor = (serviceType: 'ebook' | 'audiobook') =>
         settings.readarr.find(
           (service) =>
             service.id === bookshelfCatalogServiceId &&
-            (service.serviceType ?? 'ebook') === serviceType
+            readarrServiceSupportsFormat(service, serviceType)
         ) ??
         settings.readarr.find(
           (service) =>
             service.isDefault &&
-            (service.serviceType ?? 'ebook') === serviceType
+            readarrServiceSupportsFormat(service, serviceType)
         );
       const services: {
         serviceType: ServarrServiceType;
@@ -998,7 +1050,16 @@ export class MediaRequest {
         serviceType: ServarrServiceType,
         serviceId: number | null | undefined
       ) => {
-        if (serviceId != null) services.push({ serviceType, serviceId });
+        if (
+          serviceId != null &&
+          !services.some(
+            (service) =>
+              service.serviceType === serviceType &&
+              service.serviceId === serviceId
+          )
+        ) {
+          services.push({ serviceType, serviceId });
+        }
       };
 
       if (requestBody.mediaType === MediaType.MOVIE) {
@@ -1085,19 +1146,33 @@ export class MediaRequest {
         if (format === 'both') {
           addService(
             'readarr',
-            useAdvancedOptions && requestBody.serverId != null
-              ? requestBody.serverId
-              : defaultBookshelfFor('ebook')?.id
+            (selectedBookshelf &&
+            readarrServiceSupportsFormat(selectedBookshelf, 'ebook')
+              ? selectedBookshelf
+              : defaultBookshelfFor('ebook')
+            )?.id
           );
-          addService('readarr', defaultBookshelfFor('audiobook')?.id);
+          addService(
+            'readarr',
+            (selectedBookshelf &&
+            readarrServiceSupportsFormat(selectedBookshelf, 'audiobook')
+              ? selectedBookshelf
+              : defaultBookshelfFor('audiobook')
+            )?.id
+          );
         } else {
           addService(
             'readarr',
-            useAdvancedOptions && requestBody.serverId != null
-              ? requestBody.serverId
+            (selectedBookshelf &&
+            readarrServiceSupportsFormat(
+              selectedBookshelf,
+              format === 'audiobook' ? 'audiobook' : 'ebook'
+            )
+              ? selectedBookshelf
               : defaultBookshelfFor(
                   format === 'audiobook' ? 'audiobook' : 'ebook'
-                )?.id
+                )
+            )?.id
           );
         }
       }
@@ -1434,7 +1509,7 @@ export class MediaRequest {
         requestedServerId !== undefined &&
         requestedServerId !== null &&
         requestedServer &&
-        (requestedServer.serviceType ?? 'ebook') !== requestedServiceType
+        !readarrServiceSupportsFormat(requestedServer, requestedServiceType)
       ) {
         throw new ServiceConfigurationError(
           `Selected Bookshelf server is not configured for ${requestedServiceType}.`
@@ -1448,12 +1523,12 @@ export class MediaRequest {
         settings.readarr.find(
           (readarr) =>
             readarr.id === bookshelfCatalogServiceId &&
-            (readarr.serviceType ?? 'ebook') === serviceType
+            readarrServiceSupportsFormat(readarr, serviceType)
         ) ??
         settings.readarr.find(
           (readarr) =>
             readarr.isDefault &&
-            (readarr.serviceType ?? 'ebook') === serviceType
+            readarrServiceSupportsFormat(readarr, serviceType)
         );
       const defaultReadarr = findBookshelfService(requestedServiceType);
       const defaultEbookReadarr = findBookshelfService('ebook');
@@ -1474,7 +1549,11 @@ export class MediaRequest {
         );
       }
 
-      const selectedReadarr = requestedServer ?? defaultReadarr;
+      const selectedReadarr =
+        requestedServer &&
+        readarrServiceSupportsFormat(requestedServer, requestedServiceType)
+          ? requestedServer
+          : defaultReadarr;
 
       const createBookTarget = (
         service: ReadarrSettings,
@@ -1506,13 +1585,26 @@ export class MediaRequest {
       });
       const bookTargets: MediaRequestServiceTarget[] = [];
       if (requestedBookFormat === 'both') {
-        const ebookService = requestedServer ?? defaultEbookReadarr;
+        const ebookService =
+          (requestedServer &&
+          readarrServiceSupportsFormat(requestedServer, 'ebook')
+            ? requestedServer
+            : undefined) ?? defaultEbookReadarr;
         if (ebookService) {
           bookTargets.push(createBookTarget(ebookService, 'ebook', true));
         }
-        if (defaultAudiobookReadarr) {
+        const audiobookService =
+          (requestedServer &&
+          readarrServiceSupportsFormat(requestedServer, 'audiobook')
+            ? requestedServer
+            : undefined) ?? defaultAudiobookReadarr;
+        if (audiobookService) {
           bookTargets.push(
-            createBookTarget(defaultAudiobookReadarr, 'audiobook', false)
+            createBookTarget(
+              audiobookService,
+              'audiobook',
+              audiobookService.id === requestedServer?.id
+            )
           );
         }
       } else if (selectedReadarr) {
@@ -2602,13 +2694,17 @@ export class MediaRequest {
 
     const resolvedTvdbId = media.tvdbId ?? tvdbId;
     if (
-      (requestBody.watchAheadEpisodeCount ?? 0) > 0 &&
+      watchAheadEpisodeCount > 0 &&
       (!Number.isSafeInteger(Number(resolvedTvdbId)) ||
         Number(resolvedTvdbId) <= 0)
     ) {
-      throw new ServiceConfigurationError(
-        'The requested episode queue requires a valid TVDB identity for this series.'
-      );
+      if (watchAheadUsesUserDefault) {
+        watchAheadEpisodeCount = 0;
+      } else {
+        throw new ServiceConfigurationError(
+          'The requested episode queue requires a valid TVDB identity for this series.'
+        );
+      }
     }
 
     const useAdvancedOptions = canUseAdvancedRequestOptions(user);
@@ -3000,7 +3096,7 @@ export class MediaRequest {
         : requestedSeasons.map((seasonNumber) => ({ seasonNumber }));
       const isServerStagedFullSeriesRequest =
         !settings.main.partialRequestsEnabled &&
-        settings.main.tvSeasonWatchGateEnabled &&
+        isTvSeasonWatchGateEnabledForUser(requestUser) &&
         requestBody.seasons === 'all' &&
         !requestBody.seasonRequests?.length &&
         watchAheadEpisodeCount === 0;
@@ -3050,7 +3146,7 @@ export class MediaRequest {
           )
         : undefined;
       if (promotablePendingRequest) {
-        if (getSettings().main.tvSeasonWatchGateEnabled) {
+        if (isTvSeasonWatchGateEnabledForUser(requestUser)) {
           await enforceTvSeasonWatchGate(
             user,
             requestUser,
@@ -3139,7 +3235,7 @@ export class MediaRequest {
         throw new NoSeasonsAvailableError('No seasons available to request');
       }
 
-      if (getSettings().main.tvSeasonWatchGateEnabled) {
+      if (isTvSeasonWatchGateEnabledForUser(requestUser)) {
         const watchGateCatalog = tmdbMediaShow.seasons.map((season) => ({
           seasonNumber: season.season_number,
           episodeCount: season.episode_count,
@@ -3245,6 +3341,7 @@ export class MediaRequest {
           modifiedBy: autoApproved ? user : undefined,
           is4k: requestBody.is4k,
           watchAheadEpisodeCount,
+          watchAheadUsesUserDefault,
           serverId,
           profileId: profileId,
           rootFolder: rootFolder,
@@ -3408,6 +3505,10 @@ export class MediaRequest {
   /** Number of upcoming unwatched episodes to keep requested automatically. */
   @Column({ type: 'integer', default: 0 })
   public watchAheadEpisodeCount = 0;
+
+  /** Whether the episode count follows the request owner's saved preference. */
+  @Column({ type: 'boolean', default: true })
+  public watchAheadUsesUserDefault = true;
 
   /** Highest episode whose watched state has been handled by watch-ahead. */
   @Column({ type: 'integer', nullable: true })

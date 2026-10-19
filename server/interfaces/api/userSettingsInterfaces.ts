@@ -61,6 +61,38 @@ export interface UserSettingsCardTextResponse {
 
 export type UserRequestRootFolders = Record<string, string>;
 
+export type TvSeasonWatchGateStatus =
+  'off' | 'pending' | 'approved' | 'enabled' | 'denied';
+
+export interface TvSeasonWatchGateAccessResponse {
+  status: TvSeasonWatchGateStatus;
+  requestedAt: Date | null;
+  globallyEnabled: boolean;
+}
+
+export interface TvSeasonWatchGateApprovalRequest {
+  id: number;
+  displayName: string;
+  avatar: string;
+  requestedAt: Date | null;
+}
+
+export type EpisodeQueueAccessStatus =
+  'off' | 'pending' | 'approved' | 'denied';
+
+export interface EpisodeQueueAccessResponse {
+  status: EpisodeQueueAccessStatus;
+  requestedAt: Date | null;
+  defaultEpisodeCount: number;
+}
+
+export interface EpisodeQueueApprovalRequest {
+  id: number;
+  displayName: string;
+  avatar: string;
+  requestedAt: Date | null;
+}
+
 export type { BookHomeSectionPreference };
 
 export type DetailDisclosurePin =

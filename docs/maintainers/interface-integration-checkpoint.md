@@ -2014,3 +2014,7 @@ procedures in historical entries. See [the current integration ledger](hom3lab-u
 for the recovery ref, preservation inventory, conflict decision, scoped shared
 CSS ownership correction, test results and outstanding evidence. This checkpoint
 entry records AI-assisted work; it does not assert a completed gate or deployment.
+
+## Hom3lab upstream and Sonarr follow-up — October 19, 2026
+
+The current isolated candidate integrates upstream `f2d83c0e6553e6a7be858188e348d052b621d342` onto fork `1949db7bf0ebb5c28d5d98660820a6c4ef5a10bb`. See [the integration ledger](hom3lab-upstream-integration-20261019.md) for recovery, Sonarr diagnosis, preservation decisions and actual check status. This AI-assisted integration uses native CI; historical retired-engine procedures do not apply. Candidate verification remains in progress.

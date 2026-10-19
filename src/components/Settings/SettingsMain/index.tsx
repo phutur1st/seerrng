@@ -87,6 +87,9 @@ const messages = defineMessages('components.Settings.SettingsMain', {
   hideRequested: 'Hide Requested Media',
   hideRequestedTip:
     'Hide media that has been requested from the discover pages but not search results',
+  enable4k: 'Enable 4K',
+  enable4kTip:
+    'This global switch controls 4K movie and TV requests, issue reports, and separate availability tracking. The “4K Server” option on a Radarr or Sonarr connection only marks a separate instance for 4K; it does not enable 4K. When off, 4K options are hidden and future scans stop recording 4K separately. Existing request and issue records are retained.',
   cacheImages: 'Enable Image Caching',
   cacheImagesTip:
     'Cache externally sourced images (requires a significant amount of disk space)',
@@ -99,7 +102,7 @@ const messages = defineMessages('components.Settings.SettingsMain', {
   partialRequestsEnabled: 'Allow Partial Series Requests',
   tvSeasonWatchGateEnabled: 'Require the Previous Season to Be Watched',
   tvSeasonWatchGateEnabledTip:
-    'When enabled, users must watch every episode of the previous regular season before requesting a later season. Specials are excluded. Requests need playback progress from the user’s linked Plex, Jellyfin, or Emby account. Administrators and request managers can override this rule.',
+    'When enabled, this rule applies to everyone. Otherwise, users can request approval from Profile → TV Season Rule, then turn it on for their own account. Turning it off does not remove their approval. Later-season requests require every episode of the previous regular season to be watched. Specials are excluded; playback is checked against the requester’s linked Plex, Jellyfin, or Emby account. Administrators and request managers can override the rule.',
   personMovieBulkRequestsEnabled:
     'Allow Requesting All Movies From a Person Page',
   personMovieBulkRequestsEnabledTip:
@@ -255,6 +258,7 @@ const SettingsMain = () => {
           blocklistedTags: data?.blocklistedTags,
           blocklistedTagsLimit: data?.blocklistedTagsLimit || 50,
           partialRequestsEnabled: data?.partialRequestsEnabled,
+          enable4k: data?.enable4k ?? true,
           tvSeasonWatchGateEnabled: data?.tvSeasonWatchGateEnabled ?? false,
           personMovieBulkRequestsEnabled:
             data?.personMovieBulkRequestsEnabled ?? false,
@@ -294,6 +298,7 @@ const SettingsMain = () => {
               blocklistedTags: values.blocklistedTags,
               blocklistedTagsLimit: values.blocklistedTagsLimit,
               partialRequestsEnabled: values.partialRequestsEnabled,
+              enable4k: values.enable4k,
               tvSeasonWatchGateEnabled: values.tvSeasonWatchGateEnabled,
               personMovieBulkRequestsEnabled:
                 values.personMovieBulkRequestsEnabled,
@@ -669,6 +674,21 @@ const SettingsMain = () => {
                           'hideBlocklisted',
                           !values.hideBlocklisted
                         );
+                      }}
+                    />
+                  </SettingsFormRow>
+                  <SettingsFormRow
+                    htmlFor="enable4k"
+                    label={intl.formatMessage(messages.enable4k)}
+                    description={intl.formatMessage(messages.enable4kTip)}
+                    labelClassName="checkbox-label"
+                  >
+                    <SettingsField
+                      type="checkbox"
+                      id="enable4k"
+                      name="enable4k"
+                      onChange={() => {
+                        setFieldValue('enable4k', !values.enable4k);
                       }}
                     />
                   </SettingsFormRow>

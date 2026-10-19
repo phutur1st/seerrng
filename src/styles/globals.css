@@ -10303,3 +10303,101 @@
 .ptr--box {
   margin-bottom: -13px !important;
 }
+
+/* Shared responsive media detail arrangement; preserves upstream cascade. */
+.media-detail-body-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'actions'
+    'information';
+  align-items: start;
+  gap: var(--card-spacing);
+}
+
+.media-detail-information-column {
+  grid-area: information;
+  min-width: 0;
+}
+
+.media-detail-actions-column {
+  grid-area: actions;
+  min-width: 0;
+}
+
+.media-detail-action-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--card-spacing);
+}
+
+.media-detail-action-panel > .media-rating-row {
+  min-height: 0;
+  padding-top: 0;
+}
+
+.media-detail-action-panel .media-request-action-row {
+  margin-top: 0;
+  flex-wrap: wrap;
+}
+
+.media-detail-action-panel .media-primary-action-row {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.media-detail-action-panel .media-request-search-action {
+  flex-wrap: wrap;
+}
+
+@media (min-width: 1024px) {
+  .media-detail-body-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 23rem);
+    grid-template-areas: 'information actions';
+  }
+}
+
+[data-page-layout='embedded'] .media-detail-body-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'actions'
+    'information';
+}
+
+/* Shared settings content controls; upstream typography and form behavior. */
+.settings-page-content .heading,
+.settings-page-content .settings-group-heading {
+  font-size: var(--text-sm);
+}
+
+.settings-page-content .description,
+.settings-page-content .settings-group-description,
+.settings-page-content .label-tip,
+.settings-page-content .settings-form-row-description {
+  font-size: var(--text-sm);
+}
+
+.settings-page-content
+  .settings-form-row-compact-description
+  .settings-form-row-description {
+  font-size: var(--text-xs);
+}
+
+.settings-page-content .react-select__input-container {
+  margin: 0;
+  padding-block: 0;
+  font-size: var(--text-xs);
+  line-height: 1rem;
+}
+
+.settings-page-content .react-select__input {
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-xs);
+  line-height: 1rem;
+}
+
+.settings-page-content .settings-metadata-actions {
+  margin-top: calc(var(--card-spacing) + 0.625rem);
+}

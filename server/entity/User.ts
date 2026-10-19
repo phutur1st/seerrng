@@ -1,4 +1,6 @@
+import type { EpisodeQueueAccessStatus } from '@server/constants/episodeQueueAccess';
 import { MediaRequestStatus, MediaType } from '@server/constants/media';
+import type { TvSeasonWatchGateStatus } from '@server/constants/tvSeasonWatchGate';
 import { UserType } from '@server/constants/user';
 import { getRepository } from '@server/datasource';
 import SoftwareRequest from '@server/entity/SoftwareRequest';
@@ -88,6 +90,10 @@ export class User {
     'settings',
     'requestServices',
     'linkedAccounts',
+    'tvSeasonWatchGateStatus',
+    'tvSeasonWatchGateRequestedAt',
+    'episodeQueueAccessStatus',
+    'episodeQueueAccessRequestedAt',
   ];
 
   static readonly credentialFields: (keyof User)[] = [
@@ -267,6 +273,18 @@ export class User {
   /** null inherits the instance age-gate default; true hides mature content. */
   @Column({ type: 'boolean', nullable: true })
   public contentRestricted?: boolean | null;
+
+  @Column({ type: 'varchar', length: 16, default: 'off' })
+  public tvSeasonWatchGateStatus: TvSeasonWatchGateStatus = 'off';
+
+  @DbAwareColumn({ type: 'datetime', nullable: true })
+  public tvSeasonWatchGateRequestedAt?: Date | null;
+
+  @Column({ type: 'varchar', length: 16, default: 'off' })
+  public episodeQueueAccessStatus: EpisodeQueueAccessStatus = 'off';
+
+  @DbAwareColumn({ type: 'datetime', nullable: true })
+  public episodeQueueAccessRequestedAt?: Date | null;
 
   @Column({ nullable: true })
   public adultQuotaLimit?: number;

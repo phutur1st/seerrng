@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import { before, beforeEach, describe, it, mock } from 'node:test';
 
 import JellyfinAPI from '@server/api/jellyfin';
+import { MediaRequestStatus, MediaType } from '@server/constants/media';
 import { MediaServerType } from '@server/constants/server';
 import { UserType } from '@server/constants/user';
 import { getRepository } from '@server/datasource';
+import Media from '@server/entity/Media';
+import { MediaRequest } from '@server/entity/MediaRequest';
 import { User } from '@server/entity/User';
 import { Permission } from '@server/lib/permissions';
 import { getSettings } from '@server/lib/settings';
@@ -158,6 +161,211 @@ describe('POST /user/:id/settings/linked-accounts/jellyfin/quickconnect', () => 
       where: { id: userId },
     });
     assert.strictEqual(user.jellyfinUserId, null);
+  });
+});
+
+describe('TV season watch-rule access', () => {
+  it('supports a user request, manager approval, and personal enable/disable', async (t) => {
+    const settings = getSettings();
+    const previousGateSetting = settings.main.tvSeasonWatchGateEnabled;
+    settings.main.tvSeasonWatchGateEnabled = false;
+    t.after(() => {
+      settings.main.tvSeasonWatchGateEnabled = previousGateSetting;
+    });
+
+    const friendSession = await loginAs('friend@seerr.dev', 'test1234');
+    const friend = await getRepository(User).findOneByOrFail({
+      email: 'friend@seerr.dev',
+    });
+    const admin = await loginAs('admin@seerr.dev', 'test1234');
+    const accessRoute = `/user/${friend.id}/settings/tv-season-watch-gate`;
+
+    const initial = await request(app)
+      .get(accessRoute)
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', friendSession.sessionCookie);
+    assert.equal(initial.status, 200);
+    assert.deepEqual(initial.body, {
+      status: 'off',
+      requestedAt: null,
+      globallyEnabled: false,
+    });
+
+    const requested = await request(app)
+      .post(accessRoute)
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', friendSession.sessionCookie)
+      .send({ action: 'request' });
+    assert.equal(requested.status, 200);
+    assert.equal(requested.body.status, 'pending');
+    assert.ok(requested.body.requestedAt);
+
+    const queue = await request(app)
+      .get('/user/tv-season-watch-gate-requests')
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', admin.sessionCookie);
+    assert.equal(queue.status, 200);
+    assert.ok(queue.body.some((item: { id: number }) => item.id === friend.id));
+
+    const reviewed = await request(app)
+      .post(`${accessRoute}/review`)
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', admin.sessionCookie)
+      .send({ decision: 'approve' });
+    assert.equal(reviewed.status, 200);
+    assert.equal(reviewed.body.status, 'approved');
+
+    const enabled = await request(app)
+      .post(accessRoute)
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', friendSession.sessionCookie)
+      .send({ action: 'enable' });
+    assert.equal(enabled.status, 200);
+    assert.equal(enabled.body.status, 'enabled');
+
+    const disabled = await request(app)
+      .post(accessRoute)
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', friendSession.sessionCookie)
+      .send({ action: 'disable' });
+    assert.equal(disabled.status, 200);
+    assert.equal(disabled.body.status, 'approved');
+
+    const repeatedReview = await request(app)
+      .post(`${accessRoute}/review`)
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', admin.sessionCookie)
+      .send({ decision: 'approve' });
+    assert.equal(repeatedReview.status, 409);
+  });
+});
+
+describe('Episode Queue access and user defaults', () => {
+  it('requests approval, supports a manager-set user default, and revokes access', async () => {
+    const friendSession = await loginAs('friend@seerr.dev', 'test1234');
+    const friend = await getRepository(User).findOneByOrFail({
+      email: 'friend@seerr.dev',
+    });
+    const media = await getRepository(Media).save(
+      new Media({ mediaType: MediaType.TV, tmdbId: 987654 })
+    );
+    const requestRepository = getRepository(MediaRequest);
+    const defaultRequest = await requestRepository.save(
+      new MediaRequest({
+        type: MediaType.TV,
+        status: MediaRequestStatus.PENDING,
+        media,
+        requestedBy: friend,
+        watchAheadEpisodeCount: 0,
+        watchAheadUsesUserDefault: true,
+      })
+    );
+    const overriddenRequest = await requestRepository.save(
+      new MediaRequest({
+        type: MediaType.TV,
+        status: MediaRequestStatus.PENDING,
+        media,
+        requestedBy: friend,
+        watchAheadEpisodeCount: 1,
+        watchAheadUsesUserDefault: false,
+      })
+    );
+    const childRequest = await requestRepository.save(
+      new MediaRequest({
+        type: MediaType.TV,
+        status: MediaRequestStatus.PENDING,
+        media,
+        requestedBy: friend,
+        watchAheadEpisodeCount: 0,
+        watchAheadUsesUserDefault: true,
+        watchAheadParent: defaultRequest,
+      })
+    );
+    const admin = await loginAs('admin@seerr.dev', 'test1234');
+    const accessRoute = `/user/${friend.id}/settings/episode-queue`;
+    const secureRequest = (path: string) =>
+      request(app)
+        .post(path)
+        .set('X-Forwarded-Proto', 'https')
+        .set('Cookie', friendSession.sessionCookie);
+
+    const initial = await request(app)
+      .get(accessRoute)
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', friendSession.sessionCookie);
+    assert.equal(initial.status, 200);
+    assert.deepEqual(initial.body, {
+      status: 'off',
+      requestedAt: null,
+      defaultEpisodeCount: 0,
+    });
+
+    const earlyDefault = await secureRequest(accessRoute).send({
+      action: 'set-default',
+      defaultEpisodeCount: 2,
+    });
+    assert.equal(earlyDefault.status, 409);
+
+    const requested = await secureRequest(accessRoute).send({
+      action: 'request',
+    });
+    assert.equal(requested.status, 200);
+    assert.equal(requested.body.status, 'pending');
+    assert.ok(requested.body.requestedAt);
+
+    const queue = await request(app)
+      .get('/user/episode-queue-requests')
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', admin.sessionCookie);
+    assert.equal(queue.status, 200);
+    assert.ok(queue.body.some((item: { id: number }) => item.id === friend.id));
+
+    const reviewed = await request(app)
+      .post(`${accessRoute}/review`)
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', admin.sessionCookie)
+      .send({ decision: 'approve' });
+    assert.equal(reviewed.status, 200);
+    assert.equal(reviewed.body.status, 'approved');
+
+    const managerDefault = await request(app)
+      .post(accessRoute)
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', admin.sessionCookie)
+      .send({ action: 'set-default', defaultEpisodeCount: 3 });
+    assert.equal(managerDefault.status, 200);
+    assert.equal(managerDefault.body.defaultEpisodeCount, 3);
+    assert.equal(
+      (await requestRepository.findOneByOrFail({ id: defaultRequest.id }))
+        .watchAheadEpisodeCount,
+      3
+    );
+    assert.equal(
+      (await requestRepository.findOneByOrFail({ id: overriddenRequest.id }))
+        .watchAheadEpisodeCount,
+      1
+    );
+    assert.equal(
+      (await requestRepository.findOneByOrFail({ id: childRequest.id }))
+        .watchAheadEpisodeCount,
+      0
+    );
+
+    const userDefault = await secureRequest(accessRoute).send({
+      action: 'set-default',
+      defaultEpisodeCount: 2,
+    });
+    assert.equal(userDefault.status, 200);
+    assert.equal(userDefault.body.defaultEpisodeCount, 2);
+
+    const revoked = await request(app)
+      .post(`${accessRoute}/review`)
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', admin.sessionCookie)
+      .send({ decision: 'revoke' });
+    assert.equal(revoked.status, 200);
+    assert.equal(revoked.body.status, 'off');
+    assert.equal(revoked.body.defaultEpisodeCount, 0);
   });
 });
 

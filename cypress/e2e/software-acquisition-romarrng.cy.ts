@@ -64,6 +64,8 @@ const softwareSettings = {
   emulationCatalogProvider: 'romarr-dat',
   emulationSystemGroups: { nes: 'retro', 'sega-cd': 'retro', snes: 'retro' },
   emulationPlatformMappings: {},
+  steamApiKey: '',
+  steamApiKeyConfigured: false,
 };
 
 const catalogGame = {
@@ -237,7 +239,7 @@ const mockIntegrationData = () => {
         categoryMappings: {},
       });
     } else {
-      request.reply([]);
+      request.continue();
     }
   });
 
@@ -329,11 +331,14 @@ describe('ROMarrNG software acquisition integration', () => {
 
   it('previews platform matches and saves a manual override', () => {
     cy.viewport(1280, 720);
-    cy.visit('/settings/services?serviceCategory=tools-other');
+    cy.visit('/settings/services');
     cy.wait('@overrideRuleSettings')
       .its('response.statusCode')
       .should('eq', 200);
-    cy.wait('@publicSettings').its('response.statusCode').should('eq', 200);
+    cy.wait('@publicSettings').its('response.body').should('include', {
+      softwareEnabled: true,
+      romarrEnabled: true,
+    });
     cy.wait('@downloadClientsSettings')
       .its('response.body.clients')
       .should('deep.equal', []);
@@ -346,16 +351,13 @@ describe('ROMarrNG software acquisition integration', () => {
     cy.wait('@recognitionSettings')
       .its('response.body')
       .should('deep.equal', recognitionSettings);
-    cy.location('pathname').then((pathname) => {
-      cy.get('body').then(($body) => {
-        const pageText = $body.text().replace(/\s+/g, ' ').trim();
-        if (!pageText.includes('Software acquisition')) {
-          throw new Error(
-            `Software acquisition is missing at ${pathname}: ${pageText.slice(0, 1800)}`
-          );
-        }
-      });
-    });
+    cy.contains(
+      'nav[aria-label="Service categories"] button',
+      'System'
+    ).click();
+    cy.get('[data-settings-category="tools-other"]')
+      .should('be.visible')
+      .and('contain', 'Software acquisition');
     cy.contains('h3', 'Software acquisition').should('be.visible');
     cy.contains('button[aria-pressed="false"]', 'TV & Movies').click();
     cy.contains('h4', 'Optional Sportarr DVR link').should('be.visible');

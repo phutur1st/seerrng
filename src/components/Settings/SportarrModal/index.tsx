@@ -121,15 +121,7 @@ const SportarrModal = ({ settings, onClose, onSave }: SportarrModalProps) => {
         }
       }}
     >
-      {({
-        values,
-        errors,
-        touched,
-        isSubmitting,
-        submitForm,
-        isValid,
-        setFieldValue,
-      }) => {
+      {({ values, errors, touched, isSubmitting, submitForm, isValid }) => {
         const connectionPayload = {
           hostname: values.hostname,
           port: Number(values.port),
@@ -195,7 +187,7 @@ const SportarrModal = ({ settings, onClose, onSave }: SportarrModalProps) => {
             onSecondary={() => void testConnection()}
             secondaryDisabled={isSubmitting || isTesting || !canTestConnection}
           >
-            <Form>
+            <Form className="settings-page-content">
               <p className="description">
                 {intl.formatMessage(messages.intro)}
               </p>
@@ -288,17 +280,6 @@ const SportarrModal = ({ settings, onClose, onSave }: SportarrModalProps) => {
                       as="select"
                       id="activeProfileId"
                       name="activeProfileId"
-                      onChange={(
-                        event: React.ChangeEvent<HTMLSelectElement>
-                      ) => {
-                        const id = Number(event.target.value);
-                        const profile = profiles.find((item) => item.id === id);
-                        void setFieldValue('activeProfileId', id || '');
-                        void setFieldValue(
-                          'activeProfileName',
-                          profile?.name ?? ''
-                        );
-                      }}
                     >
                       <option value="">
                         {intl.formatMessage(messages.chooseProfile)}

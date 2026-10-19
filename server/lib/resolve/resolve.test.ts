@@ -96,6 +96,28 @@ describe('link classification', () => {
     );
     assert.equal(classifyLink('https://example.org/page').provider, 'generic');
   });
+
+  it('requires complete provider hostnames before classifying a link', () => {
+    for (const url of [
+      'https://evilimdb.com/title/tt0111161/',
+      'https://www.imdb.com.attacker.test/title/tt0111161/',
+      'https://letterboxd.com.attacker.test/film/example/',
+      'https://goodreads.com.attacker.test/book/show/1',
+      'https://amazon.com.attacker.test/dp/0123456789',
+      'https://audible.attacker.test/pd/example/0123456789',
+    ]) {
+      assert.equal(classifyLink(url).provider, 'generic', url);
+    }
+
+    assert.equal(
+      classifyLink('https://www.amazon.co.uk/dp/0123456789').provider,
+      'amazon'
+    );
+    assert.equal(
+      classifyLink('https://www.audible.com.au/pd/example/0123456789').provider,
+      'audible'
+    );
+  });
 });
 
 describe('matching', () => {
@@ -138,6 +160,13 @@ describe('page metadata', () => {
       'Portal 2 on Steam'
     );
   });
+
+  it('decodes HTML entities once and preserves invalid numeric references', () => {
+    const metadata = extractPageMetadata(
+      '<meta property="og:title" content="&amp;lt;script&amp;gt; &#x110000;">'
+    );
+    assert.equal(metadata.title, '&lt;script&gt; &#x110000;');
+  });
 });
 
 describe('safety', () => {
@@ -156,6 +185,12 @@ describe('safety', () => {
       ),
       undefined
     );
+    assert.equal(
+      sniffImageType({ length: 12 } as unknown as Buffer),
+      undefined
+    );
+    assert.equal(sniffImageType('untrusted image input'), undefined);
+    assert.equal(sniffImageType(new Array(12).fill(0)), undefined);
   });
 
   it('refuses private and non-http addresses', async () => {

@@ -2237,6 +2237,15 @@ components:
         permissions:
           type: number
           example: 0
+        tvSeasonWatchGateStatus:
+          type: string
+          enum: [off, pending, approved, enabled, denied]
+          description: Private to the account owner and callers with `MANAGE_USERS` permission.
+        tvSeasonWatchGateRequestedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Private to the account owner and callers with `MANAGE_USERS` permission.
         requestServices:
           type: array
           description: Additional Radarr or Sonarr request destinations granted to this user.
@@ -2263,6 +2272,64 @@ components:
         - email
         - createdAt
         - updatedAt
+    TvSeasonWatchGateAccess:
+      type: object
+      required: [status, requestedAt, globallyEnabled]
+      properties:
+        status:
+          type: string
+          enum: [off, pending, approved, enabled, denied]
+        requestedAt:
+          type: string
+          format: date-time
+          nullable: true
+        globallyEnabled:
+          type: boolean
+          description: Whether the administrator has enabled the requirement for every account.
+    TvSeasonWatchGateApprovalRequest:
+      type: object
+      required: [id, displayName, avatar, requestedAt]
+      properties:
+        id:
+          type: integer
+        displayName:
+          type: string
+        avatar:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+          nullable: true
+    EpisodeQueueAccess:
+      type: object
+      required: [status, requestedAt, defaultEpisodeCount]
+      properties:
+        status:
+          type: string
+          enum: [off, pending, approved, denied]
+        requestedAt:
+          type: string
+          format: date-time
+          nullable: true
+        defaultEpisodeCount:
+          type: integer
+          minimum: 0
+          maximum: 5
+          description: Account-wide default queue length. Updates existing TV requests that have not been overridden per show.
+    EpisodeQueueApprovalRequest:
+      type: object
+      required: [id, displayName, avatar, requestedAt]
+      properties:
+        id:
+          type: integer
+        displayName:
+          type: string
+        avatar:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+          nullable: true
     UserSettings:
       type: object
       properties:
@@ -2548,6 +2615,11 @@ components:
         partialRequestsEnabled:
           type: boolean
           example: false
+        enable4k:
+          type: boolean
+          default: true
+          description: Enables 4K movie and TV request options and separate availability tracking. Defaults to true for compatibility with existing settings.
+          example: true
         localLogin:
           type: boolean
           example: true
@@ -3002,6 +3074,12 @@ components:
           example: false
         baseUrl:
           type: string
+        backend:
+          type: string
+          enum: [readarr, bindery]
+        serviceType:
+          type: string
+          enum: [ebook, audiobook, both]
       required:
         - hostname
         - port
@@ -4036,6 +4114,10 @@ components:
           default: show
           description: Controls how availability tied to another user's approved or completed movie or TV request is presented to the current viewer.
           example: show
+        enable4k:
+          type: boolean
+          description: Whether movie and TV 4K request, issue-reporting, and separate availability features are enabled.
+          example: true
     MovieResult:
       type: object
       required:
@@ -5484,6 +5566,9 @@ components:
           minimum: 0
           maximum: 5
           description: Number of upcoming episodes to keep requested by the Plex, Jellyfin, or Emby Episode Queue.
+        watchAheadUsesUserDefault:
+          type: boolean
+          description: Whether this request follows its owner's account-wide Episode Queue default.
         watchAheadParentRequestId:
           type: integer
           nullable: true
@@ -6083,6 +6168,31 @@ components:
           type: string
         metadataSource:
           type: string
+    BinderyServiceTestResult:
+      type: object
+      required: [backend, system, features]
+      properties:
+        backend:
+          type: string
+          enum: [bindery]
+        system:
+          type: object
+          properties:
+            version:
+              type: string
+            commit:
+              type: string
+            buildDate:
+              type: string
+        features:
+          type: object
+          required: [requestsForUser]
+          properties:
+            requestsForUser:
+              type: boolean
+        requesterAccounts:
+          type: integer
+          minimum: 0
     PageInfo:
       type: object
       properties:
@@ -14455,6 +14565,236 @@ paths:
           description: Caller may not update maturity limits
         '404':
           description: User not found
+  /user/{userId}/settings/episode-queue:
+    get:
+      summary: Get Episode Queue access and account default
+      description: Returns the signed-in user's access and default, or another user's state for callers with `MANAGE_USERS` permission.
+      tags: [users]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Access status and account-wide queue default
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EpisodeQueueAccess'
+        '403':
+          description: Caller may not view this user's access state
+        '404':
+          description: User not found
+    post:
+      summary: Request or update Episode Queue preferences
+      description: Users can request or cancel approval. After approval, users can set a default queue length for all existing and future shows; a user manager can also set that user's default from their profile.
+      tags: [users]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [request, cancel, set-default]
+                defaultEpisodeCount:
+                  type: integer
+                  minimum: 0
+                  maximum: 5
+      responses:
+        '200':
+          description: Updated Episode Queue access and preference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EpisodeQueueAccess'
+        '400':
+          description: Invalid action or default queue length
+        '403':
+          description: Caller may not update this user's Episode Queue settings
+        '404':
+          description: User not found
+        '409':
+          description: Approval or request state does not allow this action
+  /user/{userId}/settings/episode-queue/review:
+    post:
+      summary: Approve, decline, or revoke Episode Queue access
+      description: Requires `MANAGE_USERS`. Managers cannot review their own request. Revoking access stops future queue additions and clears the saved default.
+      tags: [users]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approve, deny, revoke]
+      responses:
+        '200':
+          description: Reviewed Episode Queue access
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EpisodeQueueAccess'
+        '403':
+          description: Caller lacks permission or is reviewing their own request
+        '404':
+          description: User not found
+        '409':
+          description: The access request is not in a reviewable state
+  /user/episode-queue-requests:
+    get:
+      summary: List pending Episode Queue access requests
+      description: Requires `MANAGE_USERS`. Returns all pending requests, oldest first.
+      tags: [users]
+      responses:
+        '200':
+          description: Pending Episode Queue access requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EpisodeQueueApprovalRequest'
+        '403':
+          description: Caller lacks user management permission
+  /user/{userId}/settings/tv-season-watch-gate:
+    get:
+      summary: Get TV season watch requirement access
+      description: Returns the signed-in user's access state, or another user's state for callers with `MANAGE_USERS` permission.
+      tags: [users]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Access state and global enforcement mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TvSeasonWatchGateAccess'
+        '403':
+          description: Caller may not view this user's access state
+        '404':
+          description: User not found
+    post:
+      summary: Request, cancel, or change personal TV season access
+      description: Self-only. Users can request manager approval, cancel a pending request, turn approved access on, or turn it off while keeping approval. A global administrator setting applies to everyone and prevents personal changes while enabled.
+      tags: [users]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [request, cancel, enable, disable]
+      responses:
+        '200':
+          description: Updated access state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TvSeasonWatchGateAccess'
+        '400':
+          description: Invalid action
+        '403':
+          description: The path user is not the signed-in user
+        '409':
+          description: The action is not available in the current global or request state
+  /user/{userId}/settings/tv-season-watch-gate/review:
+    post:
+      summary: Approve or decline TV season access
+      description: Requires `MANAGE_USERS`. The request must still be pending; user managers cannot approve their own request.
+      tags: [users]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approve, deny]
+      responses:
+        '200':
+          description: Reviewed access request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TvSeasonWatchGateAccess'
+        '403':
+          description: Caller lacks permission or is reviewing their own request
+        '404':
+          description: User not found
+        '409':
+          description: The request is no longer pending
+  /user/tv-season-watch-gate-requests:
+    get:
+      summary: List pending TV season access requests
+      description: Requires `MANAGE_USERS`. Returns all pending requests, oldest first.
+      tags: [users]
+      responses:
+        '200':
+          description: Pending access requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TvSeasonWatchGateApprovalRequest'
+        '403':
+          description: Caller lacks user management permission
   /user/{userId}/settings/card-text:
     get:
       summary: Get card text visibility settings for a user
@@ -17832,11 +18172,13 @@ paths:
               $ref: '#/components/schemas/ServarrConnectionSettings'
       responses:
         '200':
-          description: Bookshelf connection details returned
+          description: Bookshelf or Bindery connection details returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServarrServiceDetails'
+                anyOf:
+                  - $ref: '#/components/schemas/ServarrServiceDetails'
+                  - $ref: '#/components/schemas/BinderyServiceTestResult'
   /settings/readarr/diagnose:
     post:
       summary: Diagnose Bookshelf lookup and add readiness
@@ -18988,6 +19330,9 @@ paths:
                   minimum: 0
                   maximum: 5
                   description: Optional Episode Queue buffer for the requesting user's Plex, Jellyfin, or Emby playback. On create, seasonRequests must specify exactly one starting episode; edits preserve existing selections.
+                watchAheadUsesUserDefault:
+                  type: boolean
+                  description: When true, use the request owner's saved Episode Queue default. When false, watchAheadEpisodeCount is a show-specific override.
                 is4k:
                   type: boolean
                   example: false
@@ -20078,6 +20423,26 @@ paths:
           description: Request not found or caller may not clear it
         '409':
           description: Request is not cancelled
+  /request/software/status/{id}/stop-tracking:
+    post:
+      summary: Remove a handed-off request from SeerrNG
+      description: Permanently removes the caller's downloading or importing software request and saved status history from SeerrNG without cancelling the external acquisition or deleting installed software. The requester needs REQUEST permission, or the caller needs MANAGE_REQUESTS.
+      tags:
+        - request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '204':
+          description: Request tracking and local status history removed
+        '404':
+          description: Request not found or caller may not remove it
+        '409':
+          description: Request is no longer downloading or importing
   /request/software/status/{id}/approve:
     post:
       summary: Approve a software request
@@ -20615,6 +20980,9 @@ paths:
                   minimum: 0
                   maximum: 5
                   description: Episode Queue buffer for the request owner's Plex, Jellyfin, or Emby playback.
+                watchAheadUsesUserDefault:
+                  type: boolean
+                  description: When true, use the request owner's saved Episode Queue default. When false, watchAheadEpisodeCount is a show-specific override.
                 is4k:
                   type: boolean
                   example: false
@@ -22964,7 +23332,7 @@ paths:
     post:
       summary: Create new issue
       description: |
-        Creates a new issue
+        Creates a new issue. Movie and TV 4K issue reports require the global 4K setting to be enabled.
       tags:
         - issue
       requestBody:
@@ -23020,6 +23388,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Issue'
+        '403':
+          description: 4K issue reporting is disabled by the administrator
 
   /issue/count:
     get:

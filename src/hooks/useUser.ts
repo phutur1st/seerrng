@@ -30,6 +30,9 @@ export interface User {
   email: string;
   avatar: string;
   permissions: number;
+  tvSeasonWatchGateStatus?:
+    'off' | 'pending' | 'approved' | 'enabled' | 'denied';
+  tvSeasonWatchGateRequestedAt?: Date | null;
   requestServices?: string[];
   contentRestricted?: boolean | null;
   userType: number;
@@ -54,6 +57,7 @@ export interface UserSettings {
   watchlistSyncBooks?: boolean;
   watchlistSyncComics?: boolean;
   watchlistSyncMagazines?: boolean;
+  episodeQueueDefaultEpisodeCount?: number;
   cardTextVisibilityMovie?: CardTextVisibility;
   cardTextVisibilityTv?: CardTextVisibility;
   cardTextVisibilityAlbum?: CardTextVisibility;

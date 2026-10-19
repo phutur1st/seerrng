@@ -10,6 +10,191 @@ and the following `v3.2.7` release includes the intervening changes. Commit-leve
 links in the generated history remain the technical source of truth for changes
 that are not called out here.
 
+## [3.71.0](https://github.com/snapetech-org/seerrng/compare/v3.70.1..v3.71.0) - 2026-10-19
+
+### User-facing changes
+
+#### Added
+
+- **Requests:** Administrators can now disable 4K support globally in Settings → Main. Turning it off hides movie and TV 4K request, issue-reporting, and availability options, blocks new 4K requests and issue reports, and stops future scans from recording 4K separately. Existing records and Radarr/Sonarr server classifications are preserved.
+- **Tv Requests:** Users can request approval to enable the previous-season watch requirement for their own account, then turn it on or off from their profile. User managers can approve or decline pending requests from the Users page. The global administrator setting still applies the rule to everyone.
+
+#### Changed
+
+- **Books:** SeerrNG now follows Bindery approval and download progress, explains pending review and service failures in request history, and withdraws requests that are still pending when canceled. Approved acquisitions continue in Bindery.
+- **Bookshelf:** Reader Apps settings now distinguish browsing imported files from book acquisition. SeerrNG sends approved requests to the configured book service; BookOrbit's separate request queue is not part of this connection.
+- **Requests:** Episode Queue now supports user manager approval and a saved per-user default for all current and future TV requests. Users can override the queue length per show, and profile, TV detail, request, and request management screens surface the setting and its approval status.
+- **Media Details:** Movie and series pages keep the familiar summary and overview up front, place request and playback controls in a clear side panel on wide screens, and stack those controls above expandable details on phones.
+
+#### Fixed
+
+- **Books:** Bindery setup now retains the API key you type, so connection testing and saving work as expected.
+- **Details:** Movie and TV detail actions now stay within the page at wide desktop sizes and wrap cleanly on smaller layouts.
+- **Settings:** The Sportarr connection dialog now uses the same theme-aware form controls as the rest of the settings interface, keeping fields readable while configuring a server.
+- **Media Details:** Movie and series detail pages now load their responsive layout styles in production, so request and playback controls stay in the side panel on wide screens and above the details on phones.
+- **Settings:** Settings forms now use consistent, readable text sizing, and provider test actions remain clear of their selectors.
+
+#### Security
+
+- **Shared Links:** Shared-link matching now checks provider hostnames precisely and decodes HTML entities once, so lookalike domains and double-encoded links are not treated as trusted media providers.
+
+### 🚀 Features
+- *(settings)* Clarify global 4K control - ([9a6714e](https://github.com/snapetech-org/seerrng/commit/9a6714e8d838791336c10f19a21d43341966234c))
+- Add per-user Episode Queue defaults and approval - ([0908b6b](https://github.com/snapetech-org/seerrng/commit/0908b6bed89df167c968160c7689372a28dd8444))
+- Add global 4K setting - ([ed853f8](https://github.com/snapetech-org/seerrng/commit/ed853f84e152cb99cce28f268b701b4de5630d00))
+
+### 🐛 Bug Fixes
+- *(bindery)* Store API keys and cover setup flow - ([8b1136d](https://github.com/snapetech-org/seerrng/commit/8b1136d232ea7efd6b0ef31be0da427128648a18))
+- *(i18n)* Sort extracted 4k messages - ([6bdefb9](https://github.com/snapetech-org/seerrng/commit/6bdefb97e95a7cec0c7f847bb2ceec60450ed579))
+- *(release)* Use supported Episode Queue note category - ([6eb0b79](https://github.com/snapetech-org/seerrng/commit/6eb0b79ae3bb5f3e40c2d5457a3dab8710ec7166))
+- *(ui)* Retain issue quality eligibility check - ([ca79366](https://github.com/snapetech-org/seerrng/commit/ca793661fa9c2e27180946204120d6c0f0e87c79))
+- Stabilize details layout and release attestations - ([196552f](https://github.com/snapetech-org/seerrng/commit/196552f98a6b61a9973cc138869713ba9280a012))
+
+### 🧪 Testing
+- *(e2e)* Stabilize settings integration fixtures - ([babb7b7](https://github.com/snapetech-org/seerrng/commit/babb7b71d454e085fc9ccd7d7fc55487594a333a))
+- *(ios)* Wait for server actions before editing - ([27d172a](https://github.com/snapetech-org/seerrng/commit/27d172afc8f0fcc989d57caa2c58b4dcaa601a53))
+- *(ios)* Wait for saved server row to appear - ([a82de4e](https://github.com/snapetech-org/seerrng/commit/a82de4eefbbe79bf81cfeaf5897982b347e2eb28))
+- Cover global 4K feature gate - ([22f3bbc](https://github.com/snapetech-org/seerrng/commit/22f3bbc5874752b50a3b1206ca0bd3ebe0309f95))
+- Mark Cypress exception filter internal - ([86c6908](https://github.com/snapetech-org/seerrng/commit/86c6908e53777fd6cdab525bab56abf27176e3b4))
+- Contain anchored listbox resize warning - ([37e772e](https://github.com/snapetech-org/seerrng/commit/37e772ed5786746ac09e0b01950dcd265c419ad7))
+
+## [3.70.1](https://github.com/snapetech-org/seerrng/compare/v3.70.0..v3.70.1) - 2026-10-19
+
+### User-facing changes
+
+#### Added
+
+- **Tv Requests:** Users can request approval to enable the previous-season watch requirement for their own account, then turn it on or off from their profile. User managers can approve or decline pending requests from the Users page. The global administrator setting still applies the rule to everyone.
+
+#### Changed
+
+- **Books:** SeerrNG now follows Bindery approval and download progress, explains pending review and service failures in request history, and withdraws requests that are still pending when canceled. Approved acquisitions continue in Bindery.
+- **Bookshelf:** Reader Apps settings now distinguish browsing imported files from book acquisition. SeerrNG sends approved requests to the configured book service; BookOrbit's separate request queue is not part of this connection.
+- **Media Details:** Movie and series pages keep the familiar summary and overview up front, place request and playback controls in a clear side panel on wide screens, and stack those controls above expandable details on phones.
+
+#### Fixed
+
+- **Settings:** The Sportarr connection dialog now uses the same theme-aware form controls as the rest of the settings interface, keeping fields readable while configuring a server.
+- **Media Details:** Movie and series detail pages now load their responsive layout styles in production, so request and playback controls stay in the side panel on wide screens and above the details on phones.
+- **Settings:** Settings forms now use consistent, readable text sizing, and provider test actions remain clear of their selectors.
+
+#### Security
+
+- **Shared Links:** Shared-link matching now checks provider hostnames precisely and decodes HTML entities once, so lookalike domains and double-encoded links are not treated as trusted media providers.
+
+### 🐛 Bug Fixes
+- *(ui)* Refine settings controls layout - ([1a44c1f](https://github.com/snapetech-org/seerrng/commit/1a44c1fbc592c558cdbbb9add9c43131033fbe04))
+- *(ui)* Note responsive details production styles - ([5dd4572](https://github.com/snapetech-org/seerrng/commit/5dd4572e95dad4205aa8dcd6f43f65bace3bdbaa))
+- *(ui)* Ship responsive media details layout - ([69d3e2c](https://github.com/snapetech-org/seerrng/commit/69d3e2c2e2a5fd2bd06c798dbcc8c039c0bcd97f))
+
+## [3.70.0](https://github.com/snapetech-org/seerrng/compare/v3.69.0..v3.70.0) - 2026-10-19
+
+### User-facing changes
+
+#### Added
+
+- **Tv Requests:** Users can request approval to enable the previous-season watch requirement for their own account, then turn it on or off from their profile. User managers can approve or decline pending requests from the Users page. The global administrator setting still applies the rule to everyone.
+
+#### Changed
+
+- **Books:** SeerrNG now follows Bindery approval and download progress, explains pending review and service failures in request history, and withdraws requests that are still pending when canceled. Approved acquisitions continue in Bindery.
+- **Bookshelf:** Reader Apps settings now distinguish browsing imported files from book acquisition. SeerrNG sends approved requests to the configured book service; BookOrbit's separate request queue is not part of this connection.
+- **Media Details:** Movie and series pages keep the familiar summary and overview up front, place request and playback controls in a clear side panel on wide screens, and stack those controls above expandable details on phones.
+
+#### Fixed
+
+- **Settings:** The Sportarr connection dialog now uses the same theme-aware form controls as the rest of the settings interface, keeping fields readable while configuring a server.
+
+#### Security
+
+- **Shared Links:** Shared-link matching now checks provider hostnames precisely and decodes HTML entities once, so lookalike domains and double-encoded links are not treated as trusted media providers.
+
+### 🚀 Features
+- *(setup)* Make service setup category aware - ([a3ede55](https://github.com/snapetech-org/seerrng/commit/a3ede55d97ad50cae85e281fdee4e367fede88bb))
+- *(tv)* Add per-user season watch rule approval - ([5555fc3](https://github.com/snapetech-org/seerrng/commit/5555fc3fe58a76209651f9bec24231a23b60f2d2))
+- Refine details and book request guidance - ([33050de](https://github.com/snapetech-org/seerrng/commit/33050deebb7a9c1cf9181b29fda0a36d1ae5026e))
+
+### 🐛 Bug Fixes
+- *(ui)* Use shared styles for TV approval cards - ([8a1594a](https://github.com/snapetech-org/seerrng/commit/8a1594ada43ef8edb8754cbad7200a7f35641437))
+- Close release validation gaps - ([6af9d76](https://github.com/snapetech-org/seerrng/commit/6af9d768ed82ffbb87ca2a70b44c62cf313a8956))
+
+### 🎨 Styling
+- Satisfy repository formatting checks - ([6448e45](https://github.com/snapetech-org/seerrng/commit/6448e457169423e57e4d96a86f119149af9e0e9d))
+
+### ⚙️ Miscellaneous Tasks
+- *(setup)* Record branch already merged as PR #350 - ([317046f](https://github.com/snapetech-org/seerrng/commit/317046f01bbb543e60b07b82635f4103fbdc77a6))
+
+## [3.69.0](https://github.com/snapetech-org/seerrng/compare/v3.68.0..v3.69.0) - 2026-10-19
+
+### User-facing changes
+
+#### Changed
+
+- **Books:** SeerrNG now follows Bindery approval and download progress, explains pending review and service failures in request history, and withdraws requests that are still pending when canceled. Approved acquisitions continue in Bindery.
+
+### 🚀 Features
+- *(books)* Sync Bindery request lifecycle - ([2ef0014](https://github.com/snapetech-org/seerrng/commit/2ef001433ba2a4596ee11476422a4e555a4be6de))
+
+## [3.68.0](https://github.com/snapetech-org/seerrng/compare/v3.67.0..v3.68.0) - 2026-10-19
+
+### User-facing changes
+
+#### Added
+
+- **Anime:** Anime pages can now point you to the manga or light novel that continues the story, show where your finished season ends when the catalog documents it, and offer the volume to request.
+- **Books:** Book requests now compare editions and narrations side by side, with the option to keep a second performance alongside the one you have. Series pages show which narrators cover which volumes.
+- **Following:** A new Following page and Follow buttons keep track of narrators, series translations, game expansions, artists, and patch projects, and explain why each new item appeared.
+- **Franchise:** Anime pages link to a franchise view that groups original works, adaptations, sequels, and side stories, marks how well each link is documented, and lets administrators confirm or hide links.
+- **Games:** PC game requests can now compare editions and expansions, show which are story content, and request only the content you select. Games whose edition contents are not listed are shown as unknown.
+- **Music:** Album pages now compare standard, deluxe, and remaster releases using their real track lists, and say so when a detail is not documented.
+- **Settings:** Settings now include Share and Image Recognition. Links and lists work without setup; image reading uses local text recognition or an opt-in vision provider you control, including local Ollama-style servers.
+  - **Action required:** Optional: install Tesseract for local image reading, or enable a vision provider under Settings, Services, after confirming images may be sent to it.
+- **Software:** Browse fan translations, ROM hacks, and improvement patches, see their completeness and versions, request the exact version you want, and keep the original alongside it. Needs a ROMarrNG with the patch catalog.
+- **Share:** Share a link, ISBN, list of titles, or a photo of a cover or recommendations to SeerrNG, check the matches, and request the ones you want. The Android app appears in the system Share menu.
+- **Discovery:** New Game Finder saved searches, Hardcover Book Vibes you can steer, and Collector Picks from slskdN show why each result appeared and let you request it directly.
+- **Bookshelf:** SeerrNG now has a native Bindery service for ebook, audiobook, or mixed-format requests. Bindery handles acquisition while SeerrNG tracks request status and scans imported books for availability. Requester ownership is used when the Bindery instance advertises support; otherwise the configured API key account owns the added book.
+  - **Action required:** Add Bindery from Settings > Services to send book requests and scan its imported library.
+- **Reader Apps:** Administrators can enable Kobo delivery for a BookOrbit live shelf. SeerrNG keeps the SmartScope for browsing and maintains a matching native BookOrbit Collection for Kobo, refreshing its membership every 15 minutes by default. The sync schedule can be adjusted under Settings > Jobs. BookOrbit still needs a Kobo account paired, and the managed Collection is reserved for SeerrNG.
+
+#### Changed
+
+- **Setup:** SeerrNG setup now focuses service options on enabled request categories and lets the setup assistant recommend companion apps for one or more selected categories.
+- **Accessibility:** Share, Following, and the new discovery tools now work fully by keyboard and screen reader, announce results and unread counts, label repeated buttons with the item they act on, and are linked from Discover, Books, Music, and Software pages.
+- **Reader Delivery:** Clarified that BookOrbit SmartScopes remain dynamic and Kobo sync uses BookOrbit Collections.
+
+#### Fixed
+
+- **Unraid:** The Unraid Community Apps template and Compose stack now follow the latest stable release tag. Existing installs using the retired image path or `:main` must update Repository once to receive current stable releases.
+  - **Action required:** Update existing installs from the retired image path or `:main` to `ghcr.io/snapetech-org/seerrng:latest`.
+- **Containers:** Validated stable releases now publish matching `:main` and `:latest` aliases to GHCR and Docker Hub. Main-branch CI publishes commit-specific images without moving either stable alias, and the Unraid Compose stack follows the stable `:latest` tags for companion apps.
+
+### 🚀 Features
+- *(books)* Add native Bindery backend - ([41b6db2](https://github.com/snapetech-org/seerrng/commit/41b6db2467d09a06876e37c594887227b25b3853))
+- *(discovery)* Cross-media discovery, editions, share-to-request, and following - ([7e8a59c](https://github.com/snapetech-org/seerrng/commit/7e8a59cb7257f360a00b21d87873047c3b2e8d77))
+- *(reader-delivery)* Sync BookOrbit shelves to Kobo - ([0b267d5](https://github.com/snapetech-org/seerrng/commit/0b267d5261524a2b0c233f59da8327180045c39e))
+- *(setup)* Make service setup category aware (#350) - ([e62d90a](https://github.com/snapetech-org/seerrng/commit/e62d90a496e27d6e61aeee28a64b2e993cd46f4a))
+- *(ux)* Surface cross-media tools, accessibility, and documentation - ([10f06ea](https://github.com/snapetech-org/seerrng/commit/10f06eab9a8c1852ea74d6dcf091d30fa061258a))
+
+### 🐛 Bug Fixes
+- *(build)* Pass the Book-terminology and shared-style gates that blocked pnpm build - ([705518f](https://github.com/snapetech-org/seerrng/commit/705518f66011ecf27062bc09001c7569fd015aef))
+- *(ci)* Align stable container image aliases - ([f3f4f22](https://github.com/snapetech-org/seerrng/commit/f3f4f2230172f59a7680082426e2d10464849191))
+- *(share)* Move focus to results after the response renders; add flow tests - ([0e8aa31](https://github.com/snapetech-org/seerrng/commit/0e8aa3172e64a329391cff04919947b1ceac501e))
+- *(ui)* Ship the cross-media stylesheet; add a Playwright screen audit - ([555fc28](https://github.com/snapetech-org/seerrng/commit/555fc283a43506a999b2831bdf68ab75d7cde044))
+- *(unraid)* Follow the latest stable image tag - ([76237c6](https://github.com/snapetech-org/seerrng/commit/76237c68d174181aa80b7213b4e1a036fabe0e03))
+- Keep stable SeerrNG image aliases in sync - ([b810153](https://github.com/snapetech-org/seerrng/commit/b810153c7d180a1d50388c9db6ae72195d1ab56e))
+
+### 📖 Documentation
+- *(books)* Clarify migration readiness evidence - ([902ef57](https://github.com/snapetech-org/seerrng/commit/902ef575b55ecd33585c99d14fadcd8cda1f77c7))
+- *(books)* Keep BookshelfNG cutover frozen - ([86361e3](https://github.com/snapetech-org/seerrng/commit/86361e3b0f6dadb3e334c0cb98effdbd781e57b2))
+- *(maintainers)* Plan cross-media discovery and edition features - ([e881537](https://github.com/snapetech-org/seerrng/commit/e8815370125a1a60469383d7f9fe56ebeec338f8))
+- *(maintainers)* Plan cross-media discovery and edition features - ([f08dd99](https://github.com/snapetech-org/seerrng/commit/f08dd99cee26049487333f6d069c68468d1fe8aa))
+
+### 🧪 Testing
+- *(integration)* Verify migrated ChaptarrNG records - ([fdc439a](https://github.com/snapetech-org/seerrng/commit/fdc439aa9b37d3dfad7487ba8b772c02e136c467))
+
+### ⚙️ Miscellaneous Tasks
+- Target restricted JIT runner group - ([a75eb3b](https://github.com/snapetech-org/seerrng/commit/a75eb3b9a781a5b6b43f12303b7ab1835f064de4))
+
 ## [3.67.0](https://github.com/snapetech-org/seerrng/compare/v3.66.0..v3.67.0) - 2026-10-18
 
 ### User-facing changes
