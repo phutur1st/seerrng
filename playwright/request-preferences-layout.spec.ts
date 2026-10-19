@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test.use({ serviceWorkers: 'block' });
 
 for (const width of [1440, 390]) {
-  test(`approved episode preferences retain shared control geometry at ${width}px`, async ({
+  test(`administrator-assigned episode preferences retain shared control geometry at ${width}px`, async ({
     page,
     baseURL,
   }) => {
@@ -32,7 +32,7 @@ for (const width of [1440, 390]) {
     ]);
     await page.route('**/api/v1/user/1/settings/episode-queue', (route) =>
       route.fulfill({
-        json: { status: 'approved', requestedAt: null, defaultEpisodeCount: 2 },
+        json: { status: 'approved', defaultEpisodeCount: 2 },
       })
     );
     await page.goto('/profile/settings/episode-queue');

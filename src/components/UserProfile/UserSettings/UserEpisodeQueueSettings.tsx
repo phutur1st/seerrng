@@ -18,57 +18,31 @@ const messages = defineMessages(
   'components.UserProfile.UserSettings.UserEpisodeQueueSettings',
   {
     title: 'Episode Queue',
-    description:
-      'Keep upcoming episodes requested as you watch. Set a default once for all of your shows, then change an individual show from its request when needed.',
-    statusOff: 'Access not requested',
-    statusPending: 'Waiting for approval',
-    statusApproved: 'Access approved',
-    statusDenied: 'Request declined',
-    statusDescriptionOff:
-      'A user manager must approve Episode Queue before you can turn it on for your shows.',
-    statusDescriptionPending:
-      'Your request is in the user manager’s review queue. You can cancel it while it is pending.',
-    statusDescriptionApproved:
-      'Your default applies to existing and future TV requests. Requests with a show-specific override keep that choice.',
-    statusDescriptionDenied:
-      'A user manager declined this request. You can request access again from this page.',
-    request: 'Request Access',
-    requestAgain: 'Request Again',
-    cancel: 'Cancel Request',
-    approve: 'Approve Access',
-    deny: 'Decline Request',
-    revoke: 'Revoke Access',
-    defaultLabel: 'Default Episodes to Queue',
+    adminDescription:
+      'Set one default for all of this user’s interactive TV requests. It updates existing and future requests that follow the user default.',
+    statusOn: 'Enabled by admin',
+    statusOff: 'Off for this user',
+    defaultLabel: 'Episodes to Keep Requested',
     defaultHelp:
-      'This applies to all of {userName}’s TV requests. Set Off to pause the default; show-specific choices stay in place.',
+      'This applies to all existing and future interactive TV requests for this user. Each request starts with one episode, then playback keeps the selected number of upcoming episodes requested.',
     off: 'Off',
     episodeOption: '{count, plural, one {# episode} other {# episodes}}',
     save: 'Save Default',
     saving: 'Saving…',
-    saved: 'Episode Queue settings saved.',
-    error: 'Could not update Episode Queue settings. Try again.',
+    saved: 'Episode Queue default saved.',
+    error: 'Could not update this user’s Episode Queue default. Try again.',
     loadError: 'Could not load Episode Queue settings.',
-    noPermission: 'Only this user or a user manager can manage these settings.',
-    modalRequestTitle: 'Request Episode Queue Access?',
-    modalRequestDescription:
-      'A user manager will review your request. Once approved, you can choose a default that applies to all your shows.',
-    modalCancelTitle: 'Cancel Your Request?',
-    modalCancelDescription:
-      'Your request will be removed from the review queue. You can request access again later.',
-    modalApproveTitle: 'Approve Episode Queue Access?',
-    modalApproveDescription:
-      'This user will be able to set a default Episode Queue length for all of their shows and override individual requests.',
-    modalDenyTitle: 'Decline This Request?',
-    modalDenyDescription:
-      'The user can request Episode Queue access again from their profile.',
-    modalRevokeTitle: 'Revoke Episode Queue Access?',
-    modalRevokeDescription:
-      'This stops future Episode Queue additions for the user. Episodes already requested remain in place.',
-    dateRequested: 'Requested {date}',
+    retry: 'Retry',
+    noPermission: 'Only a user manager can manage Episode Queue settings.',
+    managedByAdmin:
+      'Episode Queue is managed by your server administrator from each user’s profile.',
+    modalTitle: 'Apply This Episode Queue Default?',
+    modalOn:
+      'This will keep {count} queued ahead on all of this user’s existing and future interactive TV requests. Episodes already requested will stay in place.',
+    modalOff:
+      'This will stop future Episode Queue additions across this user’s interactive TV requests. Episodes already requested will remain in SeerrNG and Sonarr.',
   }
 );
-
-type EpisodeQueueAction = 'request' | 'cancel' | 'approve' | 'deny' | 'revoke';
 
 const UserEpisodeQueueSettings = () => {
   const router = useRouter();
@@ -77,80 +51,24 @@ const UserEpisodeQueueSettings = () => {
   const { user: currentUser, hasPermission } = useUser();
   const profileUserId = getPositiveQueryParamNumber(router.query.userId);
   const targetUserId = profileUserId ?? currentUser?.id;
-  const isSelf = targetUserId === currentUser?.id;
   const canManageUsers = hasPermission(Permission.MANAGE_USERS);
-  const canReview = canManageUsers && !isSelf;
   const {
     data,
     error: loadError,
     mutate: refreshAccess,
   } = useSWR<EpisodeQueueAccessResponse>(
-    targetUserId ? `/api/v1/user/${targetUserId}/settings/episode-queue` : null
+    canManageUsers && targetUserId
+      ? `/api/v1/user/${targetUserId}/settings/episode-queue`
+      : null
   );
   const [defaultCount, setDefaultCount] = useState(0);
-  const [pendingAction, setPendingAction] = useState<EpisodeQueueAction>();
+  const [showConfirm, setShowConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [actionError, setActionError] = useState(false);
 
   useEffect(() => {
     setDefaultCount(data?.defaultEpisodeCount ?? 0);
   }, [data?.defaultEpisodeCount]);
-
-  const status = data?.status ?? 'off';
-  const statusLabel =
-    status === 'pending'
-      ? messages.statusPending
-      : status === 'approved'
-        ? messages.statusApproved
-        : status === 'denied'
-          ? messages.statusDenied
-          : messages.statusOff;
-  const statusDescription =
-    status === 'pending'
-      ? messages.statusDescriptionPending
-      : status === 'approved'
-        ? messages.statusDescriptionApproved
-        : status === 'denied'
-          ? messages.statusDescriptionDenied
-          : messages.statusDescriptionOff;
-  const displayName = isSelf ? 'your account' : 'this user';
-
-  const submitAction = async () => {
-    if (!pendingAction || !targetUserId) return;
-    setIsSaving(true);
-    setActionError(false);
-    try {
-      let response: { data: EpisodeQueueAccessResponse };
-      if (pendingAction === 'approve' || pendingAction === 'deny') {
-        response = await axios.post<EpisodeQueueAccessResponse>(
-          `/api/v1/user/${targetUserId}/settings/episode-queue/review`,
-          { decision: pendingAction }
-        );
-      } else if (pendingAction === 'revoke') {
-        response = await axios.post<EpisodeQueueAccessResponse>(
-          `/api/v1/user/${targetUserId}/settings/episode-queue/review`,
-          { decision: 'revoke' }
-        );
-      } else {
-        response = await axios.post<EpisodeQueueAccessResponse>(
-          `/api/v1/user/${targetUserId}/settings/episode-queue`,
-          { action: pendingAction }
-        );
-      }
-      setPendingAction(undefined);
-      await refreshAccess(response.data);
-      await mutate(`/api/v1/user/${targetUserId}`);
-      await mutate('/api/v1/auth/me');
-      addToast(intl.formatMessage(messages.saved), {
-        appearance: 'success',
-        autoDismiss: true,
-      });
-    } catch {
-      setActionError(true);
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const saveDefault = async () => {
     if (!targetUserId) return;
@@ -159,8 +77,9 @@ const UserEpisodeQueueSettings = () => {
     try {
       const { data: nextAccess } = await axios.post<EpisodeQueueAccessResponse>(
         `/api/v1/user/${targetUserId}/settings/episode-queue`,
-        { action: 'set-default', defaultEpisodeCount: defaultCount }
+        { defaultEpisodeCount: defaultCount }
       );
+      setShowConfirm(false);
       await refreshAccess(nextAccess);
       await mutate(`/api/v1/user/${targetUserId}`);
       await mutate('/api/v1/auth/me');
@@ -175,7 +94,12 @@ const UserEpisodeQueueSettings = () => {
     }
   };
 
-  if (!targetUserId || (!isSelf && !canManageUsers)) {
+  if (!canManageUsers) {
+    return (
+      <Alert type="info" title={intl.formatMessage(messages.managedByAdmin)} />
+    );
+  }
+  if (!targetUserId) {
     return (
       <Alert type="error" title={intl.formatMessage(messages.noPermission)} />
     );
@@ -183,67 +107,36 @@ const UserEpisodeQueueSettings = () => {
   if (!data && !loadError) return <LoadingSpinner />;
   if (!data) {
     return (
-      <Alert type="error" title={intl.formatMessage(messages.loadError)} />
+      <div className="card-list">
+        <Alert type="error" title={intl.formatMessage(messages.loadError)} />
+        <Button buttonType="ghost" onClick={() => void refreshAccess()}>
+          {intl.formatMessage(messages.retry)}
+        </Button>
+      </div>
     );
   }
 
-  const statusBadge =
-    status === 'approved'
-      ? 'success'
-      : status === 'pending'
-        ? 'warning'
-        : status === 'denied'
-          ? 'danger'
-          : 'default';
-  const actionMessage =
-    pendingAction === 'request'
-      ? messages.modalRequestDescription
-      : pendingAction === 'cancel'
-        ? messages.modalCancelDescription
-        : pendingAction === 'approve'
-          ? messages.modalApproveDescription
-          : pendingAction === 'revoke'
-            ? messages.modalRevokeDescription
-            : messages.modalDenyDescription;
-  const actionTitle =
-    pendingAction === 'request'
-      ? messages.modalRequestTitle
-      : pendingAction === 'cancel'
-        ? messages.modalCancelTitle
-        : pendingAction === 'approve'
-          ? messages.modalApproveTitle
-          : pendingAction === 'revoke'
-            ? messages.modalRevokeTitle
-            : messages.modalDenyTitle;
-
+  const isEnabled = data.defaultEpisodeCount > 0;
+  const statusBadge = isEnabled ? 'success' : 'default';
   return (
     <div className="card-list">
-      {pendingAction && (
+      {showConfirm && (
         <Modal
-          title={intl.formatMessage(actionTitle)}
-          onCancel={() => setPendingAction(undefined)}
-          onOk={() => void submitAction()}
+          title={intl.formatMessage(messages.modalTitle)}
+          onCancel={() => setShowConfirm(false)}
+          onOk={() => void saveDefault()}
           okText={intl.formatMessage(
-            isSaving
-              ? messages.saving
-              : pendingAction === 'request'
-                ? messages.request
-                : pendingAction === 'cancel'
-                  ? messages.cancel
-                  : pendingAction === 'approve'
-                    ? messages.approve
-                    : pendingAction === 'revoke'
-                      ? messages.revoke
-                      : messages.deny
+            isSaving ? messages.saving : messages.save
           )}
           okDisabled={isSaving}
-          okButtonType={
-            pendingAction === 'deny' || pendingAction === 'revoke'
-              ? 'danger'
-              : 'primary'
-          }
         >
-          {intl.formatMessage(actionMessage)}
+          {defaultCount > 0
+            ? intl.formatMessage(messages.modalOn, {
+                count: intl.formatMessage(messages.episodeOption, {
+                  count: defaultCount,
+                }),
+              })
+            : intl.formatMessage(messages.modalOff)}
         </Modal>
       )}
       <section className="app-card-main refreshed-card-surface card-list">
@@ -255,119 +148,57 @@ const UserEpisodeQueueSettings = () => {
           <div className="card-layout" data-card-layout="copy">
             <h2 className="card-title">{intl.formatMessage(messages.title)}</h2>
             <p className="card-body-text">
-              {intl.formatMessage(messages.description)}
+              {intl.formatMessage(messages.adminDescription)}
             </p>
           </div>
           <Badge badgeType={statusBadge}>
-            {intl.formatMessage(statusLabel)}
+            {intl.formatMessage(
+              isEnabled ? messages.statusOn : messages.statusOff
+            )}
           </Badge>
         </div>
 
         <div className="app-card-inset refreshed-inset-surface card-list">
+          <label
+            htmlFor="episode-queue-default-count"
+            className="card-table-heading"
+          >
+            {intl.formatMessage(messages.defaultLabel)}
+          </label>
+          <select
+            id="episode-queue-default-count"
+            className="request-form-control"
+            data-control-size="compact"
+            value={defaultCount}
+            onChange={(event) => setDefaultCount(Number(event.target.value))}
+            disabled={isSaving}
+          >
+            <option value={0}>{intl.formatMessage(messages.off)}</option>
+            {[1, 2, 3, 4, 5].map((count) => (
+              <option key={count} value={count}>
+                {intl.formatMessage(messages.episodeOption, { count })}
+              </option>
+            ))}
+          </select>
           <p className="card-body-text">
-            {intl.formatMessage(statusDescription)}
+            {intl.formatMessage(messages.defaultHelp)}
           </p>
-          {data.requestedAt && status === 'pending' && (
-            <p className="card-table-value refreshed-detail-text-muted">
-              {intl.formatMessage(messages.dateRequested, {
-                date: intl.formatDate(new Date(data.requestedAt), {
-                  dateStyle: 'medium',
-                }),
-              })}
-            </p>
-          )}
-        </div>
-
-        {status === 'approved' && (
-          <div className="app-card-inset refreshed-inset-surface card-list">
-            <label
-              htmlFor="episode-queue-default-count"
-              className="card-table-heading"
+          <div className="app-action-row" data-action-placement="leading">
+            <Button
+              buttonType="primary"
+              disabled={isSaving || defaultCount === data.defaultEpisodeCount}
+              onClick={() => setShowConfirm(true)}
             >
-              {intl.formatMessage(messages.defaultLabel)}
-            </label>
-            <select
-              id="episode-queue-default-count"
-              className="request-form-control"
-              data-control-size="compact"
-              value={defaultCount}
-              onChange={(event) => setDefaultCount(Number(event.target.value))}
-              disabled={isSaving}
-            >
-              <option value={0}>{intl.formatMessage(messages.off)}</option>
-              {[1, 2, 3, 4, 5].map((count) => (
-                <option key={count} value={count}>
-                  {intl.formatMessage(messages.episodeOption, { count })}
-                </option>
-              ))}
-            </select>
-            <p className="card-body-text">
-              {intl.formatMessage(messages.defaultHelp, {
-                userName: displayName,
-              })}
-            </p>
-            <div className="app-action-row" data-action-placement="leading">
-              <Button
-                buttonType="primary"
-                disabled={isSaving || defaultCount === data.defaultEpisodeCount}
-                onClick={() => void saveDefault()}
-              >
-                {intl.formatMessage(isSaving ? messages.saving : messages.save)}
-              </Button>
-            </div>
+              {intl.formatMessage(messages.save)}
+            </Button>
           </div>
-        )}
+        </div>
 
         {(actionError || loadError) && (
           <div>
             <Alert type="error" title={intl.formatMessage(messages.error)} />
           </div>
         )}
-
-        <div className="app-action-row" data-action-placement="leading">
-          {isSelf && (status === 'off' || status === 'denied') && (
-            <Button
-              buttonType="primary"
-              onClick={() => setPendingAction('request')}
-            >
-              {intl.formatMessage(
-                status === 'denied' ? messages.requestAgain : messages.request
-              )}
-            </Button>
-          )}
-          {isSelf && status === 'pending' && (
-            <Button
-              buttonType="ghost"
-              onClick={() => setPendingAction('cancel')}
-            >
-              {intl.formatMessage(messages.cancel)}
-            </Button>
-          )}
-          {canReview && status === 'pending' && (
-            <>
-              <Button
-                buttonType="primary"
-                onClick={() => setPendingAction('approve')}
-              >
-                {intl.formatMessage(messages.approve)}
-              </Button>
-              <Button
-                buttonType="danger"
-                onClick={() => setPendingAction('deny')}
-              >
-                {intl.formatMessage(messages.deny)}
-              </Button>
-            </>
-          )}
-          {canReview && status === 'approved' && (
-            <Button
-              buttonType="danger"
-              onClick={() => setPendingAction('revoke')}
-            >
-              {intl.formatMessage(messages.revoke)}
-            </Button>
-          )}
-        </div>
       </section>
     </div>
   );

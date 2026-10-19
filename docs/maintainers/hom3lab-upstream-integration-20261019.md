@@ -1,5 +1,7 @@
 # Hom3lab upstream integration — October 19, 2026
 
+Current pinned target: `881294bf7995e5a7aa0c6dae19b420ee15dd0bd1`, 52 upstream commits since the deployed fork's common ancestor. The initial 50-commit candidate was superseded before any push. Historical first-candidate results below do not verify the two later request-policy commits.
+
 ## Authority and source
 
 1. Maintainer requested another upstream integration and investigation of failing season requests. The repeated update continues the previously authorized fork-only push, native CI, image publication and HLOS deployment workflow. Upstream is fetch-only; its push URL remains DISABLED. No provider submissions, live request retries or service migrations are authorized as test actions.
@@ -63,3 +65,13 @@ The final tooling prerequisite run additionally supplies GNU realpath for the ex
 The final lower-concurrency Vitest run passes 4,291 tests with 5 PostgreSQL skips (601 files passed, 2 skipped). Exact committed-source production build, bundle budget, 49 Playwright cases, current style checks and type checks pass. Formatting passes after moving generated Playwright output into ignored evidence, without changing the formatter scope. Local full Cypress is running against the committed build. The final exact-source hosted CI remains mandatory before image/deployment completion. The image publication workflow and inherited Helm deny guard are unchanged from the deployed fork. There are no public asset changes in this integration, so the existing persistent public mount needs no asset replacement.
 
 Separate final visual captures cover 16 desktop/narrow states at 1440/390 widths, including mocked approved preferences, pending manager queues and Bindery setup. No page errors or horizontal document overflow were recorded. Bindery dialog captures taken during the opening transition are iteration evidence; settled dialog inspection is recorded separately. No production visual claim or live provider POST is made.
+
+## Late upstream request-policy update
+
+A final authenticated fetch before publication found `45a26e488` and `881294bf7`. The earlier candidate `2d8f2e78378bf9af41d958ce7a6c3c5682f9eb1f` is recoverable at `recovery/upstream-first-candidate-20261019`; neither it nor its image was published. Current pinned upstream is `881294bf7995e5a7aa0c6dae19b420ee15dd0bd1`.
+
+The new upstream policy makes Episode Queue administrator-managed, removes end-user approval/per-show controls, and adds a migration that collapses root interactive TV requests to their owner's saved default while preserving automatic full-season requests. The rollback cannot reconstruct prior per-show values, so a fresh private database/config backup is required before deployment. Existing media/provider records and downloaded files are not removed by that migration. No new per-user value is chosen or written by this integration.
+
+Resolution adopts upstream's administrator-only route/UI/confirmation behavior and deletes its retired approval-queue component. The replacement profile component retains the fork's shared card, compact-control and responsive summary roles. The existing role audit drops only the deleted consumer; upstream's new tree tests cover forbidden end-user controls and confirmed manager changes. The browser fixture follows the revised response interface. English messages regenerate from source, preserving all other fork labels. Upstream read-only assigned-status style checks replace obsolete per-show dropdown assertions; retired dropdown paint stays removed.
+
+The Sonarr payload fix, accepted-operation guard and verified book availability are unchanged by these two commits. Both SQLite/PostgreSQL migrations and request-policy tests are included. Full native Node, Vitest, clean build/types, style and affected browser checks repeat on the latest candidate. Earlier completed and interrupted runs remain recorded as superseded evidence.

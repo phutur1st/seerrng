@@ -2018,3 +2018,5 @@ entry records AI-assisted work; it does not assert a completed gate or deploymen
 ## Hom3lab upstream and Sonarr follow-up — October 19, 2026
 
 The current isolated candidate integrates upstream `f2d83c0e6553e6a7be858188e348d052b621d342` onto fork `1949db7bf0ebb5c28d5d98660820a6c4ef5a10bb`. See [the integration ledger](hom3lab-upstream-integration-20261019.md) for recovery, Sonarr diagnosis, preservation decisions and actual check status. This AI-assisted integration uses native CI; historical retired-engine procedures do not apply. Candidate verification remains in progress.
+
+The October 19 target advanced before publication to `881294bf7995e5a7aa0c6dae19b420ee15dd0bd1` (52 upstream commits). Its administrator-managed Episode Queue behavior supersedes the initial candidate's user-approval controls. The ledger records recovery, conflict resolution and invalidated checks; no initial candidate was published.
