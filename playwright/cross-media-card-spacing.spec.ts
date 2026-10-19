@@ -45,7 +45,7 @@ for (const viewport of [
       ]);
       await page.route('**/api/v1/resolve/capabilities', (r) =>
         r.fulfill({
-          json: { text: false, image: false, maxImageBytes: 8388608 },
+          json: { enabled: false, image: false, maxImageBytes: 8388608 },
         })
       );
       await page.route('**/api/v1/follow**', (r) =>

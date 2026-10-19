@@ -1,3 +1,16 @@
+import type { RecognitionSettings } from '@server/lib/settings';
+
+const recognitionSettings: RecognitionSettings = {
+  enabled: true,
+  localOcr: true,
+  visionProvider: 'none',
+  visionApiKey: '',
+  visionModel: '',
+  visionBaseUrl: 'https://api.openai.com/v1',
+  externalConsent: false,
+  maxImageBytes: 6 * 1024 * 1024,
+};
+
 const platformMappings = {
   systems: [
     {
@@ -196,6 +209,11 @@ const mockIntegrationData = () => {
         aiBaseUrl: 'https://api.openai.com/v1',
         aiEffort: 'medium',
       });
+    } else if (pathname === '/api/v1/settings/recognition') {
+      // This is an object of controlled fields. The list-endpoint fallback
+      // leaves checkbox values undefined and incorrectly requires Formik.
+      request.alias = 'recognitionSettings';
+      request.reply({ body: recognitionSettings });
     } else if (pathname === '/api/v1/settings/reader-delivery') {
       request.reply({
         grimmoryUrl: '',
@@ -325,6 +343,9 @@ describe('ROMarrNG software acquisition integration', () => {
     cy.wait('@softwareCatalogSystems')
       .its('response.statusCode')
       .should('eq', 200);
+    cy.wait('@recognitionSettings')
+      .its('response.body')
+      .should('deep.equal', recognitionSettings);
     cy.location('pathname').then((pathname) => {
       cy.get('body').then(($body) => {
         const pageText = $body.text().replace(/\s+/g, ' ').trim();

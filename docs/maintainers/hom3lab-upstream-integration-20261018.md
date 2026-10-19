@@ -104,3 +104,25 @@ The earlier October 17 deployment finished on a5c5800: native CI run
 39058387469, fork image run 39061754915 and Compose deployment run 39062482548
 passed. Its existing requests 811/812 were reconciled successfully; those prior
 results do not verify this new candidate.
+
+## Hosted Cypress fixture correction
+
+Candidate b841f9c passed 4247 hosted Vitest tests (5 PostgreSQL skips), 289
+Linux tooling tests, 32 Playwright cases, production build/types/lint/format,
+CodeQL, docs, Helm and Jellyfin checks. Cypress reached 191 pass / 1 fail /
+32 pending: the ROMarr service-settings case rendered the error boundary.
+
+Reproduction on the isolated production build captured `getFieldProps` without
+a Formik context. The catch-all Cypress settings mock returned an empty array
+for the new recognition endpoint; undefined checkbox values selected the
+Formik adapter instead of its controlled boolean branch. Production supplies
+an object with booleans. The fixture now uses the typed RecognitionSettings
+contract and asserts its response while retaining every platform-preview and
+manual-save assertion. Local Cypress reproduces 3/4 before and passes all four
+after the fixture correction. No application behavior or assertion was weakened.
+The card browser fixture also explicitly supplies its disabled capability flag.
+
+The earlier native job was cancelled after this gate failure because its source
+was superseded. Full native CI must pass on the final fixture-corrected commit.
+No image was deployed from either superseded candidate. Local Cypress requires
+clearing the inherited ELECTRON_RUN_AS_NODE variable to launch its browser.
