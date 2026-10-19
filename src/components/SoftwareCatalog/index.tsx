@@ -5,6 +5,9 @@ import IndexerSearchLink from '@app/components/Common/IndexerSearchLink';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import Modal from '@app/components/Common/Modal';
 import PageTitle from '@app/components/Common/PageTitle';
+import RelatedTools from '@app/components/Common/RelatedTools';
+import GameContentPicker from '@app/components/GameContent';
+import PatchPicker from '@app/components/PatchProjects';
 import QuotaDisplay from '@app/components/RequestModal/QuotaDisplay';
 import useSettings from '@app/hooks/useSettings';
 import { Permission, useUser } from '@app/hooks/useUser';
@@ -17,6 +20,7 @@ import type {
   PcArchitecture,
   PcOperatingSystem,
 } from '@server/api/software/types';
+import type { SoftwareSelection } from '@server/entity/SoftwareRequest';
 import type { QuotaResponse } from '@server/interfaces/api/userInterfaces';
 import axios from 'axios';
 import { useRouter } from 'next/router';
@@ -198,6 +202,7 @@ const SoftwareCatalog = ({
   const [releaseYearFilter, setReleaseYearFilter] = useState('');
   const [releaseYearInput, setReleaseYearInput] = useState('');
   const [selectedGame, setSelectedGame] = useState<CatalogGame | null>(null);
+  const [selection, setSelection] = useState<SoftwareSelection | null>(null);
   const [selectedSystem, setSelectedSystem] = useState('');
   const [variant, setVariant] = useState<PcVariant>({
     operatingSystem: '',
@@ -458,6 +463,10 @@ const SoftwareCatalog = ({
     );
   };
 
+  useEffect(() => {
+    setSelection(null);
+  }, [selectedGame?.catalogId, selectedGame?.catalogProvider]);
+
   const submitRequest = async () => {
     if (!selectedGame) return;
     if (
@@ -486,6 +495,7 @@ const SoftwareCatalog = ({
                 },
               }
             : { platformSlug: selectedSystem }),
+          ...(selection ? { selection } : {}),
         }
       );
       setRequestSuccess(
@@ -564,6 +574,9 @@ const SoftwareCatalog = ({
           <Header subtext={intl.formatMessage(messages.intro)}>
             {intl.formatMessage(messages.title)}
           </Header>
+        )}
+        {!embedded && (
+          <RelatedTools tools={['gameFinder', 'patches', 'following']} />
         )}
 
         <div className="mt-6 flex flex-wrap gap-2" role="tablist">
@@ -1188,6 +1201,23 @@ const SoftwareCatalog = ({
                     </select>
                   </label>
                 ))}
+              {canRequest &&
+                selectedCategory === 'game' &&
+                selectedGame.catalogProvider === 'igdb' &&
+                selectedGame.igdbId && (
+                  <GameContentPicker
+                    igdbId={selectedGame.igdbId}
+                    title={selectedGame.title}
+                    onChange={setSelection}
+                  />
+                )}
+              {canRequest && selectedCategory !== 'game' && (
+                <PatchPicker
+                  catalogKey={selectedGame.catalogId}
+                  platformSlug={selectedSystem}
+                  onChange={setSelection}
+                />
+              )}
               <IndexerSearchLink
                 category={selectedCategory}
                 title={selectedGame.title}

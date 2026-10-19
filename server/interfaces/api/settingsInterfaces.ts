@@ -1,3 +1,4 @@
+import type { AgeGateSettings } from '@server/constants/ageGate';
 import type { OtherUserAvailabilityMode } from '@server/constants/availability';
 import type { EnabledMediaCategories } from '@server/constants/mediaCategories';
 import type { PublicOidcProvider } from '@server/lib/settings';
@@ -54,6 +55,7 @@ export interface PublicSettingsResponse {
   emulationCatalogEnabled?: boolean;
   swipeEnabled?: boolean;
   enabledMediaCategories?: EnabledMediaCategories;
+  ageGate?: AgeGateSettings;
   discoverRegion: string;
   streamingRegion: string;
   originalLanguage: string;

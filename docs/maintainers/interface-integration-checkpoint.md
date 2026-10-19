@@ -2004,3 +2004,13 @@ inspection was performed and no host screenshots were taken. The fresh Mode 2
 plan, Cypress/Playwright, build and native receipt reconciliation remain
 required on the integrated head. The user-facing navigation note remains
 `release-notes/20261013-navigation-regrouping.md`.
+
+## Hom3lab upstream follow-up — October 18, 2026
+
+Pinned fork input `a5c5800deff02aa88ca5b49c676f083672695654` and upstream
+`10f06eab9a8c1852ea74d6dcf091d30fa061258a` are integrated in an isolated
+forward-merge candidate. The current native-CI path supersedes retired engine
+procedures in historical entries. See [the current integration ledger](hom3lab-upstream-integration-20261018.md)
+for the recovery ref, preservation inventory, conflict decision, scoped shared
+CSS ownership correction, test results and outstanding evidence. This checkpoint
+entry records AI-assisted work; it does not assert a completed gate or deployment.

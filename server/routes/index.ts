@@ -11,6 +11,7 @@ import dataSource, { getRepository } from '@server/datasource';
 import DiscoverSlider from '@server/entity/DiscoverSlider';
 import { User } from '@server/entity/User';
 import type { StatusResponse } from '@server/interfaces/api/settingsInterfaces';
+import { isContentRestricted } from '@server/lib/contentRestriction';
 import { isMediaCategoryEnabled } from '@server/lib/mediaCategories';
 import { Permission } from '@server/lib/permissions';
 import { getSettings } from '@server/lib/settings';
@@ -23,6 +24,7 @@ import logger from '@server/logger';
 import { apiResponseCache } from '@server/middleware/apiResponseCache';
 import { checkUser, isAuthenticated } from '@server/middleware/auth';
 import { authorizedRouteAccess } from '@server/middleware/authorizedMutation';
+import { contentRestrictionMiddleware } from '@server/middleware/contentRestriction';
 import deprecatedRoute from '@server/middleware/deprecation';
 import { mapProductionCompany } from '@server/models/Movie';
 import { mapNetwork } from '@server/models/Tv';
@@ -34,6 +36,8 @@ import {
   appDataPath,
   appDataPermissions,
   appDataStatus,
+  appDataWritable,
+  misplacedConfigMount,
 } from '@server/utils/appDataVolume';
 import { getAppVersion, getCommitTag } from '@server/utils/appVersion';
 import restartFlag from '@server/utils/restartFlag';
@@ -63,11 +67,17 @@ import bookRoutes from './book';
 import calendarRoutes from './calendar';
 import collectionRoutes from './collection';
 import collectionCatalogRoutes from './collectionCatalog';
+import collectorRoutes from './collectors';
 import comicRoutes from './comic';
+import continuationRoutes from './continuation';
 import desktopRoutes from './desktop';
 import discoverRoutes, { createTmdbWithRegionLanguage } from './discover';
 import discoveryIntegrationRoutes from './discoveryIntegrations';
+import editionRoutes from './editions';
 import externalRequestListRoutes from './externalRequestLists';
+import followRoutes from './follow';
+import franchiseRoutes from './franchise';
+import gameContentRoutes from './gameContent';
 import gameLibraryRoutes from './gameLibrary';
 import { imageCacheWarmRateLimit, warmImageCache } from './imageproxy';
 import indexerSearchRoutes from './indexerSearch';
@@ -79,12 +89,14 @@ import magazineRoutes from './magazine';
 import mediaRoutes from './media';
 import movieRoutes from './movie';
 import musicRoutes from './music';
+import patchRoutes from './patches';
 import personRoutes from './person';
 import playbackRoutes from './playback';
 import playlistRoutes from './playlist';
 import queueInterventionRoutes from './queueInterventions';
 import readMeABookRoutes from './readmeabook';
 import requestRoutes from './request';
+import resolveRoutes from './resolve';
 import searchRoutes from './search';
 import seriesRoutes from './series';
 import serviceRoutes from './service';
@@ -95,6 +107,7 @@ import sportarrRoutes from './sportarr';
 import swipeRoutes from './swipe';
 import tvRoutes from './tv';
 import user from './user';
+import vibeRoutes from './vibes';
 
 const router = Router();
 const maxTmdbId = 1_000_000_000;
@@ -118,6 +131,9 @@ const categoryAvailabilityGuard =
   };
 
 const adultContentPermissionGuard: RequestHandler = (req, res, next) => {
+  if (isContentRestricted(req.user)) {
+    return res.status(404).json({ status: 404, message: 'Not found.' });
+  }
   if (
     !req.user?.hasPermission(
       [Permission.ADMIN, Permission.MANAGE_REQUESTS, Permission.REQUEST_ADULT],
@@ -224,6 +240,7 @@ export const getReleaseUpdateStatus = (
 };
 
 router.use(checkUser);
+router.use(contentRestrictionMiddleware);
 router.use(apiResponseCache);
 
 router.get('/status/ready', publicStatusRateLimit, async (_req, res) => {
@@ -379,6 +396,8 @@ router.get(
       appData: appDataStatus(),
       appDataPath: appDataPath(),
       appDataPermissions: appDataPermissions(),
+      appDataWritable: appDataWritable(),
+      misplacedConfigMount: misplacedConfigMount() ?? null,
     });
   }
 );
@@ -388,6 +407,15 @@ router.use('/live', isAuthenticated(), liveRoutes);
 router.use('/live-tv', isAuthenticated(), liveTvRoutes);
 router.use('/soulseek', isAuthenticated(), soulseekRoutes);
 router.use('/swipe', isAuthenticated(), swipeRoutes);
+router.use('/resolve', isAuthenticated(), resolveRoutes);
+router.use('/continuation', isAuthenticated(), continuationRoutes);
+router.use('/editions', isAuthenticated(), editionRoutes);
+router.use('/follow', isAuthenticated(), followRoutes);
+router.use('/franchise', isAuthenticated(), franchiseRoutes);
+router.use('/game-content', isAuthenticated(), gameContentRoutes);
+router.use('/patches', isAuthenticated(), patchRoutes);
+router.use('/vibes', isAuthenticated(), vibeRoutes);
+router.use('/collectors', isAuthenticated(), collectorRoutes);
 router.use('/readmeabook', isAuthenticated(), readMeABookRoutes);
 router.get('/settings/public', async (req, res) => {
   const settings = getSettings();

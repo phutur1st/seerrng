@@ -7,6 +7,7 @@ import downloadRecovery from '@server/lib/downloadRecovery';
 import downloadTracker from '@server/lib/downloadtracker';
 import episodeWatchAhead from '@server/lib/episodeWatchAhead';
 import { syncAllExternalRequestLists } from '@server/lib/externalRequestLists';
+import { syncFollows } from '@server/lib/follow';
 import ImageProxy from '@server/lib/imageproxy';
 import { guideIndex } from '@server/lib/liveTv/guideIndex';
 import {
@@ -14,6 +15,7 @@ import {
   syncRecordings,
 } from '@server/lib/liveTv/recordings';
 import { syncSportsFollows } from '@server/lib/liveTv/sports';
+import { syncBookOrbitKoboCollections } from '@server/lib/readerDeliveryKobo';
 import refreshToken from '@server/lib/refreshToken';
 import { captureReleaseCalendarHistory } from '@server/lib/releaseCalendar/history';
 import { reconcileActiveRequests } from '@server/lib/requestStatus';
@@ -208,6 +210,43 @@ export const startJobs = (): void => {
         return runTrackedJob(
           'External Request List Sync',
           syncAllExternalRequestLists,
+          { logCompletion: true }
+        );
+      }
+    ),
+  });
+
+  scheduledJobs.push({
+    id: 'follow-sync',
+    name: 'Followed Interests Sync',
+    type: 'process',
+    interval: 'minutes',
+    cronSchedule: jobs['follow-sync'].schedule,
+    job: schedule.scheduleJob(jobs['follow-sync'].schedule, () => {
+      logger.info('Starting scheduled job: Followed Interests Sync', {
+        label: 'Jobs',
+      });
+      return runTrackedJob('Followed Interests Sync', syncFollows, {
+        logCompletion: true,
+      });
+    }),
+  });
+
+  scheduledJobs.push({
+    id: 'reader-delivery-kobo-sync',
+    name: 'BookOrbit Kobo Collection Sync',
+    type: 'process',
+    interval: 'minutes',
+    cronSchedule: jobs['reader-delivery-kobo-sync'].schedule,
+    job: schedule.scheduleJob(
+      jobs['reader-delivery-kobo-sync'].schedule,
+      () => {
+        logger.info('Starting scheduled job: BookOrbit Kobo Collection Sync', {
+          label: 'Jobs',
+        });
+        return runTrackedJob(
+          'BookOrbit Kobo Collection Sync',
+          syncBookOrbitKoboCollections,
           { logCompletion: true }
         );
       }

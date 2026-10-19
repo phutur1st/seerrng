@@ -2301,6 +2301,95 @@ describe('Bookshelf format-specific author configuration', () => {
     ]);
   });
 
+  it('configures the selected format before tracking an alongside edition', async () => {
+    const api = makeApi(true);
+    Object.assign(api, {
+      chaptarrCapabilities: {
+        contract: 'seerrng-bookshelf',
+        features: {
+          formatSpecificPaths: true,
+          wantedEditionVariants: true,
+          editionCatalog: true,
+        },
+      },
+    });
+    mock.method(
+      api as unknown as { isChaptarr: () => boolean },
+      'isChaptarr',
+      () => true
+    );
+    const author = {
+      id: 30,
+      authorName: 'Stephen King',
+      path: '/books/Stephen King',
+      monitored: true,
+      ebookQualityProfileId: 1,
+      ebookPath: '/books/Stephen King',
+    };
+    const calls: string[] = [];
+    mock.method(
+      api as unknown as MockableReadarr,
+      'request',
+      async (
+        method: string,
+        endpoint: string,
+        body?: Record<string, unknown>
+      ) => {
+        calls.push(method + ' ' + endpoint);
+        if (method === 'GET' && endpoint === '/author/30')
+          return { data: author };
+        if (method === 'PUT' && endpoint === '/author/30') {
+          assert.deepEqual(body, {
+            ...author,
+            audiobookQualityProfileId: 2,
+            audiobookMetadataProfileId: 2,
+            audiobookPath: '/audiobooks/Stephen King',
+          });
+          return { data: body };
+        }
+        if (method === 'GET' && endpoint === '/book/303/editions/catalog') {
+          return {
+            data: [
+              {
+                editionId: 42,
+                foreignEditionId: 'narration-42',
+                monitored: false,
+              },
+            ],
+          };
+        }
+        assert.equal(method, 'POST');
+        assert.equal(endpoint, '/book/303/editions/wanted');
+        assert.deepEqual(body, {
+          editionId: 42,
+          asNewVariant: true,
+          searchForNewBook: true,
+        });
+        return { data: existingBook };
+      }
+    );
+    const result = await api.addBook({
+      ...options,
+      editionPolicy: 'alongside',
+      editions: [
+        {
+          foreignEditionId: 'narration-42',
+          title: options.title,
+          monitored: true,
+        },
+      ],
+      addOptions: { searchForNewBook: true },
+    });
+    assert.equal(result.id, 303);
+    assert.equal(result.createdBook, false);
+    assert.deepEqual(calls, [
+      'GET /author/30',
+      'PUT /author/30',
+      'GET /book/303/editions/catalog',
+      'POST /book/303/editions/wanted',
+    ]);
+  });
+
   it('avoids changing already-correct format settings', async () => {
     const api = makeApi(true);
     const request = mock.method(

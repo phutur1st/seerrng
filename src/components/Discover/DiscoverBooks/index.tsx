@@ -3,6 +3,7 @@ import CardTextVisibilityToggle from '@app/components/Common/CardTextVisibilityT
 import Header from '@app/components/Common/Header';
 import ListView from '@app/components/Common/ListView';
 import PageTitle from '@app/components/Common/PageTitle';
+import RelatedTools from '@app/components/Common/RelatedTools';
 import BookFormatTabs, {
   type BookDiscoveryFormat,
 } from '@app/components/Discover/BookFormatTabs';
@@ -282,6 +283,7 @@ const DiscoverBooks = ({
       <PageTitle title={title} />
       <div className="app-filter-section-gap">
         <Header>{title}</Header>
+        <RelatedTools tools={['share', 'vibes', 'following']} />
         {activeFormat === 'audiobook' && <ReadMeABookSearch />}
         {mediaFilters}
         {showFormatTabs && (

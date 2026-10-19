@@ -19,6 +19,8 @@ SeerrNG is a self-hosted request and discovery app for personal media libraries.
 
 SeerrNG is maintained by snapetech as a separate fork so we can move quickly on cross-media workflows and test ambitious features while keeping Seerr as the base for inherited video, user, server, and deployment behavior. The fork gives us room to develop and validate ideas before proposing them upstream; it does not presume that upstream should adopt every feature or the entire product direction. See [why SeerrNG is a fork](./docs/fork-rationale.md) for the rationale, integration changes, and conditions that could let upstream equivalents replace the fork, and [NOTICE.md](./NOTICE.md) for attribution rules.
 
+For local MCP access, see the [SnapeTech MCP integration guide](./docs/integrations/snapetech-mcp.md).
+
 ## Contents
 
 - [What SeerrNG Does](#what-seerrng-does)
@@ -41,6 +43,12 @@ SeerrNG is maintained by snapetech as a separate fork so we can move quickly on 
   - [Filter and sort local watchlists](./docs/using-seerr/plex/watchlist-auto-request.md#find-items-in-your-watchlist)
   - [Follow another user's request](./docs/using-seerr/notifications/index.mdx#follow-a-movie-or-series-request)
   - [Companion services and SeerrNG NG forks](./docs/using-seerr/companion-services.md)
+  - [Share to Request: links, ISBNs, lists, and photos](./docs/using-seerr/share-to-request.md)
+  - [Continue, compare, and follow](./docs/using-seerr/cross-media-discovery.md)
+  - [Cross-media feature requirements](./docs/using-seerr/cross-media-requirements.md)
+  - [Following](./docs/using-seerr/following.md)
+  - [SeerrNG Companion browser extension](./docs/using-seerr/browser-extension.md)
+  - [Troubleshoot cross-media features](./docs/using-seerr/cross-media-troubleshooting.md)
   - [Add and import users](./docs/using-seerr/users/adding-users.mdx)
   - [Why SeerrNG is a fork and what could retire it](./docs/fork-rationale.md)
   - [Cross-platform setup assistant](./docs/using-seerr/setup-assistant.md)
@@ -104,6 +112,13 @@ SeerrNG is maintained by snapetech as a separate fork so we can move quickly on 
 - Optional read-only Audiobookshelf library scanning marks ISBN-matched items
   as available audiobooks without sending acquisition requests or changing
   Audiobookshelf data.
+- **Share to Request:** paste a link, ISBN, list of titles, or a photo (or use the Android Share menu) and request the matches you confirm, switching ebook and audiobook at the point of discovery. Photos are read by local OCR or an opt-in vision provider, including local Ollama-style servers.
+- **Continue the story:** from an anime, find the manga or light novel that continues it, see where the finished season ends when documented, and request the right volume or follow future translated volumes. A franchise page groups sources, sequels, and side stories with confidence and evidence.
+- **Editions and narrations:** compare narrators, full-cast and solo, abridged and unabridged, and keep a second performance alongside the first (ChaptarrNG); compare a series by narrator; request a specific standard, deluxe, or remastered album release.
+- **Games and patches:** compare game editions and request only the expansions you choose (QuestarrNG), find games by theme, mode, perspective, and language with saved searches, and request exact translation or ROM-hack versions with the original kept alongside (ROMarrNG).
+- **Discovery you steer:** Hardcover Book Vibes with standalone, first-in-series, and less-popular filters; Collector Picks from slskdN with the reason each appeared.
+- **Following:** follow narrators, authors, series, game content, artists, and patch projects and read personal news that says why each item appeared; optional auto-request is limited to books.
+- A standalone [SeerrNG Companion browser extension](https://github.com/snapetech-org/seerrng-companion) for requesting from IMDb, Letterboxd, Steam, Goodreads, AniList, and more.
 - Catalog browsing and requests for Retro and Modern emulation systems and PC games for Windows, Linux, and macOS, with QuestarrNG and ROMarrNG handling acquisition.
 - Administrator-controlled availability switches for each supported category, including separate ebook, audiobook, Retro, Modern, and PC Games controls.
 - Bookshelf backend diagnostics that classify Hardcover, softcover/Goodreads, and unknown metadata providers.
@@ -187,6 +202,12 @@ SeerrNG documentation is maintained in the [docs folder](https://github.com/snap
 - [Discover and request magazines](./docs/using-seerr/magazines-backend.md)
 - [Track requests and status history](./docs/using-seerr/request-status.md)
 - [Browse and request emulation games and PC games](./docs/using-seerr/software-acquisition.md)
+- [Share to Request](./docs/using-seerr/share-to-request.md)
+- [Continue, compare, and follow](./docs/using-seerr/cross-media-discovery.md)
+- [What each cross-media feature needs](./docs/using-seerr/cross-media-requirements.md)
+- [Following](./docs/using-seerr/following.md)
+- [Browser extension](./docs/using-seerr/browser-extension.md)
+- [Troubleshoot cross-media features](./docs/using-seerr/cross-media-troubleshooting.md)
 - [Download verified files from Request Status](./docs/using-seerr/request-status.md)
 - [Use media detail and playback controls](./docs/using-seerr/media-details-and-playback.md)
 - [Configure media-server libraries, including Plex Music and Audiobooks](./docs/using-seerr/settings/mediaserver.mdx)

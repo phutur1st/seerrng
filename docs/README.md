@@ -53,6 +53,15 @@ connects to.
 - [Hide requested or available media](/using-seerr/settings/general)
 - [Plex watchlist auto-requests](/using-seerr/plex/watchlist-auto-request/)
 
+## Share, continue, compare, and follow
+
+- [Share to Request: links, ISBNs, lists, and photos](/using-seerr/share-to-request)
+- [Continue an anime, compare editions, and find games and patches](/using-seerr/cross-media-discovery)
+- [Following](/using-seerr/following)
+- [SeerrNG Companion browser extension](/using-seerr/browser-extension)
+- [Troubleshoot cross-media features](/using-seerr/cross-media-troubleshooting)
+- [Cross-media plan and build record](/maintainers/cross-media-discovery-plan)
+
 ## Configure and operate
 
 - [Choose metadata providers and configure music request limits](/using-seerr/settings/metadata/)
@@ -64,6 +73,8 @@ connects to.
 - [Choose available media categories](/using-seerr/settings/media-categories/)
 - [Configure media-server libraries](/using-seerr/settings/mediaserver)
 - [Choose and configure companion services](/using-seerr/companion-services)
+- [What each cross-media feature needs](/using-seerr/cross-media-requirements)
+- [Set up image recognition for Share to Request](/using-seerr/share-to-request/#administrators)
 - [Companion service integrations](/using-seerr/dependency-forks/)
 - [Configure ChaptarrNG and its SeerrNG service key](/using-seerr/bookshelf-backend/#chaptarrng)
 - [Preview a BookshelfNG-to-ChaptarrNG migration](/using-seerr/bookshelf-backend/#installer-script)
@@ -78,6 +89,7 @@ connects to.
 - [Back up SeerrNG](/using-seerr/backups/)
 
 ## Integrate and contribute
+- [Setup experience contract](/maintainers/setup-experience-contract): evolve the existing first-run, category, and service surfaces.
 
 - [Why SeerrNG maintains a fork and what a replacement must provide](/fork-rationale/)
 - [REST API reference](/api/seerr-api/)

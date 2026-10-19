@@ -4,6 +4,7 @@ import CardTextVisibilityToggle from '@app/components/Common/CardTextVisibilityT
 import Header from '@app/components/Common/Header';
 import ListView from '@app/components/Common/ListView';
 import PageTitle from '@app/components/Common/PageTitle';
+import RelatedTools from '@app/components/Common/RelatedTools';
 import AvailabilityQualityControl, {
   type AvailabilityQuality,
 } from '@app/components/Discover/AvailabilityQualityControl';
@@ -235,6 +236,7 @@ const DiscoverMusic = ({
             </Button>
           </div>
         </div>
+        <RelatedTools tools={['share', 'collectors', 'following']} />
         {mediaFilters}
         <PinnedFilterSectionGroup
           mediaType="music"

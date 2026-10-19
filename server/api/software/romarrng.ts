@@ -1,4 +1,5 @@
 import ExternalAPI from '@server/api/externalapi';
+import type { SoftwareSelection } from '@server/entity/SoftwareRequest';
 import cacheManager from '@server/lib/cache';
 import { enrichDatCatalogArtwork } from '@server/lib/datCatalogArtwork';
 import type { SoftwareProviderSettings } from '@server/lib/settings';
@@ -8,6 +9,9 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { SoftwareAssetStream } from './questarrng';
 import type {
+  PatchProject,
+  PatchSearchFilters,
+  PatchSearchPage,
   SoftwareAssetsResponse,
   SoftwareCatalogGame,
   SoftwareCatalogPlatform,
@@ -335,13 +339,50 @@ export class ROMarrNGAPI extends ExternalAPI {
     );
   }
 
+  /** Translation, hack, and improvement projects with their versions. */
+  public searchPatchProjects(
+    filters: PatchSearchFilters,
+    limit = 24,
+    cursor?: string
+  ): Promise<PatchSearchPage> {
+    return this.getIntegrationBase().then((base) =>
+      this.get(
+        `${base}/patches/search`,
+        {
+          params: {
+            q: filters.q,
+            platform: filters.platformSlug,
+            kind: filters.kind,
+            language: filters.language,
+            completeOnly: filters.completeOnly ? 'true' : undefined,
+            catalogKey: filters.catalogKey,
+            limit,
+            ...(cursor ? { cursor } : {}),
+          },
+        },
+        900
+      )
+    );
+  }
+
+  public getPatchProject(projectId: string): Promise<PatchProject> {
+    return this.getIntegrationBase().then((base) =>
+      this.get(
+        `${base}/patches/projects/${encodeURIComponent(projectId)}`,
+        {},
+        300
+      )
+    );
+  }
+
   public createRequest(
     externalRequestId: string,
     game: string,
     platform: string,
     catalogId?: number,
     platformId?: number,
-    datIdentity?: { catalogKey: string; platformSlug: string }
+    datIdentity?: { catalogKey: string; platformSlug: string },
+    selection?: SoftwareSelection | null
   ): Promise<SoftwareProviderRequest> {
     return this.getIntegrationBase().then((base) =>
       this.post(`${base}/requests`, {
@@ -359,6 +400,7 @@ export class ROMarrNGAPI extends ExternalAPI {
                 },
               }
             : {}),
+        ...(selection?.kind === 'patch' ? { selection } : {}),
       })
     );
   }
