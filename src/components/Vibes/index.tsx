@@ -228,7 +228,7 @@ const Vibes = () => {
         {intl.formatMessage(messages.description)}
       </p>
       {notice && (
-        <section className="app-card-main card-layout">
+        <section className="app-card-main refreshed-card-surface card-layout">
           <p className="card-body-text">{intl.formatMessage(notice)}</p>
         </section>
       )}
@@ -237,7 +237,7 @@ const Vibes = () => {
           {data.results?.map((vibe) => (
             <li key={vibe.id}>
               <article
-                className="app-card-sub card-layout"
+                className="app-card-sub refreshed-inset-surface card-layout"
                 data-choice-selected={openId === vibe.id}
               >
                 <div className="media-fact-row">
@@ -279,7 +279,7 @@ const Vibes = () => {
 
       {openId && (
         <>
-          <section className="app-card-main card-layout">
+          <section className="app-card-main refreshed-card-surface card-layout">
             <h2 className="card-title">
               {intl.formatMessage(messages.tuning)}
             </h2>
@@ -382,7 +382,7 @@ const Vibes = () => {
             </p>
           )}
           {books && books.books.length === 0 && (
-            <section className="app-card-main card-layout">
+            <section className="app-card-main refreshed-card-surface card-layout">
               <p className="card-body-text">
                 {intl.formatMessage(messages.empty)}
               </p>
@@ -391,7 +391,7 @@ const Vibes = () => {
           <ul className="card-list" data-list-layout="choices">
             {books?.books.map((book) => (
               <li key={book.id}>
-                <article className="app-card-sub card-layout media-choice-card">
+                <article className="app-card-sub refreshed-inset-surface card-layout media-choice-card">
                   <CoverImage src={book.imageUrl} alt="" />
                   <div data-card-part="body">
                     <h3 className="card-title">{book.title}</h3>
@@ -448,7 +448,7 @@ const Vibes = () => {
             ))}
           </ul>
 
-          <section className="app-card-main card-layout">
+          <section className="app-card-main refreshed-card-surface card-layout">
             <h2 className="card-title">
               {intl.formatMessage(messages.createHeading)}
             </h2>

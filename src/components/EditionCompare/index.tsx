@@ -167,7 +167,7 @@ export const EditionCardPicker = ({
     });
 
   return (
-    <section className="app-card-inset card-layout">
+    <section className="app-card-inset refreshed-inset-surface card-layout">
       <h3 className="card-title">{intl.formatMessage(messages.heading)}</h3>
       <ul
         className="card-list"
@@ -177,7 +177,7 @@ export const EditionCardPicker = ({
       >
         <li>
           <label
-            className="app-card-sub card-layout media-choice-card"
+            className="app-card-sub refreshed-inset-surface card-layout media-choice-card"
             data-choice-selected={!value.editionId}
             aria-label={intl.formatMessage(messages.automatic)}
           >
@@ -200,7 +200,7 @@ export const EditionCardPicker = ({
         {data.editions.map((card) => (
           <li key={card.id}>
             <label
-              className="app-card-sub card-layout media-choice-card"
+              className="app-card-sub refreshed-inset-surface card-layout media-choice-card"
               data-choice-selected={value.editionId === card.id}
             >
               <input
@@ -398,7 +398,7 @@ export const SeriesNarratorPlanner = ({
   );
 
   return (
-    <section className="app-card-main card-layout">
+    <section className="app-card-main refreshed-card-surface card-layout">
       <h2 className="page-heading">
         {intl.formatMessage(messages.seriesHeading)}
       </h2>
@@ -408,7 +408,7 @@ export const SeriesNarratorPlanner = ({
       <ul className="card-list" data-list-layout="choices">
         {data.plans.map((plan) => (
           <li key={plan.narrator}>
-            <article className="app-card-sub card-layout">
+            <article className="app-card-sub refreshed-inset-surface card-layout">
               <div className="media-fact-row">
                 <h3 className="card-title">{plan.narrator}</h3>
                 {plan.production === 'full-cast' && (
@@ -557,14 +557,14 @@ export const MusicEditionCompare = ({
   if (!data || data.variants.length < 2) return null;
 
   return (
-    <section className="app-card-main card-layout">
+    <section className="app-card-main refreshed-card-surface card-layout">
       <h2 className="page-heading">
         {intl.formatMessage(messages.musicHeading)}
       </h2>
       <ul className="card-list" data-list-layout="choices">
         {data.variants.map((variant) => (
           <li key={variant.releaseId}>
-            <article className="app-card-sub card-layout">
+            <article className="app-card-sub refreshed-inset-surface card-layout">
               <div className="media-fact-row">
                 <h3 className="card-title">{variant.title}</h3>
                 <Badge badgeType={variant.isStandard ? 'default' : 'primary'}>

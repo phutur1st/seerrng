@@ -391,14 +391,14 @@ const Share = () => {
       </div>
 
       {capabilities && !capabilities.enabled ? (
-        <section className="app-card-main card-layout">
+        <section className="app-card-main refreshed-card-surface card-layout">
           <p className="card-body-text">
             {intl.formatMessage(messages.unavailable)}
           </p>
         </section>
       ) : (
         <section
-          className="app-card-main card-layout share-drop-area"
+          className="app-card-main refreshed-card-surface card-layout share-drop-area"
           role="group"
           aria-label={intl.formatMessage(messages.title)}
           data-drop-active={dragging}
@@ -556,7 +556,7 @@ const Share = () => {
             </p>
           )}
           {response.groups.length === 0 ? (
-            <section className="app-card-main card-layout">
+            <section className="app-card-main refreshed-card-surface card-layout">
               <p className="card-body-text">
                 {intl.formatMessage(messages.noResults)}
               </p>
@@ -568,7 +568,7 @@ const Share = () => {
                 return (
                   <section
                     key={`${group.input}-${groupIndex}`}
-                    className="app-card-main card-layout"
+                    className="app-card-main refreshed-card-surface card-layout"
                   >
                     <label className="card-body-text">
                       <input
@@ -619,7 +619,7 @@ const Share = () => {
                             return (
                               <li key={`${candidate.source}-${candidate.id}`}>
                                 <label
-                                  className="app-card-sub card-layout media-choice-card"
+                                  className="app-card-sub refreshed-inset-surface card-layout media-choice-card"
                                   data-choice-selected={selected}
                                 >
                                   <input
@@ -752,7 +752,7 @@ const Share = () => {
                           }
                         )}
                         <li>
-                          <label className="app-card-sub card-layout">
+                          <label className="app-card-sub refreshed-inset-surface card-layout">
                             <input
                               type="radio"
                               name={`candidate-${groupIndex}`}

@@ -153,7 +153,7 @@ const Franchise = () => {
         </div>
       )}
       {data && data.items.length === 0 && (
-        <section className="app-card-main card-layout">
+        <section className="app-card-main refreshed-card-surface card-layout">
           <p className="card-body-text">{intl.formatMessage(messages.none)}</p>
         </section>
       )}
@@ -168,7 +168,7 @@ const Franchise = () => {
             <ul className="card-list" data-list-layout="choices">
               {items.map((item) => (
                 <li key={`${item.relation}-${item.title}-${item.mediaType}`}>
-                  <article className="app-card-sub card-layout media-choice-card">
+                  <article className="app-card-sub refreshed-inset-surface card-layout media-choice-card">
                     <CoverImage src={item.imageUrl} alt="" />
                     <div data-card-part="body">
                       <h3 className="card-title">{item.title}</h3>

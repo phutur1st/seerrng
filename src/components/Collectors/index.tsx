@@ -82,21 +82,21 @@ const Collectors = () => {
         {intl.formatMessage(messages.description)}
       </p>
       {data && !data.available && (
-        <section className="app-card-main card-layout">
+        <section className="app-card-main refreshed-card-surface card-layout">
           <p className="card-body-text">
             {intl.formatMessage(messages.unavailable)}
           </p>
         </section>
       )}
       {data?.available && data.results.length === 0 && (
-        <section className="app-card-main card-layout">
+        <section className="app-card-main refreshed-card-surface card-layout">
           <p className="card-body-text">{intl.formatMessage(messages.empty)}</p>
         </section>
       )}
       <ul className="card-list" data-list-layout="choices">
         {data?.results.map((pick) => (
           <li key={`${pick.title}-${pick.creator}`}>
-            <article className="app-card-sub card-layout media-choice-card">
+            <article className="app-card-sub refreshed-inset-surface card-layout media-choice-card">
               <CoverImage
                 src={pick.album?.imageUrl}
                 alt=""

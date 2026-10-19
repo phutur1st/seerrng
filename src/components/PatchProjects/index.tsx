@@ -103,7 +103,7 @@ export const PatchPicker = ({
   if (!data.available || data.results.length === 0) return null;
 
   return (
-    <section className="app-card-inset card-layout">
+    <section className="app-card-inset refreshed-inset-surface card-layout">
       <h3 className="card-title">{intl.formatMessage(messages.heading)}</h3>
       <ul
         className="card-list"
@@ -113,7 +113,7 @@ export const PatchPicker = ({
       >
         <li>
           <label
-            className="app-card-sub card-layout media-choice-card"
+            className="app-card-sub refreshed-inset-surface card-layout media-choice-card"
             data-choice-selected={!projectId}
             aria-label={intl.formatMessage(messages.original)}
           >
@@ -136,7 +136,7 @@ export const PatchPicker = ({
         {data.results.map((entry) => (
           <li key={entry.id}>
             <label
-              className="app-card-sub card-layout media-choice-card"
+              className="app-card-sub refreshed-inset-surface card-layout media-choice-card"
               data-choice-selected={projectId === entry.id}
             >
               <input

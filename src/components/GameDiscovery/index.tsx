@@ -256,13 +256,13 @@ const GameDiscovery = () => {
       </p>
 
       {!available ? (
-        <section className="app-card-main card-layout">
+        <section className="app-card-main refreshed-card-surface card-layout">
           <p className="card-body-text">
             {intl.formatMessage(messages.unavailable)}
           </p>
         </section>
       ) : (
-        <section className="app-card-main card-layout">
+        <section className="app-card-main refreshed-card-surface card-layout">
           <div className="filter-field-grid">
             <div className="form-row">
               <label htmlFor="game-keywords">
@@ -381,7 +381,7 @@ const GameDiscovery = () => {
             {intl.formatMessage(messages.results)}
           </h2>
           {results.length === 0 ? (
-            <section className="app-card-main card-layout">
+            <section className="app-card-main refreshed-card-surface card-layout">
               <p className="card-body-text">
                 {intl.formatMessage(messages.noResults)}
               </p>
@@ -390,7 +390,7 @@ const GameDiscovery = () => {
             <ul className="card-list" data-list-layout="choices">
               {results.map(({ game, reasons }) => (
                 <li key={game.id}>
-                  <article className="app-card-sub card-layout media-choice-card">
+                  <article className="app-card-sub refreshed-inset-surface card-layout media-choice-card">
                     <CoverImage src={game.coverUrl} alt="" />
                     <div data-card-part="body">
                       <h3 className="card-title">{game.title}</h3>
@@ -458,7 +458,7 @@ const GameDiscovery = () => {
             </div>
           )}
           {canSearch && (
-            <section className="app-card-main card-layout">
+            <section className="app-card-main refreshed-card-surface card-layout">
               <h2 className="card-title">
                 {intl.formatMessage(messages.saveHeading)}
               </h2>
@@ -505,14 +505,14 @@ const GameDiscovery = () => {
         {intl.formatMessage(messages.savedHeading)}
       </h2>
       {saved && saved.results.length === 0 ? (
-        <section className="app-card-main card-layout">
+        <section className="app-card-main refreshed-card-surface card-layout">
           <p className="card-body-text">{intl.formatMessage(messages.none)}</p>
         </section>
       ) : (
         <ul className="card-list" data-list-layout="stacked">
           {saved?.results.map((entry) => (
             <li key={entry.id}>
-              <article className="app-card-sub card-layout">
+              <article className="app-card-sub refreshed-inset-surface card-layout">
                 <h3 className="card-title">{entry.name}</h3>
                 <div className="media-fact-row">
                   {[

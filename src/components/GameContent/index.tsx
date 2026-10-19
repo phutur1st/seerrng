@@ -166,7 +166,7 @@ export const GameContentPicker = ({
     );
 
   return (
-    <section className="app-card-inset card-layout">
+    <section className="app-card-inset refreshed-inset-surface card-layout">
       <h3 className="card-title">{intl.formatMessage(messages.heading)}</h3>
       <p className="card-subheading">
         {intl.formatMessage(
@@ -204,7 +204,7 @@ export const GameContentPicker = ({
             {addons.map((addon) => (
               <li key={addon.igdbId}>
                 <label
-                  className="app-card-sub card-layout media-choice-card"
+                  className="app-card-sub refreshed-inset-surface card-layout media-choice-card"
                   data-choice-state={addon.owned ? 'muted' : undefined}
                   data-choice-selected={addonIds.includes(addon.igdbId)}
                 >
@@ -240,7 +240,7 @@ export const GameContentPicker = ({
             return (
               <li key={edition.igdbId}>
                 <label
-                  className="app-card-sub card-layout media-choice-card"
+                  className="app-card-sub refreshed-inset-surface card-layout media-choice-card"
                   data-choice-selected={editionId === edition.igdbId}
                 >
                   <input

@@ -174,7 +174,7 @@ const Following = () => {
         )}
       </div>
       {data && data.results.length === 0 ? (
-        <section className="app-card-main card-layout">
+        <section className="app-card-main refreshed-card-surface card-layout">
           <p className="card-body-text">
             {intl.formatMessage(messages.nothingNew)}
           </p>
@@ -186,7 +186,7 @@ const Following = () => {
             return (
               <li key={event.id}>
                 <article
-                  className="app-card-sub card-layout media-choice-card"
+                  className="app-card-sub refreshed-inset-surface card-layout media-choice-card"
                   data-choice-state={event.seen ? 'muted' : undefined}
                 >
                   <CoverImage src={event.imageUrl} alt="" />
@@ -270,7 +270,7 @@ const Following = () => {
 
       <h2 className="page-heading">{intl.formatMessage(messages.following)}</h2>
       {follows && follows.length === 0 ? (
-        <section className="app-card-main card-layout">
+        <section className="app-card-main refreshed-card-surface card-layout">
           <p className="card-body-text">
             {intl.formatMessage(messages.nothingFollowed)}
           </p>
@@ -285,7 +285,7 @@ const Following = () => {
         <ul className="card-list" data-list-layout="stacked">
           {follows?.map((follow) => (
             <li key={follow.id}>
-              <article className="app-card-sub card-layout">
+              <article className="app-card-sub refreshed-inset-surface card-layout">
                 <h3 className="card-title">{follow.subjectLabel}</h3>
                 <p className="card-subheading">
                   {intl.formatMessage(

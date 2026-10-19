@@ -244,7 +244,7 @@ export const ContinuationModal = ({
               return (
                 <article
                   key={source.anilistId}
-                  className="app-card-sub card-layout media-choice-card"
+                  className="app-card-sub refreshed-inset-surface card-layout media-choice-card"
                 >
                   <CoverImage src={source.coverUrl} alt="" />
                   <div data-card-part="body">

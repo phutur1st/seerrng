@@ -84,14 +84,14 @@ const PatchDiscovery = () => {
         {intl.formatMessage(messages.description)}
       </p>
       {data && !data.available ? (
-        <section className="app-card-main card-layout">
+        <section className="app-card-main refreshed-card-surface card-layout">
           <p className="card-body-text">
             {intl.formatMessage(messages.unavailable)}
           </p>
         </section>
       ) : (
         <>
-          <section className="app-card-main card-layout">
+          <section className="app-card-main refreshed-card-surface card-layout">
             <div className="filter-field-grid">
               <div className="form-row">
                 <label htmlFor="patch-q">
@@ -176,7 +176,7 @@ const PatchDiscovery = () => {
             </label>
           </section>
           {data?.results.length === 0 && (
-            <section className="app-card-main card-layout">
+            <section className="app-card-main refreshed-card-surface card-layout">
               <p className="card-body-text">
                 {intl.formatMessage(messages.none)}
               </p>
@@ -185,7 +185,7 @@ const PatchDiscovery = () => {
           <ul className="card-list" data-list-layout="choices">
             {data?.results.map((project) => (
               <li key={project.id}>
-                <article className="app-card-sub card-layout media-choice-card">
+                <article className="app-card-sub refreshed-inset-surface card-layout media-choice-card">
                   <CoverImage src={project.coverUrl} alt="" />
                   <div data-card-part="body">
                     <h3 className="card-title">{project.name}</h3>

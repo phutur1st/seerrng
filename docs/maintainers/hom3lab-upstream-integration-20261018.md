@@ -83,13 +83,21 @@ Current source is an integration candidate, not a completed deployment.
 - Initial cumulative Vitest: 4246 pass / 5 skips / 1 failure during fixture
   login (HTTP 401), before its malformed-book-ID assertion. An isolated repeat
   passes. The initial suite is not claimed as passing; a lower-concurrency full
-  rerun and hosted CI remain required.
+  rerun passed 4247 tests with 5 PostgreSQL skips; hosted CI remains required.
 - Upstream CI 39188147581 at the pinned source fails format and browser build
   prerequisites on the same five formatting files and Ebook terminology;
   corrections here retain the existing assertions and required gate.
 - Native compilation caught a missing required title in the new test fixture;
   corrected before the 95-test native pass. No application type errors remain.
-- Visual inspection: pending. Automated checks are separate evidence.
+- Initial desktop/narrow previews of Share, Following, Game Finder and Book
+  Vibes exposed new framed cards missing the established padded surface role.
+  New cross-media consumers now attach refreshed-card-surface or
+  refreshed-inset-surface as appropriate, preserving the existing shared paint
+  and padding owners. A browser regression verifies actual computed padding
+  and horizontal containment at both widths. Initial captures remain iteration
+  evidence; final rendered evidence is collected separately.
+- Card-spacing browser regression: all 8 desktop/narrow cases pass with computed shared padding and no horizontal document overflow. Production build, bundle budget, and 72 style tests pass after the role attachments.
+- Visual inspection: final captures pending; initial preview evidence is not claimed as acceptance of provider-backed states. Automated checks are separate evidence.
 - Live provider mutation/new request submission: not performed or required.
 
 The earlier October 17 deployment finished on a5c5800: native CI run
