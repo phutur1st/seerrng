@@ -15,19 +15,19 @@ import useSWR from 'swr';
 const messages = defineMessages(
   'components.UserList.EpisodeQueueApprovalQueue',
   {
-    title: 'Episode Queue access requests',
+    title: 'Episode Queue Access Requests',
     description:
       'Review users who want a saved Episode Queue default for all of their TV requests.',
     empty: 'No pending Episode Queue requests.',
     approve: 'Approve',
     deny: 'Decline',
-    approveTitle: 'Approve Episode Queue access?',
-    denyTitle: 'Decline Episode Queue access?',
+    approveTitle: 'Approve Episode Queue Access?',
+    denyTitle: 'Decline Episode Queue Access?',
     approveDescription:
       'This user can set a default queue length that applies across their shows.',
     denyDescription:
       'This user can request Episode Queue access again from their profile.',
-    viewProfile: 'Open profile settings',
+    viewProfile: 'Open Profile Settings',
     requested: 'Requested {date}',
     error: 'Could not review this request. Refresh and try again.',
     loading: 'Saving…',
@@ -102,13 +102,11 @@ const EpisodeQueueApprovalQueue = () => {
           )}
         </Modal>
       )}
-      <section className="app-card-main refreshed-card-surface mt-5 rounded-xl border border-gray-700 p-4 shadow-lg shadow-gray-950/20">
-        <div className="mb-3 flex items-start justify-between gap-3">
+      <section className="app-card-main refreshed-card-surface card-list">
+        <div className="app-action-row" data-action-placement="distributed">
           <div>
-            <h3 className="text-base font-semibold text-white">
-              {intl.formatMessage(messages.title)}
-            </h3>
-            <p className="refreshed-detail-text-muted mt-1 text-sm">
+            <h3 className="card-title">{intl.formatMessage(messages.title)}</h3>
+            <p className="card-body-text">
               {intl.formatMessage(messages.description)}
             </p>
           </div>
@@ -127,27 +125,30 @@ const EpisodeQueueApprovalQueue = () => {
         {!data && !error ? (
           <LoadingSpinner />
         ) : data?.length ? (
-          <ul className="divide-y divide-gray-700">
+          <ul className="card-list">
             {data.map((request) => (
               <li
-                className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                className="app-action-row"
+                data-action-placement="distributed"
                 key={request.id}
               >
-                <div className="flex min-w-0 items-center gap-3">
+                <div
+                  className="app-action-row"
+                  data-action-placement="leading"
+                  data-action-wrap="nowrap"
+                >
                   <CachedImage
                     type="avatar"
-                    className="h-10 w-10 rounded-full object-cover"
+                    className="cached-image-avatar"
                     src={request.avatar}
                     alt=""
                     width={40}
                     height={40}
                   />
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-white">
-                      {request.displayName}
-                    </div>
+                  <div className="card-layout" data-card-layout="copy">
+                    <div className="card-title">{request.displayName}</div>
                     {request.requestedAt && (
-                      <div className="refreshed-detail-text-muted text-xs">
+                      <div className="card-table-value refreshed-detail-text-muted">
                         {intl.formatMessage(messages.requested, {
                           date: intl.formatDate(new Date(request.requestedAt), {
                             dateStyle: 'medium',
@@ -157,7 +158,7 @@ const EpisodeQueueApprovalQueue = () => {
                     )}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="app-action-row">
                   <Button
                     as="a"
                     href={`/users/${request.id}/settings/episode-queue`}
@@ -167,7 +168,7 @@ const EpisodeQueueApprovalQueue = () => {
                     {intl.formatMessage(messages.viewProfile)}
                   </Button>
                   {currentUser?.id === request.id ? (
-                    <span className="refreshed-detail-text-muted text-xs">
+                    <span className="card-table-value refreshed-detail-text-muted">
                       {intl.formatMessage(messages.ownRequest)}
                     </span>
                   ) : (
@@ -197,9 +198,7 @@ const EpisodeQueueApprovalQueue = () => {
             ))}
           </ul>
         ) : (
-          <p className="refreshed-detail-text-muted text-sm">
-            {intl.formatMessage(messages.empty)}
-          </p>
+          <p className="card-body-text">{intl.formatMessage(messages.empty)}</p>
         )}
       </section>
     </>

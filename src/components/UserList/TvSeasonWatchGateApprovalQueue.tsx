@@ -15,14 +15,14 @@ import useSWR from 'swr';
 const messages = defineMessages(
   'components.UserList.TvSeasonWatchGateApprovalQueue',
   {
-    title: 'Previous-season watch requests',
+    title: 'Previous-Season Watch Requests',
     description:
       'Review requests from users who want later seasons to unlock after they finish the previous season.',
     empty: 'No pending previous-season watch requests.',
     approve: 'Approve',
     deny: 'Decline',
-    approveTitle: 'Approve TV season access?',
-    denyTitle: 'Decline TV season access?',
+    approveTitle: 'Approve TV Season Access?',
+    denyTitle: 'Decline TV Season Access?',
     approveDescription:
       'This user will be able to turn on the previous-season watch requirement for their own account.',
     denyDescription: 'This user can request access again from their profile.',
@@ -100,13 +100,11 @@ const TvSeasonWatchGateApprovalQueue = () => {
           )}
         </Modal>
       )}
-      <section className="app-card-main refreshed-card-surface mt-5 rounded-xl border border-gray-700 p-4 shadow-lg shadow-gray-950/20">
-        <div className="mb-3 flex items-start justify-between gap-3">
+      <section className="app-card-main refreshed-card-surface card-list">
+        <div className="app-action-row" data-action-placement="distributed">
           <div>
-            <h3 className="text-base font-semibold text-white">
-              {intl.formatMessage(messages.title)}
-            </h3>
-            <p className="refreshed-detail-text-muted mt-1 text-sm">
+            <h3 className="card-title">{intl.formatMessage(messages.title)}</h3>
+            <p className="card-body-text">
               {intl.formatMessage(messages.description)}
             </p>
           </div>
@@ -125,27 +123,30 @@ const TvSeasonWatchGateApprovalQueue = () => {
         {!data && !error ? (
           <LoadingSpinner />
         ) : data?.length ? (
-          <ul className="divide-y divide-gray-700">
+          <ul className="card-list">
             {data.map((request) => (
               <li
-                className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                className="app-action-row"
+                data-action-placement="distributed"
                 key={request.id}
               >
-                <div className="flex min-w-0 items-center gap-3">
+                <div
+                  className="app-action-row"
+                  data-action-placement="leading"
+                  data-action-wrap="nowrap"
+                >
                   <CachedImage
                     type="avatar"
-                    className="h-10 w-10 rounded-full object-cover"
+                    className="cached-image-avatar"
                     src={request.avatar}
                     alt=""
                     width={40}
                     height={40}
                   />
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-white">
-                      {request.displayName}
-                    </div>
+                  <div className="card-layout" data-card-layout="copy">
+                    <div className="card-title">{request.displayName}</div>
                     {request.requestedAt && (
-                      <div className="refreshed-detail-text-muted text-xs">
+                      <div className="card-table-value refreshed-detail-text-muted">
                         {intl.formatMessage(messages.requested, {
                           date: intl.formatDate(new Date(request.requestedAt), {
                             dateStyle: 'medium',
@@ -156,11 +157,11 @@ const TvSeasonWatchGateApprovalQueue = () => {
                   </div>
                 </div>
                 {currentUser?.id === request.id ? (
-                  <span className="refreshed-detail-text-muted text-xs">
+                  <span className="card-table-value refreshed-detail-text-muted">
                     {intl.formatMessage(messages.ownRequest)}
                   </span>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="app-action-row">
                     <Button
                       buttonType="ghost"
                       buttonSize="sm"
@@ -185,7 +186,7 @@ const TvSeasonWatchGateApprovalQueue = () => {
             ))}
           </ul>
         ) : (
-          <p className="refreshed-inset-surface rounded-lg px-3 py-3 text-sm">
+          <p className="app-card-inset refreshed-inset-surface card-body-text">
             {intl.formatMessage(messages.empty)}
           </p>
         )}

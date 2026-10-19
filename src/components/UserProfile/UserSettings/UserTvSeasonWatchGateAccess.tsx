@@ -18,7 +18,7 @@ import useSWR, { mutate } from 'swr';
 const messages = defineMessages(
   'components.UserProfile.UserSettings.UserTvSeasonWatchGateAccess',
   {
-    title: 'Previous-season watch requirement',
+    title: 'Previous-Season Watch Requirement',
     description:
       'Choose whether later TV seasons should unlock only after you finish the previous regular season. Specials are skipped.',
     statusGlobal: 'Enabled for everyone',
@@ -42,16 +42,16 @@ const messages = defineMessages(
       'Every later-season request checks your linked playback history. Link Plex, Jellyfin, or Emby and keep this series synced so SeerrNG can verify what you watched.',
     deniedDescription:
       'A user manager declined this request. You can submit a new request whenever you are ready.',
-    requestAccess: 'Request approval',
-    requestAgain: 'Request approval again',
-    turnOn: 'Turn on for my account',
-    cancelRequest: 'Cancel request',
-    turnOff: 'Turn off this rule',
-    linkPlayback: 'Link playback account',
-    modalRequestTitle: 'Request this rule for your account?',
-    modalCancelTitle: 'Cancel your access request?',
-    modalEnableTitle: 'Turn on the watch requirement?',
-    modalDisableTitle: 'Turn off the watch requirement?',
+    requestAccess: 'Request Approval',
+    requestAgain: 'Request Approval Again',
+    turnOn: 'Turn on for My Account',
+    cancelRequest: 'Cancel Request',
+    turnOff: 'Turn Off This Rule',
+    linkPlayback: 'Link Playback Account',
+    modalRequestTitle: 'Request This Rule for Your Account?',
+    modalCancelTitle: 'Cancel Your Access Request?',
+    modalEnableTitle: 'Turn on the Watch Requirement?',
+    modalDisableTitle: 'Turn Off the Watch Requirement?',
     modalRequestDescription:
       'A user manager will review your request. Once approved, you can turn the rule on when you are ready.',
     modalCancelDescription:
@@ -184,7 +184,7 @@ const UserTvSeasonWatchGateAccess = () => {
             : 'default';
 
   return (
-    <div className="space-y-5">
+    <div className="card-list">
       {pendingAction && (
         <Modal
           title={intl.formatMessage(
@@ -217,13 +217,15 @@ const UserTvSeasonWatchGateAccess = () => {
           )}
         </Modal>
       )}
-      <section className="app-card-main refreshed-card-surface rounded-xl border border-gray-700 p-5 shadow-lg shadow-gray-950/20">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-3xl">
-            <h2 className="text-lg font-semibold text-white">
-              {intl.formatMessage(messages.title)}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-gray-300">
+      <section className="app-card-main refreshed-card-surface card-list">
+        <div
+          className="app-action-row"
+          data-action-placement="distributed"
+          data-action-layout="summary"
+        >
+          <div className="card-layout" data-card-layout="copy">
+            <h2 className="card-title">{intl.formatMessage(messages.title)}</h2>
+            <p className="card-body-text">
               {intl.formatMessage(messages.description)}
             </p>
           </div>
@@ -232,12 +234,10 @@ const UserTvSeasonWatchGateAccess = () => {
           </Badge>
         </div>
 
-        <div className="refreshed-inset-surface mt-5 rounded-lg border border-gray-700 p-4">
-          <p className="text-sm leading-6 text-gray-300">
-            {intl.formatMessage(description)}
-          </p>
+        <div className="app-card-inset refreshed-inset-surface card-list">
+          <p className="card-body-text">{intl.formatMessage(description)}</p>
           {data.requestedAt && status !== 'off' && (
-            <p className="refreshed-detail-text-muted mt-2 text-xs">
+            <p className="card-table-value refreshed-detail-text-muted">
               {intl.formatMessage(messages.requestedAt, {
                 date: intl.formatDate(new Date(data.requestedAt), {
                   dateStyle: 'medium',
@@ -246,26 +246,27 @@ const UserTvSeasonWatchGateAccess = () => {
             </p>
           )}
           {isSelf && (
-            <Button
-              as="a"
-              href="/profile/settings/linked-accounts"
-              buttonType="ghost"
-              buttonSize="sm"
-              className="mt-3"
-            >
-              {intl.formatMessage(messages.linkPlayback)}
-            </Button>
+            <div className="app-action-row" data-action-placement="leading">
+              <Button
+                as="a"
+                href="/profile/settings/linked-accounts"
+                buttonType="ghost"
+                buttonSize="sm"
+              >
+                {intl.formatMessage(messages.linkPlayback)}
+              </Button>
+            </div>
           )}
         </div>
 
         {actionError && (
-          <div className="mt-4">
+          <div>
             <Alert type="error" title={intl.formatMessage(messages.error)} />
           </div>
         )}
 
         {isSelf && !data.globallyEnabled && !canBypassGate && (
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="app-action-row" data-action-placement="leading">
             {(status === 'off' || status === 'denied') && (
               <Button
                 buttonType="primary"

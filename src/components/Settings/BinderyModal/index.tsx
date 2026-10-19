@@ -26,8 +26,8 @@ import { useIntl } from 'react-intl';
 import * as Yup from 'yup';
 
 const messages = defineMessages('components.Settings.BinderyModal', {
-  addTitle: 'Add Bindery server',
-  editTitle: 'Edit Bindery server',
+  addTitle: 'Add Bindery Server',
+  editTitle: 'Edit Bindery Server',
   intro:
     'Bindery manages book acquisition and downloads. SeerrNG sends approved requests and tracks format availability in its library.',
   ownerNote:
@@ -38,28 +38,28 @@ const messages = defineMessages('components.Settings.BinderyModal', {
   testFailure: 'Could not connect to Bindery. Check the address and API key.',
   saveFailure: 'Could not save the Bindery connection.',
   add: 'Add Bindery',
-  name: 'Service name',
-  hostname: 'Hostname or IP address',
+  name: 'Service Name',
+  hostname: 'Hostname or IP Address',
   port: 'Port',
   ssl: 'Use SSL',
-  apiKey: 'API key',
-  baseUrl: 'URL base',
+  apiKey: 'API Key',
+  baseUrl: 'URL Base',
   externalUrl: 'External URL',
-  format: 'Available formats',
+  format: 'Available Formats',
   ebook: 'Book',
   audiobook: 'Audiobook',
-  both: 'Books and audiobooks',
-  default: 'Use as default for these formats',
-  scan: 'Scan library availability',
+  both: 'Books and Audiobooks',
+  default: 'Use as Default for These Formats',
+  scan: 'Scan Library Availability',
   testing: 'Testing…',
-  test: 'Test connection',
-  version: 'Bindery version',
+  test: 'Test Connection',
+  version: 'Bindery Version',
   hostnameRequired: 'Enter a hostname or IP address.',
   portRequired: 'Enter a valid port.',
   apiKeyRequired: 'Enter the Bindery API key.',
   nameRequired: 'Enter a service name.',
   invalidUrl: 'Enter a valid external URL.',
-  keepExisting: 'Keep existing',
+  keepExisting: 'Keep Existing',
 });
 
 interface BinderyTestResponse {
@@ -269,22 +269,22 @@ const BinderyModal = ({ settings, onClose, onSave }: BinderyModalProps) => {
             secondaryDisabled={!values.hostname || !values.apiKey || isTesting}
             onSecondary={() => testConnection(values)}
           >
-            <div className="mb-5 space-y-3">
+            <div className="card-list">
               <p className="description">
                 {intl.formatMessage(messages.intro)}
               </p>
               {testResult && (
-                <div className="rounded border border-gray-700 bg-gray-900/50 p-3 text-sm text-gray-200">
-                  <p className="flex items-center gap-2 font-semibold">
-                    <CheckCircleIcon className="h-5 w-5 text-green-400" />
+                <div className="app-card-inset refreshed-inset-surface card-list">
+                  <p className="card-title">
+                    <CheckCircleIcon className="card-table-icon" />
                     {intl.formatMessage(messages.version)}:{' '}
                     {testResult.system.version ?? 'unknown'}
                   </p>
-                  <p className="mt-2 flex items-start gap-2">
+                  <p className="card-body-text">
                     {testResult.features.requestsForUser ? (
-                      <CheckCircleIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-400" />
+                      <CheckCircleIcon className="card-table-icon" />
                     ) : (
-                      <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-yellow-400" />
+                      <ExclamationTriangleIcon className="card-table-icon" />
                     )}
                     {intl.formatMessage(
                       testResult.features.requestsForUser
@@ -313,7 +313,7 @@ const BinderyModal = ({ settings, onClose, onSave }: BinderyModalProps) => {
                 {intl.formatMessage(messages.hostname)}
               </label>
               <div className="form-input-area">
-                <div className="form-input-field">
+                <div className="form-input-field" data-field-layout="protocol">
                   <span className="protocol">
                     {values.useSsl ? 'https://' : 'http://'}
                   </span>
@@ -321,7 +321,6 @@ const BinderyModal = ({ settings, onClose, onSave }: BinderyModalProps) => {
                     id="hostname"
                     name="hostname"
                     type="text"
-                    className="rounded-e-only"
                     onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
                       setIsValidated(false);
                       setFieldValue('hostname', event.target.value);

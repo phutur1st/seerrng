@@ -25,7 +25,7 @@ describe('Bindery service setup', () => {
     cy.location('search').should('eq', '?serviceCategory=audiobooks-books');
     cy.contains('button', 'Add Bindery Server').should('be.visible').click();
     cy.get('[role="dialog"]').should('be.visible');
-    cy.contains('[data-testid="modal-title"]', 'Add Bindery server').should(
+    cy.contains('[data-testid="modal-title"]', 'Add Bindery Server').should(
       'be.visible'
     );
   };
@@ -57,7 +57,7 @@ describe('Bindery service setup', () => {
     cy.get('[role="dialog"] #apiKey')
       .type('fixture-bindery-key')
       .should('have.value', 'fixture-bindery-key');
-    cy.get('[role="dialog"]').contains('button', 'Test connection').click();
+    cy.get('[role="dialog"]').contains('button', 'Test Connection').click();
     cy.wait('@testBindery').then(({ request }) => {
       expect(request.body).to.include({
         backend: 'bindery',
@@ -69,7 +69,7 @@ describe('Bindery service setup', () => {
     });
 
     cy.get('[role="dialog"]')
-      .contains('Bindery version')
+      .contains('Bindery Version')
       .parent()
       .should('contain.text', '1.4.2');
     cy.get('[role="dialog"]').should(
@@ -110,7 +110,7 @@ describe('Bindery service setup', () => {
     cy.get('[role="dialog"] #apiKey')
       .type('fixture-bindery-key')
       .should('have.value', 'fixture-bindery-key');
-    cy.get('[role="dialog"]').contains('button', 'Test connection').click();
+    cy.get('[role="dialog"]').contains('button', 'Test Connection').click();
     cy.wait('@testLegacyBindery').then(({ request }) => {
       expect(request.body).to.include({ backend: 'bindery' });
     });

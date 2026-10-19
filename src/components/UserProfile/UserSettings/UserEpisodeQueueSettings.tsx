@@ -32,36 +32,36 @@ const messages = defineMessages(
       'Your default applies to existing and future TV requests. Requests with a show-specific override keep that choice.',
     statusDescriptionDenied:
       'A user manager declined this request. You can request access again from this page.',
-    request: 'Request access',
-    requestAgain: 'Request again',
-    cancel: 'Cancel request',
-    approve: 'Approve access',
-    deny: 'Decline request',
-    revoke: 'Revoke access',
-    defaultLabel: 'Default episodes to queue',
+    request: 'Request Access',
+    requestAgain: 'Request Again',
+    cancel: 'Cancel Request',
+    approve: 'Approve Access',
+    deny: 'Decline Request',
+    revoke: 'Revoke Access',
+    defaultLabel: 'Default Episodes to Queue',
     defaultHelp:
       'This applies to all of {userName}’s TV requests. Set Off to pause the default; show-specific choices stay in place.',
     off: 'Off',
     episodeOption: '{count, plural, one {# episode} other {# episodes}}',
-    save: 'Save default',
+    save: 'Save Default',
     saving: 'Saving…',
     saved: 'Episode Queue settings saved.',
     error: 'Could not update Episode Queue settings. Try again.',
     loadError: 'Could not load Episode Queue settings.',
     noPermission: 'Only this user or a user manager can manage these settings.',
-    modalRequestTitle: 'Request Episode Queue access?',
+    modalRequestTitle: 'Request Episode Queue Access?',
     modalRequestDescription:
       'A user manager will review your request. Once approved, you can choose a default that applies to all your shows.',
-    modalCancelTitle: 'Cancel your request?',
+    modalCancelTitle: 'Cancel Your Request?',
     modalCancelDescription:
       'Your request will be removed from the review queue. You can request access again later.',
-    modalApproveTitle: 'Approve Episode Queue access?',
+    modalApproveTitle: 'Approve Episode Queue Access?',
     modalApproveDescription:
       'This user will be able to set a default Episode Queue length for all of their shows and override individual requests.',
-    modalDenyTitle: 'Decline this request?',
+    modalDenyTitle: 'Decline This Request?',
     modalDenyDescription:
       'The user can request Episode Queue access again from their profile.',
-    modalRevokeTitle: 'Revoke Episode Queue access?',
+    modalRevokeTitle: 'Revoke Episode Queue Access?',
     modalRevokeDescription:
       'This stops future Episode Queue additions for the user. Episodes already requested remain in place.',
     dateRequested: 'Requested {date}',
@@ -217,7 +217,7 @@ const UserEpisodeQueueSettings = () => {
             : messages.modalDenyTitle;
 
   return (
-    <div className="space-y-5">
+    <div className="card-list">
       {pendingAction && (
         <Modal
           title={intl.formatMessage(actionTitle)}
@@ -246,13 +246,15 @@ const UserEpisodeQueueSettings = () => {
           {intl.formatMessage(actionMessage)}
         </Modal>
       )}
-      <section className="app-card-main refreshed-card-surface rounded-xl border border-gray-700 p-5 shadow-lg shadow-gray-950/20">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-3xl">
-            <h2 className="text-lg font-semibold text-white">
-              {intl.formatMessage(messages.title)}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-gray-300">
+      <section className="app-card-main refreshed-card-surface card-list">
+        <div
+          className="app-action-row"
+          data-action-placement="distributed"
+          data-action-layout="summary"
+        >
+          <div className="card-layout" data-card-layout="copy">
+            <h2 className="card-title">{intl.formatMessage(messages.title)}</h2>
+            <p className="card-body-text">
               {intl.formatMessage(messages.description)}
             </p>
           </div>
@@ -261,12 +263,12 @@ const UserEpisodeQueueSettings = () => {
           </Badge>
         </div>
 
-        <div className="refreshed-inset-surface mt-5 rounded-lg border border-gray-700 p-4">
-          <p className="text-sm leading-6 text-gray-300">
+        <div className="app-card-inset refreshed-inset-surface card-list">
+          <p className="card-body-text">
             {intl.formatMessage(statusDescription)}
           </p>
           {data.requestedAt && status === 'pending' && (
-            <p className="refreshed-detail-text-muted mt-2 text-xs">
+            <p className="card-table-value refreshed-detail-text-muted">
               {intl.formatMessage(messages.dateRequested, {
                 date: intl.formatDate(new Date(data.requestedAt), {
                   dateStyle: 'medium',
@@ -277,16 +279,17 @@ const UserEpisodeQueueSettings = () => {
         </div>
 
         {status === 'approved' && (
-          <div className="refreshed-inset-surface mt-5 rounded-lg border border-gray-700 p-4">
+          <div className="app-card-inset refreshed-inset-surface card-list">
             <label
               htmlFor="episode-queue-default-count"
-              className="block text-sm font-semibold text-white"
+              className="card-table-heading"
             >
               {intl.formatMessage(messages.defaultLabel)}
             </label>
             <select
               id="episode-queue-default-count"
-              className="request-form-control mt-2 w-full max-w-md rounded-md border px-3 py-2 text-sm"
+              className="request-form-control"
+              data-control-size="compact"
               value={defaultCount}
               onChange={(event) => setDefaultCount(Number(event.target.value))}
               disabled={isSaving}
@@ -298,29 +301,30 @@ const UserEpisodeQueueSettings = () => {
                 </option>
               ))}
             </select>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-300">
+            <p className="card-body-text">
               {intl.formatMessage(messages.defaultHelp, {
                 userName: displayName,
               })}
             </p>
-            <Button
-              className="mt-4"
-              buttonType="primary"
-              disabled={isSaving || defaultCount === data.defaultEpisodeCount}
-              onClick={() => void saveDefault()}
-            >
-              {intl.formatMessage(isSaving ? messages.saving : messages.save)}
-            </Button>
+            <div className="app-action-row" data-action-placement="leading">
+              <Button
+                buttonType="primary"
+                disabled={isSaving || defaultCount === data.defaultEpisodeCount}
+                onClick={() => void saveDefault()}
+              >
+                {intl.formatMessage(isSaving ? messages.saving : messages.save)}
+              </Button>
+            </div>
           </div>
         )}
 
         {(actionError || loadError) && (
-          <div className="mt-4">
+          <div>
             <Alert type="error" title={intl.formatMessage(messages.error)} />
           </div>
         )}
 
-        <div className="mt-5 flex flex-wrap gap-3">
+        <div className="app-action-row" data-action-placement="leading">
           {isSelf && (status === 'off' || status === 'denied') && (
             <Button
               buttonType="primary"

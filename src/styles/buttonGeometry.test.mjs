@@ -2282,13 +2282,18 @@ test('negative, logical and important utilities are not audit blind spots', () =
   assert.deepEqual(report.unresolved, []);
 });
 
-test('detail layout and credit/table consumers use global asset roles without utilities', () => {
+test('detail and new request-access/settings consumers use global asset roles without utilities', () => {
   for (const path of [
     'TvDetails/index.tsx',
     'TvDetails/SeriesDetailsLayout.tsx',
     'MediaDetails/SeriesSeasonEpisodeBrowser.tsx',
     'MediaDetails/SeasonEpisodeTree.tsx',
     'MediaDetails/ExpandableCreditList.tsx',
+    'UserList/EpisodeQueueApprovalQueue.tsx',
+    'UserList/TvSeasonWatchGateApprovalQueue.tsx',
+    'UserProfile/UserSettings/UserEpisodeQueueSettings.tsx',
+    'UserProfile/UserSettings/UserTvSeasonWatchGateAccess.tsx',
+    'Settings/BinderyModal/index.tsx',
   ]) {
     const report = auditTailwindClassExpressions({
       path,

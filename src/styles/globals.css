@@ -1177,6 +1177,11 @@
 
   /* One disclosure unit: the remaining-width table and content-sized action area.
      Hidden panels stay mounted without participating in layout or hit testing. */
+  .card-layout[data-card-layout='copy'] {
+    flex: 1;
+    min-width: 0;
+  }
+
   .card-layout[data-card-layout='media-server-panel']:not([hidden]) {
     display: flex;
     align-items: flex-start;
@@ -5289,6 +5294,12 @@
     @apply mr-1 h-5 w-5 scale-100 transform-gpu rounded-full transition duration-300 group-hover:scale-105;
   }
 
+  .cached-image-avatar {
+    flex: none;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
   .cached-image-avatar-fallback {
     color: rgb(var(--color-indigo-500));
   }
@@ -5319,6 +5330,11 @@
 
   .form-input-field {
     @apply flex max-w-xl rounded-md shadow-sm;
+  }
+
+  .form-input-field[data-field-layout='protocol'] > input {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
   }
 
   .service-host-picker {
@@ -8224,7 +8240,8 @@
   }
 
   .settings-page-content input:not([type='checkbox']):not([type='radio']),
-  .settings-page-content select {
+  .settings-page-content select,
+  select.request-form-control[data-control-size='compact'] {
     @apply px-2 py-0 text-xs leading-4;
     box-sizing: border-box;
     height: var(--compact-control-height);
@@ -8732,6 +8749,18 @@
 
   .app-action-row[data-action-placement='distributed'] {
     --action-row-justify: space-between;
+  }
+
+  .app-action-row[data-action-layout='summary']
+    > .card-layout[data-card-layout='copy'] {
+    flex-basis: 100%;
+  }
+
+  @media (min-width: 640px) {
+    .app-action-row[data-action-layout='summary']
+      > .card-layout[data-card-layout='copy'] {
+      flex-basis: 0;
+    }
   }
 
   .app-action-row[data-action-wrap='nowrap'] {
