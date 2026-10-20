@@ -14,6 +14,7 @@ import {
   getBookRequestId,
   getSportsRequestId,
 } from '@app/components/RequestCard/requestIdentity';
+import { getTvRequestScopeStatus } from '@app/components/RequestCard/requestScopeStatus';
 import { canRetryRequest } from '@app/components/RequestCard/retryPermissions';
 import RequestFailureDetails from '@app/components/RequestFailureDetails';
 import StatusBadge from '@app/components/StatusBadge';
@@ -226,6 +227,9 @@ const getRequestServiceUrl = (request: NonFunctionProperties<MediaRequest>) => {
 const getRequestMediaStatus = (
   request: NonFunctionProperties<MediaRequest>
 ) => {
+  if (request.type === 'tv') {
+    return getTvRequestScopeStatus(request);
+  }
   if (request.type !== 'book' || request.media.status === MediaStatus.DELETED) {
     return request.media[request.is4k ? 'status4k' : 'status'];
   }

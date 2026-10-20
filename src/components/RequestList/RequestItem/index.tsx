@@ -10,6 +10,7 @@ import MediaTypeBadge, {
   getMediaTypeBadgeType,
 } from '@app/components/Common/MediaTypeBadge';
 import Tooltip from '@app/components/Common/Tooltip';
+import { getTvRequestScopeStatus } from '@app/components/RequestCard/requestScopeStatus';
 import { canRetryRequest } from '@app/components/RequestCard/retryPermissions';
 import RequestFailureDetails from '@app/components/RequestFailureDetails';
 import StatusBadge from '@app/components/StatusBadge';
@@ -259,6 +260,10 @@ const hasBookFormat = (
 const getRequestMediaStatus = (
   request: NonFunctionProperties<MediaRequest>
 ) => {
+  if (request.type === 'tv') {
+    return getTvRequestScopeStatus(request);
+  }
+
   if (request.type !== 'book') {
     return request.media[request.is4k ? 'status4k' : 'status'];
   }
