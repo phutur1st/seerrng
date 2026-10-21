@@ -212,6 +212,12 @@ test('upstream public commands preserve build-time translation and visual guards
 test('current shared owners pass their checks and functional mutations fail', () => {
   const cases = [
     [
+      'cypress/e2e/library-discover-parity.cy.ts',
+      'expect(bounds.height).to.eq(24)',
+      'expect(bounds.height).to.eq(16)',
+      'rendered Manage regression coverage must measure the canonical action geometry',
+    ],
+    [
       'src/components/MediaDetails/MusicRatings.tsx',
       'getSafeHref(rating?.url)',
       'rating?.url',
