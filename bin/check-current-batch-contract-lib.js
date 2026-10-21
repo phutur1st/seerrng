@@ -166,6 +166,7 @@ const validateSeriesRequestEntryEvidence = (source) => {
       const match = node.text.match(/^\/(.*)\/([a-z]*)$/);
       if (!match || !match[1].startsWith('^') || !match[1].endsWith('$'))
         return false;
+      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- the pattern is built from repository files, never from user input
       const pattern = new RegExp(match[1], match[2]);
       return pattern.test(expected) && !pattern.test(`${expected} Extra`);
     };
@@ -1865,8 +1866,8 @@ const validateCurrentBatchContract = (files) => {
   );
   requireText(
     globals,
-    '--action-control-height: 1rem;',
-    'all shared action-button aliases must resolve through the approved 16-pixel action token'
+    '--action-control-height: 1.5rem;',
+    'all shared action-button aliases must resolve through the approved 24-pixel action token'
   );
   requireText(
     globals,
@@ -2659,8 +2660,8 @@ const validateCurrentBatchContract = (files) => {
   );
   requireText(
     globals,
-    '--theme-control-surface: 49 46 129;\n    --theme-control-surface-hover: 55 48 163;\n    --theme-control-border: 99 102 241;\n    --theme-control-text: 199 210 254;',
-    'shared controls must retain the approved dark-indigo palette'
+    '--theme-control-surface: 31 41 55;\n    --theme-control-surface-hover: 55 65 81;\n    --theme-control-border: 40 68 120;\n    --theme-control-text: 219 234 254;',
+    'shared controls must retain the approved slate and blue palette'
   );
   requireCssRule(
     '.selection-circle',
@@ -3022,13 +3023,8 @@ const validateCurrentBatchContract = (files) => {
   );
   requireText(
     globals,
-    'linear-gradient(\n        40deg,',
-    'page gradient must use 40 degrees'
-  );
-  requireText(
-    globals,
-    'rgb(var(--theme-page-gradient-black)) 0%',
-    'page gradient must end in black'
+    'background-color: rgb(var(--theme-page-bg));',
+    'the page canvas must use the shared flat theme background token'
   );
   requireText(
     globals,
@@ -5287,7 +5283,7 @@ const validateCurrentBatchContract = (files) => {
   );
   requireText(
     globals,
-    "input[type='checkbox'] {\n    @apply h-4 w-4 rounded-full text-emerald-500",
+    "input[type='checkbox'] {\n    /* 24px is the WCAG 2.2 minimum target size; the check mark scales with it. */\n    @apply h-6 w-6 rounded-full text-emerald-500",
     'native selection circles must share the standard global geometry'
   );
   requireText(
@@ -6121,7 +6117,7 @@ const validateCurrentBatchContract = (files) => {
   );
   for (const token of [
     ':is(.app-card-sub, .app-card-inset),',
-    '--app-card-frame-background: var(--palette-blue, #0051d4);',
+    '--app-card-frame-background: rgb(var(--theme-sidebar-border));',
     '--app-card-frame-width: 1px;',
     'border-radius: 0.5rem;',
     'background: var(--app-card-frame-background);',
@@ -6130,7 +6126,7 @@ const validateCurrentBatchContract = (files) => {
     requireText(
       globals,
       token,
-      'card borders must preserve the shared rounded silhouette and solid blue ring'
+      'card borders must preserve the shared rounded silhouette and solid theme ring'
     );
   }
   for (const token of ["label: 'HD'", "label: '4K'"]) {
@@ -6169,8 +6165,8 @@ const validateCurrentBatchContract = (files) => {
   );
   requireText(
     globals,
-    '--action-control-height: 1rem;',
-    'the shared standard-size token must resolve to the approved 16-pixel height'
+    '--action-control-height: 1.5rem;',
+    'the shared standard-size token must resolve to the approved 24-pixel height'
   );
   for (const token of [
     'expect(bounds.height).to.eq(16)',

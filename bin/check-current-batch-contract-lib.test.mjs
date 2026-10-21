@@ -243,9 +243,9 @@ test('current shared owners pass their checks and functional mutations fail', ()
     ],
     [
       'src/styles/globals.css',
-      '--app-card-frame-background: var(--palette-blue, #0051d4);',
+      '--app-card-frame-background: rgb(var(--theme-sidebar-border));',
       '--app-card-frame-background: conic-gradient(#252a30, #f8fafb);',
-      'card borders must preserve the shared rounded silhouette and solid blue ring',
+      'card borders must preserve the shared rounded silhouette and solid theme ring',
     ],
     [
       'src/styles/globals.css',

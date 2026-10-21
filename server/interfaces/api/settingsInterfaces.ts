@@ -102,6 +102,7 @@ export interface StatusResponse {
   version: string;
   commitTag: string;
   updateAvailable?: boolean;
+  updateCheckSucceeded?: boolean;
   commitsBehind?: number;
   restartRequired: boolean;
 }

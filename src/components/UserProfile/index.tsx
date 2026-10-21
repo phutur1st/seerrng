@@ -95,7 +95,7 @@ const QuotaSummaryCard = ({
       </dt>
       <dd
         className={`mt-1 flex items-center text-sm ${
-          quota.restricted ? 'text-red-500' : 'text-white'
+          quota.restricted ? 'text-red-500' : 'text-gray-100'
         }`}
       >
         {quota.limit ? (
@@ -240,7 +240,7 @@ const UserProfile = () => {
                 <dt className="truncate text-sm font-bold text-gray-300">
                   {intl.formatMessage(messages.totalrequests)}
                 </dt>
-                <dd className="mt-1 text-3xl font-semibold text-white">
+                <dd className="mt-1 text-3xl font-semibold text-gray-100">
                   <Link
                     href={
                       currentHasPermission(
@@ -276,7 +276,7 @@ const UserProfile = () => {
                 </dt>
                 <dd
                   className={`mt-1 flex items-center text-sm ${
-                    quota.movie.restricted ? 'text-red-500' : 'text-white'
+                    quota.movie.restricted ? 'text-red-500' : 'text-gray-100'
                   }`}
                 >
                   {quota.movie.limit ? (
@@ -331,7 +331,7 @@ const UserProfile = () => {
                 </dt>
                 <dd
                   className={`mt-1 flex items-center text-sm ${
-                    quota.tv.restricted ? 'text-red-500' : 'text-white'
+                    quota.tv.restricted ? 'text-red-500' : 'text-gray-100'
                   }`}
                 >
                   {quota.tv.limit ? (
@@ -386,7 +386,7 @@ const UserProfile = () => {
                 </dt>
                 <dd
                   className={`mt-1 flex items-center text-sm ${
-                    quota.music.restricted ? 'text-red-500' : 'text-white'
+                    quota.music.restricted ? 'text-red-500' : 'text-gray-100'
                   }`}
                 >
                   {quota.music.limit ? (
@@ -441,7 +441,7 @@ const UserProfile = () => {
                 </dt>
                 <dd
                   className={`mt-1 flex items-center text-sm ${
-                    quota.book.restricted ? 'text-red-500' : 'text-white'
+                    quota.book.restricted ? 'text-red-500' : 'text-gray-100'
                   }`}
                 >
                   {quota.book.limit ? (

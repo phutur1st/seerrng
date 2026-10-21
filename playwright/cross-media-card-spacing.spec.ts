@@ -10,7 +10,7 @@ for (const viewport of [
     '/share',
     '/following',
     '/discover/games',
-    '/discover/vibes',
+    '/discover/book-recommendations',
   ]) {
     test(`cross-media cards preserve shared padding on ${route} at ${viewport.width}px`, async ({
       page,
@@ -51,8 +51,8 @@ for (const viewport of [
       await page.route('**/api/v1/follow**', (r) =>
         r.fulfill({ json: { total: 0, results: [] } })
       );
-      await page.route('**/api/v1/vibes', (r) =>
-        r.fulfill({ json: { configured: false, results: [], vibes: [] } })
+      await page.route('**/api/v1/book-recommendations', (r) =>
+        r.fulfill({ json: { configured: false, results: [] } })
       );
       await page.route('**/api/v1/game-content/saved', (r) =>
         r.fulfill({ json: { results: [] } })

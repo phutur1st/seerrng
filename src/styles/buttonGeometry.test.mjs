@@ -96,8 +96,9 @@ test('Request preserves its typography, color and border styling', () => {
   assert.doesNotMatch(requestRule, /@apply/);
 });
 
-test('action buttons fit a 16px detail row without shrinking their text', () => {
-  assert.match(css, /--action-control-height: 1rem;/);
+test('action buttons keep the 24px WCAG target without growing their text or glyphs', () => {
+  assert.match(css, /--action-control-height: 1\.5rem;/);
+  assert.match(css, /--action-control-content-height: 0\.875rem;/);
   assert.match(css, /--button-padding-x: 5px;/);
   assert.match(css, /--action-control-padding-x: var\(--button-padding-x\);/);
   assert.match(css, /--compact-button-padding-x: var\(--button-padding-x\);/);
@@ -129,7 +130,8 @@ test('editable inputs retain 20px while dropdown buttons share 16px action sizin
 });
 
 test('poster badges keep the shared compact poster geometry', () => {
-  assert.match(css, /--poster-control-height: 1rem;/);
+  assert.match(css, /--poster-control-height: 1\.5rem;/);
+  assert.match(css, /--poster-control-content-height: 0\.875rem;/);
   assert.match(css, /--poster-control-padding-x: var\(--button-padding-x\);/);
   assert.match(css, /--poster-control-gap: 0\.125rem;/);
   assert.match(
@@ -584,13 +586,13 @@ test('Request Status timeline uses the shared green completion treatment', () =>
   );
 });
 
-test('page titles have one global typography and purple-gradient owner', () => {
+test('page titles have one global typography and solid color owner', () => {
   const title = rule('.page-title');
-  assert.match(title, /background-image: linear-gradient/);
-  assert.match(title, /rgb\(var\(--color-indigo-400\)\)/);
-  assert.match(title, /rgb\(var\(--color-purple-400\)\)/);
-  assert.match(title, /background-clip: text/);
-  assert.match(title, /color: transparent/);
+  assert.match(title, /color: rgb\(var\(--theme-heading-text\)\)/);
+  assert.doesNotMatch(
+    title,
+    /background-image: linear-gradient|background-clip: text|color: transparent/
+  );
   assert.match(title, /width: fit-content/);
   assert.match(title, /--page-title-font-size: 1\.5rem/);
   assert.match(title, /font-size: var\(--page-title-font-size\)/);
@@ -711,7 +713,8 @@ test('section headings share page-title treatment with their independent 24px si
   const shared = rule('.page-title');
   const heading = rules('.page-heading');
   assert.match(css, /\.page-title,\s*\.page-heading\s*\{/);
-  assert.match(shared, /background-image: linear-gradient/);
+  assert.match(shared, /color: rgb\(var\(--theme-heading-text\)\)/);
+  assert.doesNotMatch(shared, /background-image: linear-gradient/);
   assert.match(shared, /font-weight: 700/);
   assert.match(heading, /font-size: var\(--page-heading-font-size\)/);
   assert.match(heading, /line-height: var\(--page-heading-line-height\)/);

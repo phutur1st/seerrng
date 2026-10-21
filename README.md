@@ -116,7 +116,7 @@ For local MCP access, see the [SnapeTech MCP integration guide](./docs/integrati
 - **Continue the story:** from an anime, find the manga or light novel that continues it, see where the finished season ends when documented, and request the right volume or follow future translated volumes. A franchise page groups sources, sequels, and side stories with confidence and evidence.
 - **Editions and narrations:** compare narrators, full-cast and solo, abridged and unabridged, and keep a second performance alongside the first (ChaptarrNG); compare a series by narrator; request a specific standard, deluxe, or remastered album release.
 - **Games and patches:** compare game editions and request only the expansions you choose (QuestarrNG), find games by theme, mode, perspective, and language with saved searches, and request exact translation or ROM-hack versions with the original kept alongside (ROMarrNG).
-- **Discovery you steer:** Hardcover Book Vibes with standalone, first-in-series, and less-popular filters; Collector Picks from slskdN with the reason each appeared.
+- **Discovery you steer:** Hardcover book recommendations with standalone, first-in-series, and less-popular filters; Collector Picks from slskdN with the reason each appeared.
 - **Following:** follow narrators, authors, series, game content, artists, and patch projects and read personal news that says why each item appeared; optional auto-request is limited to books.
 - A standalone [SeerrNG Companion browser extension](https://github.com/snapetech-org/seerrng-companion) for requesting from IMDb, Letterboxd, Steam, Goodreads, AniList, and more.
 - Catalog browsing and requests for Retro and Modern emulation systems and PC games for Windows, Linux, and macOS, with QuestarrNG and ROMarrNG handling acquisition.
@@ -833,3 +833,7 @@ Contributions should target SeerrNG behavior and this repository's current branc
 ## Attribution
 
 SeerrNG builds on Seerr, Jellyseerr, and Overseerr. Inherited code, documentation, and design remain credited to their original contributors. Fork-specific changes are credited to snapetech and SeerrNG contributors unless otherwise noted. See [NOTICE.md](./NOTICE.md) for the full attribution policy.
+
+## Local security scanning
+
+Run `./scripts/security-scan-local.sh` for local Semgrep CE and the Trivy scanners that fit this repository. The installed pre-commit hook scans the staged source/config snapshot after linting; Trivy runs on demand or in CI. This public repository also runs Semgrep CE and Trivy in GitHub Actions on main changes, pull requests, and weekly. Semgrep reports are retained as run artifacts for triage. See [security-scanning.md](docs/security-scanning.md). Use `./scripts/update-security-tools.sh` to refresh local scanner data and the Trivy database.

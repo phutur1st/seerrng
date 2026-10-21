@@ -36,7 +36,7 @@ const screens: [string, string][] = [
   ['/following', 'Following'],
   ['/franchise/tv/1396', 'Franchise'],
   ['/discover/games', 'Game'],
-  ['/discover/vibes', 'Vibes'],
+  ['/discover/book-recommendations', 'Book Recommendations'],
   ['/discover/collectors', 'Collector'],
   ['/discover/patches', 'Patch'],
   ['/', 'Share & Identify'],
@@ -57,6 +57,9 @@ for (const [path, heading] of screens) {
     });
     await page.goto(path);
     await page.waitForLoadState('networkidle');
+    const pageTitle = page.locator('.page-title:visible').first();
+    await expect(pageTitle).toHaveCSS('font-size', '36px');
+    await expect(pageTitle).toHaveCSS('font-weight', '700');
     await page.screenshot({
       path: `${process.env.SHOT_DIR ?? 'test-results'}/${path.replace(/\W+/g, '_')}.png`,
       fullPage: true,

@@ -1269,3 +1269,13 @@ test('the Hom3lab fork cannot publish inherited upstream Helm charts', () => {
     './.github/workflows/lint-helm-charts.yml'
   );
 });
+
+test('the Hom3lab fork cannot promote inherited upstream container aliases', () => {
+  for (const [workflow, job] of [
+    ['release.yml', 'promote-stable-container-aliases'],
+    ['promote-container-aliases.yml', 'promote'],
+  ]) {
+    const condition = readWorkflow(workflow).jobs[job].if;
+    assert.match(condition, /github\.repository != 'phutur1st\/seerrng' &&/);
+  }
+});

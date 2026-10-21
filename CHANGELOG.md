@@ -10,6 +10,40 @@ and the following `v3.2.7` release includes the intervening changes. Commit-leve
 links in the generated history remain the technical source of truth for changes
 that are not called out here.
 
+## [3.71.4](https://github.com/snapetech-org/seerrng/compare/v3.71.3..v3.71.4) - 2026-10-20
+
+### User-facing changes
+
+#### Fixed
+
+- **Settings:** The About page now marks the installed release explicitly and reports when GitHub could not be checked, instead of showing a failed version check as up to date.
+
+### 🐛 Bug Fixes
+- *(update)* Clarify installed and available releases - ([bd48b01](https://github.com/snapetech-org/seerrng/commit/bd48b01ca5249d0b93a2e77e5c25b7e5403c6946))
+
+## [3.71.3](https://github.com/snapetech-org/seerrng/compare/v3.71.2..v3.71.3) - 2026-10-20
+
+### User-facing changes
+
+#### Fixed
+
+- **Display:** Cross-media pages now render their intended heading sizes and colors in production builds.
+
+### 🐛 Bug Fixes
+- *(ui)* Load cross-media styles after globals - ([de6d537](https://github.com/snapetech-org/seerrng/commit/de6d537ed))
+- *(ui)* Restore cross-media heading styles - ([055e74d](https://github.com/snapetech-org/seerrng/commit/055e74d29))
+
+## [3.71.2](https://github.com/snapetech-org/seerrng/compare/v3.71.1..v3.71.2) - 2026-10-20
+
+### User-facing changes
+
+#### Changed
+
+- **Settings:** Settings > Services now groups integrations by purpose, making request destinations, media libraries, reader tools, downloads, and system controls easier to scan. Compact add actions reduce empty space, and Reader Apps stay available whenever book services are enabled.
+
+### 🚜 Refactor
+- *(settings)* Organize services page by purpose - ([b624980](https://github.com/snapetech-org/seerrng/commit/b624980d7f66a99fd65917690a04a6099a826a00))
+
 ## [3.71.1](https://github.com/snapetech-org/seerrng/compare/v3.71.0..v3.71.1) - 2026-10-20
 
 ### User-facing changes

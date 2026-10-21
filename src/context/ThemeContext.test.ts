@@ -33,7 +33,7 @@ const getContrastRatio = (foreground: string, background: string): number => {
 };
 
 describe('themePalettes', () => {
-  it('uses the approved Blackout treatment for SeerrNG without a duplicate picker choice', () => {
+  it('uses solid slate chrome and a restrained blue accent for SeerrNG', () => {
     assert.equal(
       themePalettes.some((p) => p.id === 'blackout'),
       false
@@ -45,42 +45,39 @@ describe('themePalettes', () => {
     for (const mode of ['dark', 'light'] as const) {
       const original = getThemeTokens(mode, 'classic');
       const seerrng = getThemeTokens(mode, 'seerr');
-      for (const field of [
-        'primaryScale',
-        'secondaryScale',
-        'surfaceScale',
-        'pageBg',
-        'pageGlowStart',
-        'pageGlowEnd',
-        'sidebarBorder',
-        'sidebarHover',
-      ] as const) {
+      for (const field of ['primaryScale', 'secondaryScale'] as const) {
         assert.deepEqual(seerrng[field], original[field], field);
       }
-      assert.equal(seerrng.chrome, 'blackout');
-      assert.equal(seerrng.searchbarScrolled, '0 0 0');
-      assert.equal(seerrng.sidebarStart, '0 0 0');
-      assert.equal(seerrng.sidebarEnd, '0 0 0');
+      assert.notDeepEqual(seerrng.surfaceScale, original.surfaceScale);
+      assert.equal(seerrng.chrome, 'classic');
+      assert.equal(seerrng.activePaletteId, 'seerr');
+      assert.equal(seerrng.selectedPaletteId, 'seerr');
     }
   });
 
-  it('keeps overlay opacity at its shared owner and scopes black to SeerrNG', () => {
+  it('uses solid slate menu surfaces with shared overlay opacity', () => {
     const css = readFileSync('src/styles/globals.css', 'utf8');
     const block = css.match(/\[data-theme-palette='seerr'\] \{([^}]+)\}/)?.[1];
     assert.ok(block);
     assert.doesNotMatch(block, /--color-|--theme-control-(text|border):/);
     for (const [token, value] of Object.entries({
-      'gradient-light': '0 0 0',
+      'gradient-light': '31 41 55',
       'gradient-main': '40 68 120',
-      'gradient-deep': '14 28 58',
+      'gradient-deep': '17 24 39',
       'gradient-black': '0 0 0',
     })) {
       assert.ok(block.includes(`--theme-page-${token}: ${value};`));
     }
     assert.ok(block.includes('--theme-page-spotlight-strength: 0;'));
     assert.ok(block.includes('--theme-page-gradient-main-stop: 50%;'));
-    for (const token of ['light', 'main', 'deep', 'neutral', 'menu']) {
-      assert.ok(block.includes(`--theme-overlay-${token}: 0 0 0;`));
+    for (const [token, value] of Object.entries({
+      light: '31 41 55',
+      main: '31 41 55',
+      deep: '17 24 39',
+      neutral: '31 41 55',
+      menu: '31 41 55',
+    })) {
+      assert.ok(block.includes(`--theme-overlay-${token}: ${value};`));
     }
     for (const [selector, opacity] of [
       ['refreshed-card-surface', '0.38'],
@@ -111,19 +108,22 @@ describe('themePalettes', () => {
       /\[data-theme-palette='seerr'\] \.sidebar \{([^}]+)\}/
     )?.[1];
     assert.ok(sidebar);
-    assert.ok(sidebar?.includes('radial-gradient('));
-    assert.ok(sidebar?.includes('linear-gradient('));
-    assert.ok(sidebar?.includes('rgb(var(--theme-page-gradient-main) / 0.8)'));
-    assert.ok(sidebar?.includes('backdrop-filter: blur(5px)'));
-    for (const [token, value] of Object.entries({
-      'indigo-500': '59 130 246',
-      'indigo-600': '37 99 235',
-      'indigo-800': '30 64 175',
-      'purple-500': '14 165 233',
-      'purple-600': '2 132 199',
-      'purple-800': '7 89 133',
-    })) {
-      assert.ok(sidebar.includes(`--color-${token}: ${value};`));
+    assert.ok(
+      sidebar?.includes('background-color: rgb(var(--theme-sidebar-start));')
+    );
+    assert.doesNotMatch(sidebar ?? '', /gradient|backdrop-filter/i);
+    const selectedLink = css.match(/\.sidebar-link-selected \{([^}]+)\}/)?.[1];
+    assert.ok(
+      selectedLink?.includes(
+        'background-color: rgb(var(--theme-control-border));'
+      )
+    );
+    assert.doesNotMatch(selectedLink ?? '', /gradient/i);
+    const backdrop = css.match(/\.app-backdrop \{([^}]+)\}/)?.[1];
+    const menuSurface = css.match(/\.app-menu-gradient \{([^}]+)\}/)?.[1];
+    for (const surface of [backdrop, menuSurface]) {
+      assert.ok(surface?.includes('background-color:'));
+      assert.doesNotMatch(surface ?? '', /gradient/i);
     }
   });
 
@@ -133,18 +133,27 @@ describe('themePalettes', () => {
     assert.equal(themePalettes[0].name, 'SeerrNG');
   });
 
-  it('uses the approved Blackout chrome in the default SeerrNG palette', () => {
+  it('uses the solid Seerr blue and slate tokens in the default palette', () => {
     const tokens = getThemeTokens('dark', 'seerr');
 
     assert.equal(tokens.pageBg, '17 24 39');
     assert.equal(tokens.pageGlowStart, '31 41 55');
-    assert.equal(tokens.searchbarScrolled, '0 0 0');
-    assert.equal(tokens.sidebarStart, '0 0 0');
-    assert.equal(tokens.sidebarEnd, '0 0 0');
+    assert.equal(tokens.searchbarScrolled, '55 65 81');
+    assert.equal(tokens.sidebarStart, '31 41 55');
+    assert.equal(tokens.sidebarEnd, '19 25 40');
     assert.equal(tokens.sidebarBorder, '55 65 81');
     assert.equal(tokens.sidebarHover, '55 65 81');
-    assert.equal(tokens.primaryScale[6], '79 70 229');
-    assert.equal(tokens.secondaryScale[6], '147 51 234');
+    assert.equal(tokens.controlBorder, '40 68 120');
+    assert.equal(tokens.primaryScale[6], '40 68 120');
+    assert.equal(tokens.secondaryScale[6], '71 85 105');
+    assert.ok(
+      getContrastRatio('255 255 255', tokens.controlBorder) >= 4.5,
+      'active navigation text should remain readable on the blue selection'
+    );
+    assert.ok(
+      getContrastRatio(tokens.primaryScale[4], tokens.sidebarStart) >= 3,
+      'keyboard focus should remain visible against the sidebar'
+    );
   });
 
   it('keeps light surfaces and text in the selected mode while preserving dark artwork overlays', () => {
@@ -163,6 +172,44 @@ describe('themePalettes', () => {
     assert.equal(lightTokens.artworkGradientBlack, '0 0 0');
   });
 
+  it('keeps every light-mode text shade readable on its page background in every palette', () => {
+    for (const palette of themePalettes) {
+      const tokens = getThemeTokens('light', palette.id);
+
+      // gray-50..gray-500 are body, secondary and label text.
+      for (const [index, shade] of tokens.surfaceScale.slice(0, 6).entries()) {
+        for (const background of [
+          tokens.pageBg,
+          tokens.pageGlowStart,
+          tokens.pageGradientMain,
+        ]) {
+          assert.ok(
+            getContrastRatio(shade, background) >= 4.5,
+            `${palette.name} light gray-${[50, 100, 200, 300, 400, 500][index]} needs 4.5:1 on ${background}`
+          );
+        }
+      }
+    }
+  });
+
+  it('keeps light-mode accent text shades (indigo and purple 100-400) readable', () => {
+    for (const palette of themePalettes) {
+      const tokens = getThemeTokens('light', palette.id);
+
+      for (const [name, scale] of [
+        ['indigo', tokens.primaryScale],
+        ['purple', tokens.secondaryScale],
+      ] as const) {
+        for (const index of [1, 2, 3, 4]) {
+          assert.ok(
+            getContrastRatio(scale[index], tokens.pageBg) >= 4.5,
+            `${palette.name} light ${name}-${[50, 100, 200, 300, 400][index]} needs 4.5:1 on the page`
+          );
+        }
+      }
+    }
+  });
+
   it('keeps light-mode control and heading colors readable across palettes', () => {
     for (const palette of themePalettes) {
       const tokens = getThemeTokens('light', palette.id);
@@ -178,19 +225,19 @@ describe('themePalettes', () => {
     }
   });
 
-  it('exposes the approved Blackout colors through the SeerrNG palette', () => {
+  it('exposes the slate and blue colors through the SeerrNG palette', () => {
     const seerr = themePalettes.find((palette) => palette.id === 'seerr');
 
     assert.deepStrictEqual(seerr, {
       id: 'seerr',
       name: 'SeerrNG',
-      swatches: ['#000000', '#1a3260', '#333333'],
+      swatches: ['#111827', '#1f2937', '#284478'],
       surface: 'gray',
-      primary: 'indigo',
-      secondary: 'purple',
-      chrome: 'blackout',
+      primary: 'seerrBlue',
+      secondary: 'slate',
+      chrome: 'classic',
     });
-    assert.equal(getThemeTokens('dark', 'seerr').sidebarStart, '0 0 0');
+    assert.equal(getThemeTokens('dark', 'seerr').sidebarStart, '31 41 55');
   });
 
   it('includes the Sietch palette displayed by the theme picker', () => {

@@ -57,6 +57,91 @@ const makeUpdateEvent = (
   ({ entity, databaseEntity }) as unknown as UpdateEvent<Media>;
 
 describe('MediaSubscriber', () => {
+  it('serializes completion saves while keeping unimported book formats approved', async () => {
+    const subscriber = new MediaSubscriber();
+    const internals = subscriber as unknown as SubscriberInternals;
+    const requests = (['ebook', 'ebook', 'audiobook', 'both'] as const).map(
+      (bookFormat, index) =>
+        new MediaRequest({
+          id: index + 1,
+          bookFormat,
+          status: MediaRequestStatus.APPROVED,
+          is4k: false,
+        })
+    );
+    internals.forEachRequestBatch = async (_manager, _where, callback) => {
+      await callback(
+        requests.filter(
+          (request) => request.status === MediaRequestStatus.APPROVED
+        )
+      );
+    };
+    let saving = false;
+    const saved: number[] = [];
+    const manager = {
+      getRepository: () => ({
+        save: async (request: MediaRequest) => {
+          assert.equal(
+            Array.isArray(request),
+            false,
+            'batched saves launch subscribers concurrently'
+          );
+          assert.equal(
+            saving,
+            false,
+            'subscriber writes must not overlap on one connection'
+          );
+          saving = true;
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          saved.push(request.id);
+          saving = false;
+        },
+      }),
+    } as unknown as EntityManager;
+    const previous = makeMedia({
+      mediaType: MediaType.BOOK,
+      status: MediaStatus.PROCESSING,
+    });
+    const ebookOnly = makeMedia({
+      mediaType: MediaType.BOOK,
+      status: MediaStatus.AVAILABLE,
+      serviceId: 20,
+      externalServiceId: 72,
+      ebookAvailable: true,
+      audiobookAvailable: false,
+      audiobookServiceId: 21,
+      audiobookExternalServiceId: 73,
+    });
+    await internals.updateRelatedMediaRequest(
+      manager,
+      ebookOnly,
+      previous,
+      false
+    );
+    assert.deepEqual(saved, [1, 2]);
+    assert.deepEqual(
+      requests.map((request) => request.status),
+      [
+        MediaRequestStatus.COMPLETED,
+        MediaRequestStatus.COMPLETED,
+        MediaRequestStatus.APPROVED,
+        MediaRequestStatus.APPROVED,
+      ]
+    );
+    await internals.updateRelatedMediaRequest(
+      manager,
+      makeMedia({ ...ebookOnly, audiobookAvailable: true }),
+      ebookOnly,
+      false
+    );
+    assert.deepEqual(saved, [1, 2, 3, 4]);
+    assert.ok(
+      requests.every(
+        (request) => request.status === MediaRequestStatus.COMPLETED
+      )
+    );
+  });
+
   it('processes a fixed request snapshot in bounded keyset batches', async () => {
     const subscriber = new MediaSubscriber();
     const internals = subscriber as unknown as SubscriberInternals;

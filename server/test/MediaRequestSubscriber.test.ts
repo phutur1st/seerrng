@@ -63,6 +63,7 @@ import {
   READARR_MAX_LOOKUP_RESULTS,
   clampReadarrProviderRetryDelay,
 } from '@server/subscriber/MediaRequestSubscriber';
+import { makeBookshelfBookId } from '@server/utils/bookshelfCatalog';
 import { resetTestDb, seedTestDb } from '@server/utils/seedTestDb';
 import axios from 'axios';
 
@@ -2187,6 +2188,13 @@ describe('MediaRequestSubscriber service dispatch', () => {
       })
     );
     const request = await createApprovedRequest(media, await getRequester());
+    mock.method(
+      ReadarrAPI.prototype as unknown as {
+        ensureProvider: () => Promise<void>;
+      },
+      'ensureProvider',
+      async () => undefined
+    );
     const terms: string[] = [];
     mock.method(ReadarrAPI.prototype, 'lookupBook', async (term: string) => {
       terms.push(term);
@@ -2650,6 +2658,158 @@ describe('MediaRequestSubscriber service dispatch', () => {
     });
     assert.equal(savedRequest.status, MediaRequestStatus.APPROVED);
   });
+
+  for (const format of ['ebook', 'audiobook'] as const) {
+    for (const lookupOutcome of ['match', 'empty'] as const) {
+      it(`preserves ${format} dispatch and availability after ${lookupOutcome} provider-ID lookup`, async () => {
+        const settings = getSettings();
+        settings.readarr = [
+          {
+            id: 20,
+            name: 'Chaptarr',
+            hostname: 'chaptarr.local',
+            port: 8787,
+            apiKey: 'test-key',
+            useSsl: false,
+            activeProfileId: 11,
+            activeProfileName: 'Books',
+            activeMetadataProfileId: 12,
+            activeMetadataProfileName: 'Standard',
+            activeDirectory: format === 'ebook' ? '/ebooks' : '/audiobooks',
+            tags: [],
+            is4k: false,
+            isDefault: true,
+            syncEnabled: true,
+            preventSearch: false,
+            tagRequests: false,
+            overrideRule: [],
+            serviceType: format,
+          },
+        ];
+
+        const requestedBy = await getRequester();
+        const media = await getRepository(Media).save(
+          new Media({
+            mediaType: MediaType.BOOK,
+            tmdbId: 0,
+            status: MediaStatus.PENDING,
+            status4k: MediaStatus.UNKNOWN,
+            identifiers: [
+              new MediaIdentifier({
+                provider: MediaIdentifierProvider.BOOKSHELF,
+                value: makeBookshelfBookId(20, '374541'),
+                canonical: true,
+              }),
+              new MediaIdentifier({
+                provider: MediaIdentifierProvider.ISBN,
+                value: '9780306406157',
+              }),
+            ],
+          })
+        );
+        const request = await createApprovedRequest(media, requestedBy);
+        request.bookFormat = format;
+        request.preferredEditionId = 'hc:edition-1';
+        let providerBookId: string | undefined;
+        let preferredEditionId: string | undefined;
+        const lookupResult: ReadarrBookLookupResult = {
+          title: 'The Return of the King',
+          foreignBookId: 'hc:374541',
+          titleSlug: 'return-of-the-king',
+          author: {
+            foreignAuthorId: 'hc:author-1',
+            authorName: 'J. R. R. Tolkien',
+          },
+          editions: [
+            {
+              foreignEditionId: 'hc:edition-1',
+              title: 'The Return of the King',
+              monitored: true,
+            },
+          ],
+        };
+        const lookupByIdentity = mock.method(
+          ReadarrAPI.prototype,
+          'lookupBookByProviderIdentity',
+          async (bookId: string, editionId?: string) => {
+            providerBookId = bookId;
+            preferredEditionId = editionId;
+            if (lookupOutcome === 'empty') return undefined;
+            return lookupResult;
+          }
+        );
+        const fallbackLookup = mock.method(
+          ReadarrAPI.prototype,
+          'lookupBook',
+          async () => [lookupResult]
+        );
+        const addBook = mock.method(
+          ReadarrAPI.prototype,
+          'addBook',
+          async (payload: ReadarrBookOptions) => ({
+            ...payload,
+            id: 72,
+            titleSlug: 'return-of-the-king',
+          })
+        );
+
+        await new MediaRequestSubscriber().sendToReadarr(request);
+
+        assert.equal(providerBookId, '374541');
+        assert.equal(lookupByIdentity.mock.callCount(), 1);
+        assert.equal(preferredEditionId, 'hc:edition-1');
+        assert.equal(
+          fallbackLookup.mock.callCount(),
+          lookupOutcome === 'empty' ? 1 : 0
+        );
+        assert.equal(
+          (addBook.mock.calls[0].arguments[0] as ReadarrBookOptions)
+            .foreignBookId,
+          'hc:374541'
+        );
+        const savedRequest = await getRepository(MediaRequest).findOneByOrFail({
+          id: request.id,
+        });
+        assert.equal(savedRequest.status, MediaRequestStatus.APPROVED);
+        const payload = addBook.mock.calls[0]
+          .arguments[0] as ReadarrBookOptions;
+        assert.equal(payload.qualityProfileId, 11);
+        assert.equal(payload.metadataProfileId, 12);
+        assert.equal(
+          payload.rootFolderPath,
+          format === 'ebook' ? '/ebooks' : '/audiobooks'
+        );
+        assert.equal(savedRequest.serviceTargets?.[0]?.format, format);
+        assert.equal(savedRequest.serviceTargets?.[0]?.externalServiceId, 72);
+        const savedMedia = await getRepository(Media).findOneByOrFail({
+          id: media.id,
+        });
+        assert.notEqual(savedMedia.ebookAvailable, true);
+        assert.notEqual(savedMedia.audiobookAvailable, true);
+        const search = await getRepository(BookRequestSearch).findOneByOrFail({
+          requestId: request.id,
+          format,
+        });
+        assert.equal(search.bookId, 72);
+        const subscriber = new MediaRequestSubscriber();
+        assert.equal(
+          (await subscriber.dispatchRequestById(request.id)).delivered,
+          true
+        );
+        assert.equal(addBook.mock.callCount(), 1);
+        assert.equal(lookupByIdentity.mock.callCount(), 1);
+        assert.equal(
+          (
+            await getRepository(BookRequestSearch).findOneByOrFail({
+              requestId: request.id,
+              format,
+            })
+          ).id,
+          search.id
+        );
+      });
+    }
+  }
 
   it('does not save Bookshelf identifiers already linked to another book media row', async () => {
     const settings = getSettings();

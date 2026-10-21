@@ -45,19 +45,19 @@ export const themePalettes: ThemePalette[] = [
   {
     id: 'seerr',
     name: 'SeerrNG',
-    swatches: ['#000000', '#1a3260', '#333333'],
+    swatches: ['#111827', '#1f2937', '#284478'],
     surface: 'gray',
-    primary: 'indigo',
-    secondary: 'purple',
-    chrome: 'blackout',
+    primary: 'seerrBlue',
+    secondary: 'slate',
+    chrome: 'classic',
   },
   {
     id: 'classic',
     name: 'Seerr',
-    swatches: ['#1f2937', '#4f46e5', '#9333ea'],
-    surface: 'gray',
-    primary: 'indigo',
-    secondary: 'purple',
+    swatches: ['#0f172a', '#1e293b', '#284478'],
+    surface: 'slate',
+    primary: 'seerrBlue',
+    secondary: 'slate',
     chrome: 'classic',
   },
   {
@@ -402,6 +402,19 @@ const themeScales = {
     '30 58 138',
     '23 37 84',
   ],
+  seerrBlue: [
+    '239 246 255',
+    '219 234 254',
+    '191 219 254',
+    '147 197 253',
+    '112 146 190',
+    '59 91 143',
+    '40 68 120',
+    '33 56 96',
+    '24 42 73',
+    '17 29 50',
+    '8 16 30',
+  ],
   indigo: [
     '238 242 255',
     '224 231 255',
@@ -623,6 +636,68 @@ const mixRgb = (from: string, to: string, amount: number): string => {
     .join(' ');
 };
 
+const getRelativeLuminance = (value: string): number => {
+  const [red, green, blue] = parseRgb(value).map((channel) => {
+    const normalized = channel / 255;
+
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+
+  return red * 0.2126 + green * 0.7152 + blue * 0.0722;
+};
+
+export const getContrastRatio = (
+  foreground: string,
+  background: string
+): number => {
+  const [lighter, darker] = [
+    getRelativeLuminance(foreground),
+    getRelativeLuminance(background),
+  ].sort((left, right) => right - left);
+
+  return (lighter + 0.05) / (darker + 0.05);
+};
+
+/** Gray shades 50-500 are used as body, secondary and label text. */
+const TEXT_SHADE_COUNT = 6;
+export const LIGHT_TEXT_MIN_CONTRAST = 4.5;
+
+/**
+ * Light surface scales are blended from each palette's hues, and several
+ * (Citrus, Gold, Forest, Moss, Ember...) ended up with secondary text near
+ * 2.4:1 against their own page. Darken only the text shades until each one
+ * meets the contrast minimum on every background it can sit on.
+ */
+const ensureReadableLightText = (
+  scale: readonly string[],
+  backgrounds: readonly string[],
+  firstShade = 0,
+  lastShade = TEXT_SHADE_COUNT - 1
+): string[] =>
+  scale.map((shade, index) => {
+    if (index < firstShade || index > lastShade) {
+      return shade;
+    }
+
+    const worst = (candidate: string) =>
+      Math.min(
+        ...backgrounds.map((background) =>
+          getContrastRatio(candidate, background)
+        )
+      );
+
+    for (let step = 0; step <= 20; step++) {
+      const candidate = mixRgb(shade, '0 0 0', step * 0.05);
+      if (worst(candidate) >= LIGHT_TEXT_MIN_CONTRAST) {
+        return candidate;
+      }
+    }
+
+    return mixRgb(shade, '0 0 0', 1);
+  });
+
 const rgbToHex = (value: string): string =>
   `#${parseRgb(value)
     .map((channel) => channel.toString(16).padStart(2, '0'))
@@ -719,12 +794,12 @@ const getThemeChromeTokens = (
       : mixRgb(primaryScale[6], secondaryScale[5], 0.32);
 
   const pageSpotlightCenter = classicDark
-    ? '194 169 255'
+    ? '40 68 120'
     : mode === 'dark'
       ? mixRgb(primaryScale[2], secondaryScale[2], 0.5)
       : mixRgb(primaryScale[1], secondaryScale[1], 0.5);
   const pageSpotlightEdge = classicDark
-    ? '151 115 246'
+    ? '59 91 143'
     : mode === 'dark'
       ? mixRgb(primaryScale[4], secondaryScale[4], 0.5)
       : mixRgb(primaryScale[2], secondaryScale[2], 0.5);
@@ -732,21 +807,21 @@ const getThemeChromeTokens = (
   const pageGradientLight = blackout
     ? '0 0 0'
     : classicDark
-      ? '76 67 189'
+      ? '31 41 55'
       : mode === 'dark'
         ? mixRgb(pageGlowStart, primaryScale[6], 0.18)
         : pageGlowStart;
   const pageGradientMain = blackout
     ? '40 68 120'
     : classicDark
-      ? '52 51 157'
+      ? '40 68 120'
       : mode === 'dark'
         ? mixRgb(pageBg, primaryScale[8], 0.35)
         : mixRgb(pageBg, pageGlowStart, 0.2);
   const pageGradientDeep = blackout
     ? '14 28 58'
     : classicDark
-      ? '23 29 89'
+      ? '17 24 39'
       : mode === 'dark'
         ? mixRgb(surfaceScale[10], primaryScale[9], 0.42)
         : mixRgb(pageBg, surfaceScale[8], 0.2);
@@ -756,21 +831,21 @@ const getThemeChromeTokens = (
   const controlSurface = blackout
     ? '0 0 0'
     : classicDark
-      ? '49 46 129'
+      ? '31 41 55'
       : mode === 'dark'
         ? mixRgb(surfaceScale[8], primaryScale[9], 0.18)
         : mixRgb(surfaceScale[9], secondaryScale[0], 0.12);
   const controlSurfaceHover = blackout
     ? '0 0 0'
     : classicDark
-      ? '55 48 163'
+      ? '55 65 81'
       : mode === 'dark'
         ? mixRgb(surfaceScale[7], primaryScale[8], 0.18)
         : mixRgb(surfaceScale[8], secondaryScale[0], 0.1);
-  const controlBorder = classicDark ? '99 102 241' : primaryScale[5];
+  const controlBorder = classicDark ? '40 68 120' : primaryScale[5];
   const controlText =
     blackout || classicDark
-      ? '199 210 254'
+      ? '219 234 254'
       : mode === 'dark'
         ? primaryScale[2]
         : mixRgb(surfaceScale[2], primaryScale[9], 0.12);
@@ -870,32 +945,55 @@ const resetAdvancedThemeOverrides = (root: HTMLElement) => {
 };
 
 export const getThemeTokens = (mode: ThemeMode, palette: string) => {
-  const activePalette = getThemePalette(palette);
+  const basePalette = getThemePalette(palette);
+  // Keep legacy blackout preferences on the readable Seerr chrome in light mode.
+  const activePalette: ThemePalette =
+    basePalette.chrome === 'blackout' && mode === 'light'
+      ? { ...basePalette, id: 'classic', chrome: 'classic' }
+      : basePalette;
   const primaryScale = themeScales[activePalette.primary];
   const secondaryScale = themeScales[activePalette.secondary];
-  const surfaceScale =
+  const baseSurfaceScale =
     mode === 'dark' &&
     (activePalette.chrome === 'classic' || activePalette.chrome === 'blackout')
-      ? themeScales.gray
+      ? themeScales[activePalette.surface]
       : createSurfaceScale(
           themeScales[activePalette.surface],
           primaryScale,
           secondaryScale,
           mode
         );
-  const chromeTokens = getThemeChromeTokens(
-    surfaceScale,
+  const baseChromeTokens = getThemeChromeTokens(
+    baseSurfaceScale,
     primaryScale,
     secondaryScale,
     mode,
     activePalette.chrome
   );
+  const surfaceScale =
+    mode === 'light'
+      ? ensureReadableLightText(baseSurfaceScale, [
+          baseChromeTokens.pageBg,
+          baseChromeTokens.pageGlowStart,
+          baseChromeTokens.pageGradientMain,
+        ])
+      : baseSurfaceScale;
+  const chromeTokens =
+    mode === 'light'
+      ? getThemeChromeTokens(
+          surfaceScale,
+          primaryScale,
+          secondaryScale,
+          mode,
+          activePalette.chrome
+        )
+      : baseChromeTokens;
   const darkSurfaceScale =
     mode === 'dark'
       ? surfaceScale
       : activePalette.chrome === 'classic' ||
           activePalette.chrome === 'blackout'
-        ? themeScales.gray
+        ? themeScales[activePalette.surface]
         : createSurfaceScale(
             themeScales[activePalette.surface],
             primaryScale,
@@ -913,10 +1011,28 @@ export const getThemeTokens = (mode: ThemeMode, palette: string) => {
           activePalette.chrome
         );
 
+  // Accent text (text-indigo-200/300/400 links, labels and values) is a pale
+  // tint in the shared scale, which vanishes on a light page. Darken only
+  // shades 100-400 in light mode; 500+ stay as the button and ring colours.
+  const accentBackgrounds = [
+    chromeTokens.pageBg,
+    chromeTokens.pageGlowStart,
+    chromeTokens.pageGradientMain,
+  ];
+  const readablePrimaryScale =
+    mode === 'light'
+      ? ensureReadableLightText(primaryScale, accentBackgrounds, 1, 4)
+      : primaryScale;
+  const readableSecondaryScale =
+    mode === 'light'
+      ? ensureReadableLightText(secondaryScale, accentBackgrounds, 1, 4)
+      : secondaryScale;
+
   return {
     activePaletteId: activePalette.id,
-    primaryScale,
-    secondaryScale,
+    selectedPaletteId: basePalette.id,
+    primaryScale: readablePrimaryScale,
+    secondaryScale: readableSecondaryScale,
     surfaceScale,
     chrome: activePalette.chrome,
     ...chromeTokens,
@@ -980,7 +1096,7 @@ const applyTheme = (
       )
     );
   writeLocalStorageValue(THEME_MODE_KEY, mode);
-  writeLocalStorageValue(THEME_PALETTE_KEY, themeTokens.activePaletteId);
+  writeLocalStorageValue(THEME_PALETTE_KEY, themeTokens.selectedPaletteId);
 };
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {

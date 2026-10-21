@@ -138,7 +138,7 @@
     flex: none;
   }
 
-  /* Stacked filter fields (game discovery, vibe tuning). */
+  /* Stacked filter fields (game discovery, recommendation tuning). */
   .filter-field-grid {
     display: grid;
     gap: var(--card-spacing);
@@ -253,28 +253,30 @@
     --color-gray-800: 31 41 55;
     --color-gray-900: 17 24 39;
     --color-gray-950: 3 7 18;
-    --color-indigo-50: 238 242 255;
-    --color-indigo-100: 224 231 255;
-    --color-indigo-200: 199 210 254;
-    --color-indigo-300: 165 180 252;
-    --color-indigo-400: 129 140 248;
-    --color-indigo-500: 99 102 241;
-    --color-indigo-600: 79 70 229;
-    --color-indigo-700: 67 56 202;
-    --color-indigo-800: 55 48 163;
-    --color-indigo-900: 49 46 129;
-    --color-indigo-950: 30 27 75;
-    --color-purple-50: 250 245 255;
-    --color-purple-100: 243 232 255;
-    --color-purple-200: 233 213 255;
-    --color-purple-300: 216 180 254;
-    --color-purple-400: 192 132 252;
-    --color-purple-500: 168 85 247;
-    --color-purple-600: 147 51 234;
-    --color-purple-700: 126 34 206;
-    --color-purple-800: 107 33 168;
-    --color-purple-900: 88 28 135;
-    --color-purple-950: 59 7 100;
+    --color-indigo-50: 239 246 255;
+    --color-indigo-100: 219 234 254;
+    --color-indigo-200: 191 219 254;
+    --color-indigo-300: 147 197 253;
+    --color-indigo-400: 112 146 190;
+    --color-indigo-500: 59 91 143;
+    --color-indigo-600: 40 68 120;
+    --color-indigo-700: 33 56 96;
+    --color-indigo-800: 24 42 73;
+    --color-indigo-900: 17 29 50;
+    --color-indigo-950: 8 16 30;
+    --color-purple-50: 248 250 252;
+    --color-purple-100: 241 245 249;
+    --color-purple-200: 226 232 240;
+    --color-purple-300: 203 213 225;
+    --color-purple-400: 148 163 184;
+    --color-purple-500: 100 116 139;
+    --color-purple-600: 71 85 105;
+    --color-purple-700: 51 65 85;
+    --color-purple-800: 30 41 59;
+    --color-purple-900: 15 23 42;
+    --color-purple-950: 2 6 23;
+    --theme-sidebar-start: 31 41 55;
+    --theme-sidebar-end: 19 25 40;
     --theme-sidebar-border: 55 65 81;
     --theme-sidebar-hover: 55 65 81;
     --sidebar-navigation-group-gap: calc(2 * var(--card-spacing));
@@ -289,31 +291,31 @@
     --theme-page-bg: 17 24 39;
     --theme-page-glow-start: 31 41 55;
     --theme-page-glow-end: 17 24 39;
-    --theme-page-spotlight-center: 194 169 255;
-    --theme-page-spotlight-edge: 151 115 246;
-    --theme-page-spotlight-strength: 1;
-    --theme-page-gradient-light: 76 67 189;
-    --theme-page-gradient-main: 52 51 157;
-    --theme-page-gradient-deep: 23 29 89;
+    --theme-page-spotlight-center: 40 68 120;
+    --theme-page-spotlight-edge: 59 91 143;
+    --theme-page-spotlight-strength: 0;
+    --theme-page-gradient-light: 31 41 55;
+    --theme-page-gradient-main: 40 68 120;
+    --theme-page-gradient-deep: 17 24 39;
     --theme-page-gradient-black: 0 0 0;
-    --theme-page-gradient-main-stop: 72%;
+    --theme-page-gradient-main-stop: 50%;
     --theme-searchbar-scrolled: 55 65 81;
-    --theme-control-surface: 49 46 129;
-    --theme-control-surface-hover: 55 48 163;
-    --theme-control-border: 99 102 241;
-    --theme-control-text: 199 210 254;
+    --theme-control-surface: 31 41 55;
+    --theme-control-surface-hover: 55 65 81;
+    --theme-control-border: 40 68 120;
+    --theme-control-text: 219 234 254;
     --theme-overlay-light: var(--theme-page-gradient-light);
     --theme-overlay-main: var(--theme-page-gradient-main);
     --theme-overlay-deep: var(--theme-page-gradient-deep);
     --theme-overlay-neutral: var(--color-gray-900);
     --theme-overlay-menu: var(--color-gray-800);
     --theme-heading-text: 255 255 255;
-    --theme-artwork-scrim: 52 51 157;
-    --theme-artwork-gradient-light: 76 67 189;
-    --theme-artwork-gradient-main: 52 51 157;
-    --theme-artwork-gradient-deep: 23 29 89;
+    --theme-artwork-scrim: 40 68 120;
+    --theme-artwork-gradient-light: 31 41 55;
+    --theme-artwork-gradient-main: 40 68 120;
+    --theme-artwork-gradient-deep: 17 24 39;
     --theme-artwork-gradient-black: 0 0 0;
-    --theme-artwork-text: 199 210 254;
+    --theme-artwork-text: 219 234 254;
     --compact-control-height: 1.25rem;
     --filter-control-height: var(--action-control-height);
     --filter-control-content-height: calc(var(--filter-control-height) - 2px);
@@ -375,12 +377,12 @@
     --palette-aqua-light: #64d5e7;
     --palette-aqua: #1aabcb;
     --palette-aqua-dark: #065769;
-    --palette-blue-light: #4d8fff;
-    --palette-blue: #0051d4;
-    --palette-blue-dark: #002b70;
-    --palette-purple-light: #a78bfa;
-    --palette-purple: #8b5cf6;
-    --palette-purple-dark: #6d28d9;
+    --palette-blue-light: #9bb4d3;
+    --palette-blue: #507097;
+    --palette-blue-dark: #284478;
+    --palette-purple-light: #b0b8c5;
+    --palette-purple: #6a788c;
+    --palette-purple-dark: #39475b;
     --palette-plum-light: #b85ad3;
     --palette-plum: #8414a6;
     --palette-plum-dark: #470b59;
@@ -395,10 +397,13 @@
     --detail-heading-gap: var(--card-spacing);
     /* Keep action sizing independent so the former 1.875rem height can return
        without changing any page's button variant or typography. */
-    --action-control-height: 1rem;
-    --action-control-content-height: calc(var(--action-control-height) - 2px);
-    --poster-control-height: 1rem;
-    --poster-control-content-height: calc(var(--poster-control-height) - 2px);
+    /* 24px is the WCAG 2.2 minimum target size (2.5.8). The glyph box (icons,
+       chevrons, rating marks, line height) stays 14px and is centred in the
+       taller control, so only the hit area grows. */
+    --action-control-height: 1.5rem;
+    --action-control-content-height: 0.875rem;
+    --poster-control-height: 1.5rem;
+    --poster-control-content-height: 0.875rem;
     --button-padding-x: 5px;
     --action-control-padding-x: var(--button-padding-x);
     /* One visual space between every button icon and its label. */
@@ -412,23 +417,35 @@
     --dropdown-menu-border: rgb(var(--theme-control-border) / 0.75);
   }
 
-  /* Blackout owns its canvas and readability colors. Other palettes and semantic
-     colors stay unchanged; each shared component keeps its existing alpha. */
+  /* Touch screens need a larger hit area than a mouse; coarse pointers get
+     28px from the same owners (the glyph box is unchanged). */
+  @media (pointer: coarse) {
+    :root:root {
+      --action-control-height: 1.75rem;
+      --poster-control-height: 1.75rem;
+    }
+  }
+
+  /* SeerrNG uses neutral slate surfaces and a restrained blue accent. */
   [data-theme-palette='seerr'] {
-    --theme-detail-divider-shadow: 0 0 4px 0 rgb(255 255 255 / 0.8);
     --theme-page-spotlight-strength: 0;
-    --theme-page-gradient-light: 0 0 0;
+    --theme-page-gradient-light: 31 41 55;
     --theme-page-gradient-main: 40 68 120;
     --theme-page-gradient-main-stop: 50%;
-    --theme-page-gradient-deep: 14 28 58;
+    --theme-page-gradient-deep: 17 24 39;
     --theme-page-gradient-black: 0 0 0;
-    --theme-overlay-light: 0 0 0;
-    --theme-overlay-main: 0 0 0;
-    --theme-overlay-deep: 0 0 0;
-    --theme-overlay-neutral: 0 0 0;
-    --theme-overlay-menu: 0 0 0;
-    --theme-control-surface: 0 0 0;
-    --theme-control-surface-hover: 0 0 0;
+    --theme-overlay-light: 31 41 55;
+    --theme-overlay-main: 31 41 55;
+    --theme-overlay-deep: 17 24 39;
+    --theme-overlay-neutral: 31 41 55;
+    --theme-overlay-menu: 31 41 55;
+    --theme-control-surface: 31 41 55;
+    --theme-control-surface-hover: 55 65 81;
+  }
+
+  [data-theme-palette='seerr'][data-theme-mode='light'] {
+    --theme-overlay-neutral: var(--color-gray-900);
+    --theme-overlay-menu: var(--color-gray-800);
   }
 
   [data-theme-mode='light'] {
@@ -445,9 +462,7 @@
     --color-gray-950: 255 255 255;
   }
 
-  :root,
-  [data-theme-palette='aurora'],
-  [data-theme-palette='classic'] {
+  [data-theme-palette='aurora'] {
     --color-indigo-50: 238 242 255;
     --color-indigo-100: 224 231 255;
     --color-indigo-200: 199 210 254;
@@ -579,11 +594,36 @@
     --color-purple-950: 26 46 5;
   }
 
+  [data-theme-palette='classic'],
+  [data-theme-palette='seerr'] {
+    --color-indigo-50: 239 246 255;
+    --color-indigo-100: 219 234 254;
+    --color-indigo-200: 191 219 254;
+    --color-indigo-300: 147 197 253;
+    --color-indigo-400: 112 146 190;
+    --color-indigo-500: 59 91 143;
+    --color-indigo-600: 40 68 120;
+    --color-indigo-700: 33 56 96;
+    --color-indigo-800: 24 42 73;
+    --color-indigo-900: 17 29 50;
+    --color-indigo-950: 8 16 30;
+    --color-purple-50: 248 250 252;
+    --color-purple-100: 241 245 249;
+    --color-purple-200: 226 232 240;
+    --color-purple-300: 203 213 225;
+    --color-purple-400: 148 163 184;
+    --color-purple-500: 100 116 139;
+    --color-purple-600: 71 85 105;
+    --color-purple-700: 51 65 85;
+    --color-purple-800: 30 41 59;
+    --color-purple-900: 15 23 42;
+    --color-purple-950: 2 6 23;
+  }
+
   [data-theme-palette='sapphire'],
   [data-theme-palette='arctic'],
   [data-theme-palette='skyline'],
-  [data-theme-palette='steel'],
-  [data-theme-palette='seerr'] {
+  [data-theme-palette='steel'] {
     --color-indigo-50: 239 246 255;
     --color-indigo-100: 219 234 254;
     --color-indigo-200: 191 219 254;
@@ -722,6 +762,10 @@
 
   body {
     background-color: rgb(var(--theme-page-bg));
+    /* Text without an explicit colour used to inherit the browser default
+       (black), which is unreadable on every dark page. gray-100 is near-white
+       in dark mode and dark in light mode (the gray scale inverts). */
+    color: rgb(var(--color-gray-100));
     -webkit-overflow-scrolling: touch;
   }
 
@@ -1261,6 +1305,15 @@
     padding-inline: var(--page-layout-margin-inline);
   }
 
+  /* Pages whose children are independent blocks (cards, filter rows, notices)
+     need one shared vertical rhythm so those blocks never touch or overlap. */
+  .page-layout [data-page-layout-part='content'][data-page-flow='stack'] {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: calc(2 * var(--card-spacing));
+  }
+
   /* Embedded content stays in normal flow; standalone backdrop offsets must
      never create a transparent hit area over preceding navigation controls. */
   .page-layout [data-page-layout='embedded'] {
@@ -1396,29 +1449,7 @@
     border-inline-end: 1px solid rgb(var(--theme-sidebar-border));
     padding-top: env(safe-area-inset-top);
     padding-inline-start: var(--safe-area-inline-start);
-    background:
-      radial-gradient(
-        ellipse 34% 27% at 100% 0%,
-        rgb(
-            var(--theme-page-spotlight-center) /
-              calc(0.98 * var(--theme-page-spotlight-strength))
-          )
-          0%,
-        rgb(
-            var(--theme-page-spotlight-edge) /
-              calc(0.72 * var(--theme-page-spotlight-strength))
-          )
-          34%,
-        rgb(var(--theme-page-gradient-light) / 0) 100%
-      ),
-      linear-gradient(
-        40deg,
-        rgb(var(--theme-page-gradient-black)) 0%,
-        rgb(var(--theme-page-gradient-deep)) 36%,
-        rgb(var(--theme-page-gradient-main))
-          var(--theme-page-gradient-main-stop),
-        rgb(var(--theme-page-gradient-light)) 100%
-      );
+    background-color: rgb(var(--theme-sidebar-start));
   }
 
   :root {
@@ -1481,14 +1512,6 @@
     overflow-y: auto;
   }
 
-  :root[data-theme-mode='light'] .sidebar {
-    background: linear-gradient(
-      40deg,
-      rgb(var(--theme-sidebar-end)) 0%,
-      rgb(var(--theme-sidebar-start)) 100%
-    );
-  }
-
   .sidebar-link-idle {
     background: transparent;
     color: white;
@@ -1500,58 +1523,27 @@
   }
 
   .sidebar-link-selected {
-    background: linear-gradient(40deg, #102d61 0%, #387ebe 100%);
+    background-color: rgb(var(--theme-control-border));
     color: white;
   }
 
   .sidebar-link-selected:hover,
   .sidebar-link-selected:focus-visible {
-    background: linear-gradient(40deg, #19457f 0%, #4c98d3 100%);
+    background-color: rgb(var(--theme-control-border));
   }
 
   .main-menu-link:focus-visible {
-    outline: 2px solid #93c5fd !important;
+    outline: 2px solid rgb(var(--color-indigo-400)) !important;
     outline-offset: 2px;
   }
 
   [data-theme-palette='seerr'] .sidebar {
-    /* Keep SeerrNG's blue/sky active and hover states local to the menu. */
-    --color-indigo-500: 59 130 246;
-    --color-indigo-600: 37 99 235;
-    --color-indigo-800: 30 64 175;
-    --color-purple-500: 14 165 233;
-    --color-purple-600: 2 132 199;
-    --color-purple-800: 7 89 133;
-    background:
-      radial-gradient(
-        ellipse 34% 27% at 100% 0%,
-        rgb(
-            var(--theme-page-spotlight-center) /
-              calc(0.784 * var(--theme-page-spotlight-strength))
-          )
-          0%,
-        rgb(
-            var(--theme-page-spotlight-edge) /
-              calc(0.576 * var(--theme-page-spotlight-strength))
-          )
-          34%,
-        rgb(var(--theme-page-gradient-light) / 0) 100%
-      ),
-      linear-gradient(
-        40deg,
-        rgb(var(--theme-page-gradient-black) / 0.8) 0%,
-        rgb(var(--theme-page-gradient-deep) / 0.8) 36%,
-        rgb(var(--theme-page-gradient-main) / 0.8)
-          var(--theme-page-gradient-main-stop),
-        rgb(var(--theme-page-gradient-light) / 0.8) 100%
-      );
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
+    background-color: rgb(var(--theme-sidebar-start));
   }
 
   .sidebar-link-idle:hover,
   .sidebar-link-idle:focus-visible {
-    background: linear-gradient(40deg, #09182f 0%, #1c4b80 100%);
+    background-color: rgb(var(--theme-sidebar-hover));
   }
 
   .app-shell {
@@ -1559,63 +1551,11 @@
   }
 
   .app-backdrop {
-    background:
-      radial-gradient(
-        ellipse 34% 27% at 100% 0%,
-        rgb(
-            var(--theme-page-spotlight-center) /
-              calc(0.98 * var(--theme-page-spotlight-strength))
-          )
-          0%,
-        rgb(
-            var(--theme-page-spotlight-edge) /
-              calc(0.72 * var(--theme-page-spotlight-strength))
-          )
-          34%,
-        rgb(var(--theme-page-gradient-light) / 0) 100%
-      ),
-      linear-gradient(
-        40deg,
-        rgb(var(--theme-page-gradient-black)) 0%,
-        rgb(var(--theme-page-gradient-deep)) 36%,
-        rgb(var(--theme-page-gradient-main))
-          var(--theme-page-gradient-main-stop),
-        rgb(var(--theme-page-gradient-light)) 100%
-      );
+    background-color: rgb(var(--theme-page-bg));
   }
 
   .app-menu-gradient {
-    background:
-      radial-gradient(
-        ellipse 34% 27% at 100% 0%,
-        rgb(
-            var(--theme-page-spotlight-center) /
-              calc(0.96 * var(--theme-page-spotlight-strength))
-          )
-          0%,
-        rgb(
-            var(--theme-page-spotlight-edge) /
-              calc(0.7 * var(--theme-page-spotlight-strength))
-          )
-          34%,
-        rgb(var(--theme-page-gradient-light) / 0) 100%
-      ),
-      linear-gradient(
-        40deg,
-        rgb(var(--theme-page-gradient-black) / 0.98) 0%,
-        rgb(var(--theme-page-gradient-deep) / 0.98) 36%,
-        rgb(var(--theme-page-gradient-main) / 0.96)
-          var(--theme-page-gradient-main-stop),
-        rgb(var(--theme-page-gradient-light) / 0.96) 100%
-      );
-  }
-
-  :root[data-theme-mode='light'] .app-menu-gradient {
-    background: linear-gradient(
-      40deg,
-      rgb(var(--theme-sidebar-end) / 0.98) 0%,
-      rgb(var(--theme-sidebar-start) / 0.98) 100%
-    );
+    background-color: rgb(var(--theme-overlay-menu));
   }
 
   .app-blocklist-confirmation-card {
@@ -1624,29 +1564,7 @@
     min-height: 9rem;
     border: 1px solid rgb(var(--color-indigo-400) / 0.75);
     border-radius: 0.75rem !important;
-    background:
-      radial-gradient(
-        ellipse 34% 27% at 100% 0%,
-        rgb(
-            var(--theme-page-spotlight-center) /
-              calc(0.96 * var(--theme-page-spotlight-strength))
-          )
-          0%,
-        rgb(
-            var(--theme-page-spotlight-edge) /
-              calc(0.7 * var(--theme-page-spotlight-strength))
-          )
-          34%,
-        rgb(var(--theme-page-gradient-light) / 0) 100%
-      ),
-      linear-gradient(
-        40deg,
-        rgb(var(--theme-page-gradient-black) / 0.98) 0%,
-        rgb(var(--theme-page-gradient-deep) / 0.98) 36%,
-        rgb(var(--theme-page-gradient-main) / 0.96)
-          var(--theme-page-gradient-main-stop),
-        rgb(var(--theme-page-gradient-light) / 0.96) 100%
-      ) !important;
+    background-color: rgb(var(--theme-overlay-menu)) !important;
   }
 
   .media-detail-disclosure-row {
@@ -1877,10 +1795,14 @@
     align-self: stretch;
     overflow: hidden;
     border-right: 1px solid rgb(var(--color-gray-700));
-    background-color: #fff;
+    background-color: rgb(var(--color-gray-900));
   }
 
   .app-card-sub[data-card-layout='portrait'] > [data-card-part='artwork'] img {
+    /* The artwork column stretches with the card, so the image must fill it;
+       a fixed-size image left the rest of the column as a blank white block. */
+    width: 100%;
+    height: 100%;
     object-fit: cover;
     object-position: top;
   }
@@ -2205,16 +2127,7 @@
   }
 
   [data-theme-palette='seerr'] .collection-summary-table::after {
-    background-color: black;
-    box-shadow: var(--theme-detail-divider-shadow);
-  }
-
-  :root[data-theme-mode='light'] .app-blocklist-confirmation-card {
-    background: linear-gradient(
-      40deg,
-      rgb(var(--theme-sidebar-end) / 0.98) 0%,
-      rgb(var(--theme-sidebar-start) / 0.98) 100%
-    ) !important;
+    background-color: rgb(var(--theme-sidebar-border));
   }
 
   .format-request-control {
@@ -3308,29 +3221,7 @@
   }
 
   .request-modal-site-surface {
-    background:
-      radial-gradient(
-        ellipse 34% 27% at 100% 0%,
-        rgb(
-            var(--theme-page-spotlight-center) /
-              calc(0.98 * var(--theme-page-spotlight-strength))
-          )
-          0%,
-        rgb(
-            var(--theme-page-spotlight-edge) /
-              calc(0.72 * var(--theme-page-spotlight-strength))
-          )
-          34%,
-        rgb(var(--theme-page-gradient-light) / 0) 100%
-      ),
-      linear-gradient(
-        40deg,
-        rgb(var(--theme-page-gradient-black)) 0%,
-        rgb(var(--theme-page-gradient-deep)) 36%,
-        rgb(var(--theme-page-gradient-main))
-          var(--theme-page-gradient-main-stop),
-        rgb(var(--theme-page-gradient-light)) 100%
-      ) !important;
+    background-color: rgb(var(--theme-overlay-menu)) !important;
   }
 
   .card-layout[data-card-layout='request-options'][data-expanded='true'] {
@@ -3754,6 +3645,9 @@
 
   .sportarr-detail-page {
     display: grid;
+    /* A bare grid track grows to its widest child, so the non-wrapping page
+       title stretched the whole page to ~3000px. Let the track shrink. */
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--card-body-spacing-before);
   }
 
@@ -3829,7 +3723,7 @@
 
   .sportarr-event-date,
   .sportarr-event-state {
-    color: rgb(var(--theme-control-text) / 0.76);
+    color: rgb(var(--theme-control-text) / 0.9);
     font-size: var(--card-body-font-size);
   }
 
@@ -3848,6 +3742,10 @@
 
   .sportarr-event-file-ready {
     color: var(--palette-green-light);
+  }
+
+  :root[data-theme-mode='light'] .sportarr-event-file-ready {
+    color: color-mix(in srgb, var(--palette-green-dark) 70%, black);
   }
 
   .sportarr-event-file-ready svg {
@@ -4023,7 +3921,7 @@
     margin-bottom: 0.5rem;
     column-gap: 1rem;
     row-gap: 0.25rem;
-    color: rgb(199 210 254);
+    color: rgb(var(--theme-control-text));
     font-size: 0.75rem;
     line-height: 1rem;
   }
@@ -4044,11 +3942,7 @@
   .app-progress-fill {
     height: 100%;
     border-radius: 9999px;
-    background-image: linear-gradient(
-      to right,
-      rgb(99 102 241),
-      rgb(168 85 247)
-    );
+    background-color: rgb(var(--theme-control-border));
     transition: width 500ms ease;
   }
 
@@ -4158,8 +4052,7 @@
     left: 0;
     right: 0;
     height: var(--detail-divider-width);
-    background-color: black;
-    box-shadow: var(--theme-detail-divider-shadow);
+    background-color: rgb(var(--theme-sidebar-border));
   }
 
   @media (min-width: 720px) {
@@ -4351,7 +4244,7 @@
     .manage-media-card-sections > div
   ) {
     --tw-ring-shadow: 0 0 #0000 !important;
-    --app-card-frame-background: var(--palette-blue, #0051d4);
+    --app-card-frame-background: rgb(var(--theme-sidebar-border));
   }
 
   .app-card-poster {
@@ -4530,6 +4423,33 @@
   .poster-layout [data-poster-region='association-slot'],
   .poster-layout [data-poster-region='watchlist-slot'] {
     min-width: 0;
+  }
+
+  /* Secondary actions (associations, blocklist) sat on top of every poster's
+     artwork and title at all times. With a pointer they now appear on hover or
+     keyboard focus; touch screens have no hover, so they stay visible there.
+     Hidden slots also stop receiving clicks so nothing invisible is pressed. */
+  @media (hover: hover) and (pointer: fine) {
+    .poster-layout [data-poster-region='association-slot'],
+    .poster-layout [data-poster-region='blocklist-slot'] {
+      transition: opacity 150ms ease-in-out;
+    }
+
+    .poster-layout:not(:hover):not(:focus-within)
+      :is(
+        [data-poster-region='association-slot'],
+        [data-poster-region='blocklist-slot']
+      ) {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .poster-layout [data-poster-region='association-slot'],
+    .poster-layout [data-poster-region='blocklist-slot'] {
+      transition: none;
+    }
   }
 
   .poster-layout [data-poster-region='status-slot'] {
@@ -4801,8 +4721,14 @@
     gap: calc(2 * var(--card-spacing));
   }
 
+  /* Every vertical card is a fixed-width poster, so columns must be at least as
+     wide as the poster: narrower flexible columns made posters overlap their
+     neighbours and push the last column past the viewport edge. */
   ul.cards-vertical {
-    grid-template-columns: repeat(auto-fill, minmax(9.375rem, 1fr));
+    grid-template-columns: repeat(auto-fill, var(--poster-width));
+    /* Spread leftover width between columns instead of leaving a ragged,
+       empty right edge at every viewport width. */
+    justify-content: space-between;
   }
 
   ul.cards-horizontal {
@@ -4829,6 +4755,15 @@
 
   ul.cards-vertical.poster-grid {
     grid-template-columns: repeat(auto-fill, var(--poster-width));
+  }
+
+  /* Phones narrower than two fixed posters plus gutters and gap (about 390px)
+     would otherwise show one poster per row beside a blank half-screen. Share
+     the row between two posters until the fixed width fits twice. */
+  @media (max-width: 389px) {
+    :root:root {
+      --poster-width: calc((100vw - 2rem - 2 * var(--card-spacing)) / 2);
+    }
   }
 
   ul.cards-horizontal > li {
@@ -5272,7 +5207,7 @@
   }
 
   .section {
-    @apply mt-6 mb-10 text-white;
+    @apply mt-6 mb-10 text-gray-100;
   }
 
   .form-row {
@@ -5342,7 +5277,7 @@
   }
 
   .label-tip {
-    @apply block font-medium text-gray-500;
+    @apply block font-medium text-gray-400;
   }
 
   button,
@@ -5353,7 +5288,8 @@
   }
 
   input[type='checkbox'] {
-    @apply h-4 w-4 rounded-full text-emerald-500 transition duration-150 ease-in-out focus:ring-2 disabled:cursor-not-allowed disabled:opacity-40;
+    /* 24px is the WCAG 2.2 minimum target size; the check mark scales with it. */
+    @apply h-6 w-6 rounded-full text-emerald-500 transition duration-150 ease-in-out focus:ring-2 disabled:cursor-not-allowed disabled:opacity-40;
     border-color: rgb(var(--theme-control-border) / 0.72);
     background-color: rgb(var(--theme-control-surface) / 0.92);
     --tw-ring-color: rgb(var(--theme-control-border));
@@ -5363,12 +5299,17 @@
     @apply border-emerald-400 bg-emerald-500;
   }
 
+  /* An <input> with no type attribute (and url/email fields) matched none of
+     these selectors and rendered as a native white box on dark pages. */
+  input:not([type]),
   input[type='text'],
   input[type='number'],
   input[type='password'],
+  input[type='url'],
+  input[type='email'],
   select,
   textarea {
-    @apply block w-full min-w-0 flex-1 rounded-md border border-gray-500 bg-gray-700 text-white transition duration-150 ease-in-out sm:text-sm sm:leading-5;
+    @apply block w-full min-w-0 flex-1 rounded-md border border-gray-500 bg-gray-700 text-gray-100 transition duration-150 ease-in-out sm:text-sm sm:leading-5;
   }
 
   input.rounded-s-only,
@@ -5453,6 +5394,29 @@
       drop-shadow(0 0 3px rgb(0 0 0 / 0.95));
   }
 
+  /* The black halo exists to keep white labels legible over dark artwork. On a
+     light page it just smudges dark labels (and fails contrast), so light mode
+     drops it from ordinary buttons; poster controls keep theirs because they
+     always sit on artwork. */
+  :root[data-theme-mode='light']
+    :is(
+      .app-button,
+      button:not(.app-filter-button):not(.app-control-shadow-exempt)
+    ):not(.poster-control) {
+    text-shadow: none;
+  }
+
+  :root[data-theme-mode='light']
+    :is(
+      .app-button,
+      button:not(.app-filter-button):not(.app-control-shadow-exempt),
+      .detail-disclosure-control,
+      .selection-circle
+    ):not(.poster-control)
+    svg {
+    filter: none;
+  }
+
   button.app-button:disabled {
     text-shadow: none;
   }
@@ -5483,6 +5447,20 @@
 
   .app-button-primary {
     @apply border-indigo-500/90 bg-indigo-950/55 text-indigo-200 hover:border-indigo-300 hover:bg-indigo-900/70 hover:text-white focus:border-indigo-300 focus:ring-indigo-500 active:border-indigo-400 active:bg-indigo-900/85;
+  }
+
+  /* The dark-mode treatment (translucent dark tint, pale label) becomes a mid
+     tint with a dark label on a light page, about 2:1. Use a solid accent with
+     a white label there. */
+  :root[data-theme-mode='light'] .app-button-primary {
+    border-color: rgb(var(--color-indigo-700));
+    background-color: rgb(var(--color-indigo-700));
+    color: #fff;
+  }
+
+  :root[data-theme-mode='light'] .app-button-primary:hover {
+    background-color: rgb(var(--color-indigo-600));
+    color: #fff;
   }
 
   .app-button-danger,
@@ -6052,14 +6030,18 @@
     display: inline-flex;
     align-items: center;
     justify-content: flex-end;
-    flex-shrink: 0;
     margin-inline-start: auto;
     gap: var(--button-content-gap);
     color: var(--palette-orange-light);
     font-size: var(--card-title-font-size);
     line-height: 1.25rem;
     font-weight: 600;
-    white-space: nowrap;
+    /* Statuses can be full sentences (for example the Steam import notice);
+       they must wrap instead of widening the whole page. */
+    white-space: normal;
+    min-width: 0;
+    flex-shrink: 1;
+    overflow-wrap: anywhere;
   }
 
   .page-status svg {
@@ -6074,7 +6056,7 @@
     stroke-width: var(--page-status-stroke-width);
   }
 
-  /* Page titles and section headings share one purple-gradient/type owner. */
+  /* Page titles and section headings share one solid color/type owner. */
   .page-title,
   .page-heading {
     --page-title-font-size: 1.5rem;
@@ -6086,14 +6068,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    background-image: linear-gradient(
-      to bottom right,
-      rgb(var(--color-indigo-400)),
-      rgb(var(--color-purple-400))
-    );
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
+    color: rgb(var(--theme-heading-text));
     font-size: var(--page-title-font-size);
     line-height: var(--page-title-line-height);
     font-weight: 700;
@@ -6119,7 +6094,7 @@
     width: 1em;
     height: 1em;
     margin-inline-start: var(--button-content-gap);
-    color: rgb(var(--color-purple-400));
+    color: rgb(var(--color-indigo-300));
   }
 
   .page-title-subtext {
@@ -6211,6 +6186,12 @@
 
   .page-error-message .card-title {
     color: inherit;
+  }
+
+  /* The message surface is a translucent tint over the page, so white text is
+     only readable on dark pages; light mode needs the inverted gray scale. */
+  :root[data-theme-mode='light'] .page-error-message {
+    --page-error-message-text: rgb(var(--color-gray-100));
   }
 
   .page-error-message-detail {
@@ -6473,7 +6454,11 @@
 
   @media (min-width: 640px) {
     .page-title {
-      overflow: visible;
+      /* Keep large glyph ascenders/descenders visible vertically, but clip the
+         line horizontally so a long title ellipsizes instead of widening the
+         whole page. */
+      overflow-x: clip;
+      overflow-y: visible;
       --page-title-font-size: 2.25rem;
     }
 
@@ -6515,6 +6500,11 @@
     border-color: color-mix(in srgb, var(--palette-blue) 90%, transparent);
     background-color: hsl(217 100% 10% / 0.55);
     color: hsl(217 100% 72%);
+  }
+
+  /* Pale blue on the mid tint a dark translucent fill becomes over a light page. */
+  :root[data-theme-mode='light'] .app-button-prowlarr {
+    color: #fff;
   }
 
   .app-button-prowlarr:hover {
@@ -6839,6 +6829,13 @@
     pointer-events: none;
   }
 
+  /* The rating popover floats above everything (z-index 100) and is portaled to
+     <body>, so it stayed visible on top of an opened modal. Hide it while any
+     page overlay is open. */
+  body:has(.page-overlay) .poster-rating-popover {
+    display: none;
+  }
+
   .detail-disclosure-control[data-reorder-state] .detail-disclosure-button {
     cursor: inherit;
     user-select: none;
@@ -7066,6 +7063,19 @@
     color: transparent;
   }
 
+  /* In action rows the circle sits beside 24px buttons, where a 16px target
+     fails WCAG 2.2 target spacing. Give it a 24px hit area there; the drawn
+     circle and the surrounding layout are unchanged. Dense trees keep the
+     shared 16px box (their row pitch already satisfies the spacing rule). */
+  .app-action-row > .selection-circle {
+    --selection-circle-hit-size: 1.5rem;
+    width: var(--selection-circle-hit-size);
+    height: var(--selection-circle-hit-size);
+    margin: calc(
+      (var(--detail-row-height) - var(--selection-circle-hit-size)) / 2
+    );
+  }
+
   .selection-circle:focus-visible {
     outline: 2px solid rgb(var(--selection-color-bright));
   }
@@ -7083,7 +7093,10 @@
     color: #fff;
   }
 
-  .game-library-sharing-label {
+  /* Labels beside a selection circle share one size; most callers render a
+     bare <span> and never selected this class, so they fell back to 16px. */
+  .game-library-sharing-label,
+  .app-action-row > .selection-circle + span {
     font-size: var(--card-body-font-size);
     line-height: var(--card-copy-line-height);
     color: rgb(var(--theme-control-text) / 0.9);
@@ -7774,6 +7787,12 @@
     outline-offset: 1px;
   }
 
+  /* Light pages need a dark label on the active filter's translucent tint. */
+  :root[data-theme-mode='light'] .app-filter-button-active {
+    color: rgb(var(--color-indigo-950));
+    background-color: rgb(var(--color-indigo-200) / 0.7);
+  }
+
   .app-filter-button-active:focus-within,
   .app-filter-button-active:focus-visible {
     outline-width: 2px;
@@ -8090,6 +8109,15 @@
     @apply inline-flex flex-nowrap items-center gap-[5px] whitespace-nowrap;
   }
 
+  /* Two badges plus a label are wider than a 320px phone; let the badges wrap
+     there instead of widening the whole settings page. */
+  @media (max-width: 380px) {
+    .settings-badge-row {
+      max-width: 100%;
+      flex-wrap: wrap;
+    }
+  }
+
   .settings-provider-status-list {
     display: flex;
     flex-direction: column;
@@ -8166,7 +8194,7 @@
   }
 
   .settings-form-label-line {
-    @apply inline-flex flex-wrap items-center gap-[5px];
+    @apply inline-flex flex-nowrap items-center gap-[5px] whitespace-nowrap;
   }
 
   .settings-plain-value {
@@ -8346,6 +8374,106 @@
 
   .settings-service-card {
     @apply col-span-1 flex h-full min-w-0 flex-col rounded-lg border border-gray-700;
+  }
+
+  /* Service integration groups share the settings layout owner. */
+  .settings-service-category-picker {
+    margin-bottom: 1.5rem;
+  }
+
+  .settings-service-category-navigation {
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgb(var(--color-gray-700) / 0.8);
+  }
+
+  .settings-service-category-panel {
+    min-width: 0;
+  }
+
+  .settings-service-group {
+    min-width: 0;
+    margin-bottom: 1.5rem;
+  }
+
+  .settings-service-group-heading {
+    margin: 1.75rem 0 0.75rem;
+    padding: 0 0.25rem 0.5rem;
+    border-bottom: 1px solid rgb(var(--color-gray-700) / 0.8);
+  }
+
+  .settings-service-group:first-child .settings-service-group-heading {
+    margin-top: 0.25rem;
+  }
+
+  .settings-service-group-content {
+    min-width: 0;
+  }
+
+  .settings-service-category-panel .settings-service-heading {
+    margin-block: 1rem 0.5rem;
+  }
+
+  .settings-service-category-panel .settings-service-section {
+    margin: 0 0 0.75rem;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .settings-service-category-panel .settings-service-add-card {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    width: max-content;
+    max-width: 100%;
+    align-self: start;
+    justify-self: start;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .settings-service-category-panel .settings-service-add-card-content {
+    display: flex;
+    width: auto;
+    min-height: 0;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  .settings-service-category-panel .settings-service-add-card .app-button {
+    margin: 0;
+  }
+
+  .settings-service-category-panel .settings-service-add-icon {
+    width: var(--action-control-content-height);
+    height: var(--action-control-content-height);
+  }
+
+  .settings-service-category-panel .settings-service-add-card svg {
+    width: var(--action-control-content-height);
+    height: var(--action-control-content-height);
+    flex: none;
+  }
+
+  .settings-service-category-panel .settings-service-grid {
+    gap: var(--card-spacing);
+  }
+
+  .settings-service-category-panel[hidden] {
+    display: none;
+  }
+  .settings-service-category-navigation {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--card-spacing);
+  }
+  @media (min-width: 640px) {
+    .settings-service-category-navigation {
+      display: flex;
+      flex-wrap: wrap;
+    }
   }
 
   .settings-service-grid {
@@ -8994,6 +9122,16 @@
   .discover-filter-control-label-active {
     background-color: rgb(var(--color-indigo-500) / 0.35);
     color: #fff;
+  }
+
+  /* The indigo scale does not invert in light mode, so pale labels vanish on
+     light control surfaces. */
+  :root[data-theme-mode='light'] .discover-filter-control-label {
+    color: rgb(var(--color-indigo-950));
+  }
+
+  :root[data-theme-mode='light'] .discover-filter-control-label-active {
+    color: rgb(var(--color-indigo-950));
   }
 
   .compact-select-warning .discover-filter-control-label,
@@ -9873,6 +10011,21 @@
     .pwa-only {
       @apply hidden;
     }
+  }
+
+  .request-episode-queue-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--card-spacing);
+  }
+
+  .request-episode-queue-title {
+    color: #fff;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 600;
   }
 
   .request-selection-layout {

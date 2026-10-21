@@ -67,7 +67,7 @@ natural wrapping for longer or translated copy rather than clipping it.
 
 1. Exercise role/state combinations with isolated fixtures or mocks: enabled, disabled, hover, active, focus, busy, empty, failed, cached refresh, partial data and relevant breakpoints. Verify user-facing controls are visually functional where the review asks for them.
    Use dedicated ordinary inspection tabs, leave the work owner's existing tabs untouched, and close temporary inspection tabs afterward. Verify preview origin/source and media-specific optional controls before diagnosing a screenshot or wrapped row.
-2. Preserve accessibility: names, descriptive help, disabled-tooltip access, keyboard behavior, native semantics and reduced motion. Detect nested buttons, double selection, event propagation into posters and invisible-but-interactive panels.
+2. Preserve accessibility: names, descriptive help, disabled-tooltip access, keyboard behavior, native semantics and reduced motion. When accepted theme or target geometry changes, verify browser chrome and control dimensions against their current shared owners. Isolate seeded account theme preferences and advanced overrides as well as browser storage; clearing local storage alone does not reset account-owned appearance. Detect nested buttons, double selection, event propagation into posters and invisible-but-interactive panels.
    When consolidating segmented actions into a single screen-entry control,
    verify that the whole control opens the intended screen, permission/service
    eligibility is preserved, and navigation does not perform an approval or

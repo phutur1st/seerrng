@@ -2024,3 +2024,17 @@ The October 19 target advanced before publication to `881294bf7995e5a7aa0c6dae19
 ## Hom3lab upstream v3.71.1 and TV request card status — October 20, 2026
 
 The isolated candidate integrates upstream `a2ae3cb234fb7b694e19e380e398b7dec141c4d2` (4 commits) onto deployed fork `d675d0a44da0881a80d1f3c81afd3146b205b235` and fixes TV request card status. See [the integration ledger](hom3lab-upstream-integration-20261020.md). The status change selects existing status branches; no presentation owner changed. This entry records AI-assisted work; it does not assert a completed gate or deployment.
+
+## Hom3lab upstream catch-up — October 21, 2026
+
+Pinned fork `0ed814d05ca6dd9b8d7ef4b7c1e13488d1d5d6a8` and upstream
+`2bae695931409a5b059afca220d166ffcf31dfc6` are being integrated in isolation.
+The maintainer explicitly adopts upstream's slate theme and 24px compact targets.
+See [the integration ledger](hom3lab-upstream-integration-20261021.md) for the
+reproduced Bookshelf work-ID regression, per-format preservation checks, recovery
+and actual validation status. No completed gate or deployment is asserted.
+
+The maintainer also selected upstream's two-column poster layout below 390px.
+The current standard records that narrow-width exception; existing native and
+browser geometry checks cover it. The October 21 ledger owns finalization and
+hosted CI/deployment evidence; earlier pending design entries are superseded.
