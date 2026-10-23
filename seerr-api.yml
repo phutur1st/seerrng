@@ -14382,6 +14382,14 @@ paths:
             type: string
             format: uri-reference
           description: URL to redirect to after login. Defaults to /login if not specified.
+        - in: query
+          name: returnTo
+          required: false
+          allowReserved: true
+          schema:
+            type: string
+            maxLength: 2048
+          description: In-app destination after successful sign-in, separate from the provider callback URL. Unsafe destinations fall back to the application root.
       responses:
         '200':
           description: OK

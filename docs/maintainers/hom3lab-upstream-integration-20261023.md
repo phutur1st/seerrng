@@ -193,3 +193,36 @@ test commit still requires hosted native CI; no completed gate is asserted here.
 AI assistance covers lifecycle diagnosis, timing-controlled assertions and this
 record. Test runtimes remain isolated from live configurations/providers. OIDC
 recovery, image publication and deployment boundaries remain unchanged.
+
+## OIDC account-link initiation contract correction
+
+After the authorized deployment, the maintainer reported an unknown error while
+linking an account. Sanitized application logs showed no OIDC handler error.
+Read-only source tracing found that the shared browser initiation helper always
+sends `returnTo`, while the production OpenAPI schema declares only `returnUrl`.
+The validator runs before the authentication handler, explaining the missing
+OIDC logs and the linked-account screen's generic initiation-error message.
+
+An isolated regression mounted the real production request validator and auth
+router with OIDC disabled, avoiding provider calls and account/session mutation.
+Both login and linked-account callback cases failed before repair with HTTP 400,
+`Unknown query parameter 'returnTo'`; older-client and unknown-query cases passed.
+The schema now declares only that existing optional scalar parameter, bounded
+to the browser/handler's 2,048-character limit. The callback allowlist,
+same-origin return-path handling, PKCE/correlation/claim checks and provider
+configuration remain unchanged. Unknown queries, repeated values and oversized
+return context still fail validation. No global validation exception was added.
+
+Focused Vitest verification passes 164 cases across the new API contract suite,
+existing authentication routes, OIDC HTTP/identity/provisioning and client helper
+tests. The new six-case suite also passes the native Node runner with zero
+failures/skips. Focused formatting/lint and server type checks pass. The new
+release fragment covers the user-visible initiation fix. This is an API contract
+repair, not an identity-provider configuration change or evidence of a completed
+live OIDC round trip. Account links and provider settings were not modified by
+the diagnosis. Full hosted verification and a validated image remain required
+before upgrading the running application with this correction.
+
+AI assistance covers diagnosis, the schema correction, isolated regressions and
+these records. The prior deployed source remains recoverable at
+`cdb03c5a8f678724cd35af9acf6598c7f70620c8` with the private deployment backup.
