@@ -14,6 +14,48 @@ describe('Request Status', () => {
     cy.loginAsAdmin();
   });
 
+  for (const parameter of ['requestId', 'softwareRequestId']) {
+    it(`opens a notification link and preserves ${parameter}`, () => {
+      const emptyStatus = {
+        pageInfo: { page: 1, pages: 0, pageSize: 20, results: 0 },
+        results: [],
+        counts: {
+          total: 0,
+          active: 0,
+          incomplete: 0,
+          attention: 0,
+          completed: 0,
+          unavailable: 0,
+          failed: 0,
+        },
+        olderCount: 0,
+      };
+      cy.intercept('GET', '/api/v1/request/status*', emptyStatus).as(
+        'mediaStatus'
+      );
+      cy.intercept('GET', '/api/v1/request/software/status*', emptyStatus).as(
+        'softwareStatus'
+      );
+
+      const link = `/requests/status?${parameter}=825`;
+      cy.request(link).its('status').should('eq', 200);
+      cy.visit(link);
+      cy.location('pathname').should('eq', '/requests/status');
+      cy.location('search').should('eq', `?${parameter}=825`);
+      cy.get('[data-testid="page-header"]')
+        .should('be.visible')
+        .and('have.text', 'Requests');
+      cy.wait(parameter === 'requestId' ? '@mediaStatus' : '@softwareStatus')
+        .its('request.url')
+        .then((url) => {
+          const query = new URL(url).searchParams;
+          expect(query.get('requestId')).to.eq('825');
+          expect(query.get('skip')).to.eq('0');
+          if (parameter === 'requestId') expect(query.get('take')).to.eq('1');
+        });
+    });
+  }
+
   it('opens on all requests and lets users choose a history window', () => {
     cy.visit('/requests');
     openRequestFilterSection('Filters');

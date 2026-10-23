@@ -226,3 +226,36 @@ before upgrading the running application with this correction.
 AI assistance covers diagnosis, the schema correction, isolated regressions and
 these records. The prior deployed source remains recoverable at
 `cdb03c5a8f678724cd35af9acf6598c7f70620c8` with the private deployment backup.
+
+## Request notification route compatibility
+
+The maintainer reported that `/requests/status?requestId=825` returns 404,
+including when opened without the email tracking wrapper. Availability
+notifications still generate that route for media and software requests, but
+Requests unification removed its page entrypoint. The existing `/requests`
+page already consumes both `requestId` and `softwareRequestId`.
+
+Restore `/requests/status` as a re-export of the current Requests page. This
+preserves previously delivered links, queued notification payloads, client-side
+navigation and query parameters while retaining the existing page's permission
+checks and UI. No provider, account, request record or visual role changes.
+
+Before the fix, the isolated production-build Cypress suite recorded two
+notification-link failures with HTTP 404 and one existing filter test passing.
+The new cases require HTTP 200, a visible Requests heading, an unchanged query,
+and the focused request ID reaching the correct media/software status endpoint.
+Post-change verification: production build, bundle budget, focused ESLint and
+formatting pass; 31 focused request-status/query/notification tests pass; all
+three Cypress cases pass with no retries or skips. The first post-fix browser
+run reached the page but failed the new test's incorrect `h1` assumption;
+corrected it to the existing shared `page-header` test ID and exact Requests
+text. Runtime source was unchanged by that test correction.
+
+Visual inspection was separate: the failure screenshot showed the restored
+Requests page with the focused API request, its existing filters and empty
+request state at the desktop test viewport. This is iteration evidence, not
+a release candidate or a claim that live request 825 was inspected. No live
+database, accounts or notification delivery were used in testing. Hosted
+checks, image publication and deployment remain pending.
+
+AI assistance: diagnosis, route compatibility implementation and regression tests.
