@@ -154,3 +154,42 @@ review, rendered inspection, workflow settings and these records. The new
 structured release fragment describes the user-visible return-path fix. Final
 hosted verification and image publication remain pending for the correction;
 no live deployment, OIDC relinking or settings/provider mutation occurred.
+
+## Hosted Watchlist test lifecycle repair
+
+Correction `8cc1f0523be91bc7fa02f7d9d3b8c092c4ccda0f` passed all five hosted
+navigation regressions and the other 15 validation jobs in native CI run
+`39969903249`. Cypress instead failed `user/profile.cy.ts:60`, where the profile
+Watchlist test asserted visibility on the parent of a title card. Totals were
+197 passed, one failed, 32 pending, zero skipped across 230 tests. Image run
+`39977190921` correctly skipped publication. Separate Semgrep and Trivy jobs passed.
+
+The unchanged three-case profile spec passed locally; the hosted failure is not
+claimed reproduced end to end. A separate isolated browser lifecycle probe held
+the metadata response and established the relevant race: before metadata, the
+observer parent was attached/visible at 169.1875 by 253.78125 pixels; afterward,
+that parent was detached/invisible while the current poster remained attached,
+visible and the same size. No page errors occurred. This is automated DOM
+evidence, not visual inspection or a live provider check.
+
+The test now queries the current poster rather than its replaceable observer
+parent. It retains visibility, positive dimensions, all four viewport-edge
+checks, successful metadata response and detail navigation, and adds an explicit
+attachment assertion. Two controlled response orderings exercise metadata before
+the loaded-poster check and metadata held until the fallback-poster check passes.
+The delayed case checks both fallback and loaded poster geometry. No production
+source, CSS, caching policy, retry count, timeout or test exclusion changed.
+All four profile cases pass; combined profile/navigation verification passes
+9/9. This is internal-only test/evidence work with `release-note: none`.
+
+A supplemental `tsc --project cypress/tsconfig.json --noEmit` invocation failed
+on existing errors in other specs (DOM typings, ES5 targets, duplicate globals and
+an unresolved alias). None referred to the modified profile spec. This broad
+standalone invocation is outside the native CI inventory; it is recorded as
+failed, not represented as a passing check or used to expand this bounded repair.
+Normal application type checks passed hosted on the unchanged source. The new
+test commit still requires hosted native CI; no completed gate is asserted here.
+
+AI assistance covers lifecycle diagnosis, timing-controlled assertions and this
+record. Test runtimes remain isolated from live configurations/providers. OIDC
+recovery, image publication and deployment boundaries remain unchanged.
