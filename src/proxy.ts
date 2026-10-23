@@ -1,3 +1,4 @@
+import { hasPermission, Permission } from '@server/lib/permissions';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { isAuthenticationError } from './utils/auth';
@@ -64,6 +65,9 @@ export async function proxy(req: NextRequest) {
   }
 
   let authed = false;
+  let canUseGuidedSetup = false;
+  const isGuidedSetup =
+    pathname === '/setup' && req.nextUrl.searchParams.get('guide') === '1';
   try {
     const cookie = req.headers.get('cookie');
     const res = await fetch(`${apiBaseUrl}/api/v1/auth/me`, {
@@ -72,6 +76,17 @@ export async function proxy(req: NextRequest) {
     });
     if (res.ok) {
       authed = true;
+      if (isGuidedSetup) {
+        try {
+          const account = await res.json();
+          canUseGuidedSetup =
+            Number.isSafeInteger(account?.permissions) &&
+            hasPermission(Permission.ADMIN, account.permissions);
+        } catch {
+          // An unreadable account response cannot authorize the admin guide.
+          canUseGuidedSetup = false;
+        }
+      }
     } else if (!isAuthenticationError({ status: res.status })) {
       // A backend failure is not proof that the user's session is invalid.
       // Keep the page request alive so the client can retry instead of
@@ -85,7 +100,8 @@ export async function proxy(req: NextRequest) {
 
   if (authed) {
     if (
-      (isSetupPath(pathname) || isLoginPath(pathname)) &&
+      ((isSetupPath(pathname) && !canUseGuidedSetup) ||
+        isLoginPath(pathname)) &&
       !isPlexLoginCompletion
     ) {
       // An already signed-in visitor goes straight to the saved destination.

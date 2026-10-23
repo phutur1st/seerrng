@@ -79,6 +79,10 @@ cypress/downloads
 cypress/videos
 cypress/screenshots
 
+# Vitest JUnit report
+report.xml
+__pycache__/
+
 # Playwright
 playwright-report
 test-results

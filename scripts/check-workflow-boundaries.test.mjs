@@ -421,11 +421,13 @@ test('shared runner jobs use SeerrNG and exact-run labels', () => {
         /github\.ref == 'refs\/heads\/main'/u,
         `${filename}/${jobName}`
       );
-      assert.match(
-        runner,
-        /github\.event_name == 'push'/u,
-        `${filename}/${jobName}`
-      );
+      if (!['release.yml', 'release-assets.yml'].includes(filename)) {
+        assert.match(
+          runner,
+          /github\.event_name == 'push'/u,
+          `${filename}/${jobName}`
+        );
+      }
     }
   }
   assert.ok(sharedRunnerCount > 0);
@@ -439,4 +441,35 @@ test('credentialed chart publication stays on a hosted runner', () => {
     )
   );
   assert.equal(helmWorkflow.jobs.publish?.['runs-on'], 'ubuntu-latest');
+});
+
+test('fork workflows keep private Apple groups behind upstream ownership', () => {
+  for (const filename of ['ios.yml', 'release-assets.yml']) {
+    const workflow = yaml.load(
+      fs.readFileSync(
+        path.join(rootDirectory, '.github', 'workflows', filename),
+        'utf8'
+      )
+    );
+    for (const [jobName, job] of Object.entries(workflow.jobs)) {
+      const runner = job['runs-on'];
+      if (
+        typeof runner !== 'string' ||
+        !runner.includes('private-apple-builds')
+      )
+        continue;
+      assert.match(
+        runner,
+        /^\$\{\{ github\.repository == 'snapetech-org\/seerrng' &&/u,
+        `${filename}/${jobName}`
+      );
+      if (runner.includes("matrix.os == 'linux'")) {
+        assert.match(
+          runner,
+          /\|\| \(github\.repository == 'snapetech-org\/seerrng' && matrix\.os == 'linux'/u,
+          'both private matrix branches require upstream ownership'
+        );
+      }
+    }
+  }
 });

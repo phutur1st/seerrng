@@ -6,4 +6,4 @@ action: Confirm a working alternative login before upgrading, then relink existi
 breaking: true
 ---
 
-Update upstream book series, setup, user service preferences, security fixes, and OIDC support while preserving Hom3lab Bookshelf format handling and standalone ROM catalogs. Existing OIDC links require relinking after the issuer-binding upgrade.
+Update upstream book series, setup, user service preferences, security fixes, and OIDC support while preserving Hom3lab Bookshelf format handling and standalone ROM catalogs. Administrators can reopen guided setup. Existing OIDC links require relinking after the issuer-binding upgrade.

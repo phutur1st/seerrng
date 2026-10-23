@@ -148,16 +148,18 @@ export default function BookSeriesWatch({
                 {target.providerId.startsWith('gr:') ? (
                   <p>{intl.formatMessage(messages.goodreads)}</p>
                 ) : (
-                  <label className="media-fact-row">
-                    <input
-                      type="checkbox"
-                      checked={includeExtras}
-                      onChange={(event) =>
-                        setIncludeExtras(event.target.checked)
-                      }
-                    />
-                    {intl.formatMessage(messages.extras)}
-                  </label>
+                  <div className="choice-group">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={includeExtras}
+                        onChange={(event) =>
+                          setIncludeExtras(event.target.checked)
+                        }
+                      />
+                      <span>{intl.formatMessage(messages.extras)}</span>
+                    </label>
+                  </div>
                 )}
                 <div className="media-fact-row">
                   <Button buttonType="primary" disabled={busy} onClick={submit}>

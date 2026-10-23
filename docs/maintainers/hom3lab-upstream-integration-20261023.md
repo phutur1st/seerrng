@@ -37,3 +37,55 @@ Public discovery from the host received HTTP 403. The same configured issuer que
 ## Visual and live evidence
 
 Separately inspected series search at 1440px and 390px. This was iteration evidence and identified the missing inset surface described above. Final surface, OIDC, setup/settings and preserved shared-role renders remain to be inspected. No authenticated live UI acceptance, provider acquisition, physical touch behavior or real OIDC login round trip is asserted. No source, image, release or deployment is published by this record.
+
+
+## Refreshed target and stable-build follow-up
+
+1. Local two-parent checkpoint `8ef4f8c47e24d6120321abc89ca4461fb5a987f1` preserves the 98-commit integration. The refreshed merge targets `329426c370ebdcf035b0b27907a80aeb86bf34ff` (110 upstream-only commits). Its release-workflow conflict keeps the fork's publication guard and upstream's new runner/bootstrap logic. All private Linux/Apple branches require upstream repository ownership; hosted fallback remains available to this fork. Native tooling now passes 300 tests, including the new Apple ownership regression.
+2. The CI-mode dependency installation intentionally skipped Husky shim generation, so the checkpoint's ordinary Git commit did not execute hooks. Shims have now been initialized. Full formatting/lint/type checks and full Semgrep run separately; final commit hooks must execute normally. A generated JUnit report accidentally entered the local checkpoint; the final candidate removes it, ignores generated reports/Python caches and retains the report only as private evidence.
+3. The first browser repeats reused a saved Audiobookshelf fixture; subsequent runs were also invalidated when a concurrent rebuild replaced static assets. These runs remain failed/incomplete. Stop affected test processes, prepare separate fresh runtimes and freeze the build before collecting final browser evidence. No success is inferred from their partial output.
+4. A frozen-build Chrome Cypress attempt still reproduced navigation load timeouts with offline-worker traffic. Upstream already records this interaction in its scoped Prowlarr fixture. No service-worker coverage or assertion was removed here. The unmodified complete Electron suite is running separately; its Discover carousel restoration case reproduces the previously recorded platform failure. Hosted Linux Chrome remains separate required evidence.
+5. Stable production build, full formatting, ESLint/oxlint, server/client types and bundle budget pass. Lint retains an existing unused-parameter warning. The final full Vitest/native Node repeats are in progress. Full native style checks pass 448 tests after the auth logo cascade was repaired through one 20px token, preserving negative geometry checks and the actual rendered-size assertion.
+6. Stable-build full Playwright passes all 75 tests. This includes four new desktop/narrow series/OIDC cases, independent format navigation and carousel controls, real inset token padding and no page-wide overflow. Separate screenshots inspect the final series search/detail and OIDC login at 1440/390. Choice labels use the existing choice-group owner to keep the 24px checkbox beside wrapping text.
+7. Strict docs build/API generation, ten docs security tests, Helm lint and two Jellyfin startup-retry Python tests pass. The Jellyfin .NET build/container integration, CodeQL, hosted Helm documentation, external docs links and iOS device/UI verification remain unrun locally.
+8. Full Semgrep completes with 611 executed rules, 3,381 scanned files and 30 reported findings in upstream's existing report-only mode. This is not a zero-findings result. No suppression, scanner exclusion, assertion relaxation or retired validation-engine connection was added.
+
+
+## Guided setup regression found during rendered inspection
+
+The isolated Services preview rendered, but following the guided-setup route
+redirected an authenticated administrator to Discover. Reproduced before repair:
+the new proxy regression passed three cases and failed the explicit admin guide
+case because `/setup?guide=1` returned a redirect. Upstream's new component accepts
+the guide, but its existing proxy still rejected every initialized setup route.
+The proxy now reads authenticated account permissions only for the explicit guide
+and admits administrators; ordinary users, malformed permission values and the
+existing setup/login redirects retain their previous boundaries. Five focused
+proxy cases pass. Two actual browser regressions now cover reopening the guide
+at desktop/narrow widths, with no settings save or live service probe.
+
+Guided choice-card descriptions use the existing stacked choice role to override
+the legacy global no-wrap span rule. The final build passes. Rebuilds occur only
+after test browsers finish, followed by fresh seeded runtimes; earlier browser
+receipts do not verify this final proxy/card change.
+
+The stable prior full Electron run completed 229 tests: 196 passed, one failed,
+32 pending, zero skipped, across 56 specs. Its unchanged carousel assertion
+expected 572 and received 571.5. The same assertion passes 1/1 separately in
+Chrome for Testing 153. These receipts do not turn the full Electron run or
+interrupted full Chrome runs into a passing complete Cypress gate. The final
+source repeat and hosted Linux Chrome evidence remain separate.
+
+## Final local source receipts
+
+1. Final complete Vitest: 4,489 passed, five PostgreSQL skips, zero failures; 630 passed files and two skipped files. Final complete native Node: 3,801 passed, five PostgreSQL skips, zero failures; 3,806 tests in 736 suites. The subsequent guided-setup change affects proxy/UI source; server source and the native Node inventory remain identical to that complete receipt. Its five new proxy cases are included in the complete Vitest count.
+2. Final rebuilt-source Playwright: 77/77 passed, including both the real Services link and direct guide URL at 1440/390. Final native style suite: 448/448 passed. Native tooling: 300/300 passed. Formatting, lint, server/client types, production build, bundle budget, i18n and strict docs build pass. Docs security remains 10/10; Helm lint and Jellyfin startup-retry Python remain passing. Changelog validation covers all 166 applicable tags through 3.72.3.
+3. Final complete Cypress/Electron repeat: 196 passed, one failed, 32 pending, zero skipped, 229 tests across 56 specs. The failure is again the unchanged carousel assertion, 571.5 versus 572. The exact assertion passed separately in Chrome for Testing 153 before the proxy-only repair. Neither that focused pass nor Playwright makes the complete Cypress gate green. Full hosted Linux Chrome and the other hosted/platform checks listed above remain required before release completion.
+4. Final full Semgrep: 611 rules on 3,379 files, 30 findings, existing report-only mode. A passing scanner process does not mean no findings. No new suppression or gate bypass was introduced.
+5. Separate rendered inspection covers final series search/details, OIDC login, setup defaults/connections and Services configuration at desktop/narrow widths. The final independent Services/setup capture reports zero page errors and no page-wide horizontal overflow at 1440/390. The inspected Services state is the disposable empty/add-connection configuration; this is not a live configured-provider audit or exhaustive inspection of every logo branch. Existing shared-role preservation also has automated browser evidence. The preview's HTTP transport warning and sample provider content are isolated fixture state.
+6. All work is local. No fork/upstream source push, image publication, GitHub release, announcement, live provider request, OIDC link change or deployment was performed. OIDC recovery still requires a real working alternative login and explicit relinking after upgrade; discovery and stored Plex credentials do not establish that interactive round trip.
+
+Normal final commit hooks executed attribution, lint-staged formatting/lint,
+Semgrep on the staged source and container-alias validation. Commit-msg rejected
+an overlong message body; wrap the message and rerun the normal hooks. This is a
+message-format failure, not a successful commit or a hook waiver.

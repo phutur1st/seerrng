@@ -31,12 +31,16 @@ const assertLoginGeometry = (stylesheet) => {
   );
   assert.equal(contract.declaration(':root', '--button-padding-x'), '5px');
   assert.equal(
-    contract.declaration('.auth-login-page .app-button svg', 'height'),
+    contract.declaration('.auth-login-page', '--auth-control-content-height'),
     '20px'
   );
   assert.equal(
+    contract.declaration('.auth-login-page .app-button svg', 'height'),
+    'var(--auth-control-content-height)'
+  );
+  assert.equal(
     contract.declaration('.auth-login-page .app-button svg', 'width'),
-    '20px'
+    'var(--auth-control-content-height)'
   );
   assert.equal(
     contract.declaration('.auth-login-page .app-button svg', 'max-height'),
@@ -55,6 +59,16 @@ test('login geometry check rejects a restored competing padding owner', () => {
       assertLoginGeometry(
         css +
           '\n.auth-login-page .app-button { padding-inline: 16px !important; }'
+      ),
+    assert.AssertionError
+  );
+});
+
+test('login geometry check rejects a changed auth icon token', () => {
+  assert.throws(
+    () =>
+      assertLoginGeometry(
+        css + '\n.auth-login-page { --auth-control-content-height: 14px; }'
       ),
     assert.AssertionError
   );

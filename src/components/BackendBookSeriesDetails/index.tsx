@@ -213,14 +213,16 @@ export default function BookSeriesDetails() {
             >
               {intl.formatMessage(messages.request)}
             </Button>
-            <label className="media-fact-row">
-              <input
-                type="checkbox"
-                checked={includeExtras}
-                onChange={(event) => setIncludeExtras(event.target.checked)}
-              />
-              {intl.formatMessage(messages.extras)}
-            </label>
+            <div className="choice-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={includeExtras}
+                  onChange={(event) => setIncludeExtras(event.target.checked)}
+                />
+                <span>{intl.formatMessage(messages.extras)}</span>
+              </label>
+            </div>
           </div>
         )}
       </div>

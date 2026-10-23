@@ -83,3 +83,28 @@ test('the Request Book Advanced Options control stays readable on narrow cards',
     );
   }
 });
+
+test('provider logos consume the auth content owner without competing sizes', () => {
+  const { contract } = stylesheets.find(
+    ({ filename }) => filename === 'globals.css'
+  );
+  assert.equal(
+    contract.declaration('.auth-login-page', '--auth-control-content-height'),
+    '20px'
+  );
+  for (const property of ['width', 'height']) {
+    assert.equal(
+      contract
+        .declaration(
+          ".card-list[data-list-layout='auth-provider'] [data-provider-part='logo']",
+          property
+        )
+        .replace(/\s+/g, ''),
+      'var(--auth-control-content-height,var(--action-control-content-height))'
+    );
+    assert.equal(
+      contract.declaration('.auth-login-page .app-button svg', property),
+      'var(--auth-control-content-height)'
+    );
+  }
+});

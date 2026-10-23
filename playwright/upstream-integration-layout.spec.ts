@@ -198,7 +198,7 @@ for (const width of [1440, 390]) {
     );
     await expect(provider.getByRole('link')).toHaveAttribute(
       'href',
-      /docs.authentik.io/
+      /docs\.goauthentik\.io/
     );
     await expect(provider.locator('[data-provider-part="logo"]')).toHaveCSS(
       'width',
@@ -211,6 +211,53 @@ for (const width of [1440, 390]) {
     ).toBe(true);
     await page.screenshot({
       path: `${process.env.SHOT_DIR ?? 'test-results'}/oidc-login-${width}.png`,
+      fullPage: true,
+    });
+  });
+}
+
+for (const width of [1440, 390]) {
+  test(`administrators can reopen guided setup at ${width}px`, async ({
+    page,
+    baseURL,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await loginAsAdmin(page, baseURL);
+    await page.goto('/settings/services');
+    await page
+      .getByRole('link', { name: 'Open Guided Setup', exact: true })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'Set Defaults for New Users' })
+    ).toBeVisible();
+    await page.goto('/setup?guide=1');
+    await expect(
+      page.getByRole('heading', { name: 'Set Defaults for New Users' })
+    ).toBeVisible();
+    await page.screenshot({
+      path: `${process.env.SHOT_DIR ?? 'test-results'}/setup-defaults-${width}.png`,
+      fullPage: true,
+    });
+    await page
+      .getByRole('button', { name: 'Skip for Now', exact: true })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'What Would You Like to Connect?' })
+    ).toBeVisible();
+    const choice = page
+      .locator('.media-choice-card[data-choice-layout="stacked"]')
+      .first();
+    await expect(choice.locator('.card-body-text').first()).toHaveCSS(
+      'white-space',
+      'normal'
+    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth
+      )
+    ).toBe(true);
+    await page.screenshot({
+      path: `${process.env.SHOT_DIR ?? 'test-results'}/setup-connections-${width}.png`,
       fullPage: true,
     });
   });

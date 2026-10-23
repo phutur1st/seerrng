@@ -7636,6 +7636,7 @@
   }
 
   .auth-login-page {
+    --auth-control-content-height: 20px;
     padding-top: calc(1.5rem + env(safe-area-inset-top));
     padding-bottom: calc(9rem + env(safe-area-inset-bottom));
   }
@@ -7680,12 +7681,9 @@
     line-height: 20px;
   }
 
-  .auth-login-page .app-button svg,
-  .auth-login-page
-    [data-list-layout='auth-provider']
-    [data-provider-part='logo'] {
-    height: 20px;
-    width: 20px;
+  .auth-login-page .app-button svg {
+    height: var(--auth-control-content-height);
+    width: var(--auth-control-content-height);
     max-height: none;
   }
 
@@ -10566,6 +10564,11 @@
     text-align: start;
   }
 
+  .media-choice-card[data-choice-layout='stacked']
+    > :is(.card-title, .card-body-text) {
+    white-space: normal;
+  }
+
   .media-choice-card[data-choice-layout='linked'] > [data-card-link='primary'] {
     position: static;
   }
@@ -10632,8 +10635,14 @@
   }
 
   .card-list[data-list-layout='auth-provider'] [data-provider-part='logo'] {
-    width: var(--action-control-content-height);
-    height: var(--action-control-content-height);
+    width: var(
+      --auth-control-content-height,
+      var(--action-control-content-height)
+    );
+    height: var(
+      --auth-control-content-height,
+      var(--action-control-content-height)
+    );
     flex: none;
     object-fit: contain;
   }
