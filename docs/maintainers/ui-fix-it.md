@@ -115,3 +115,12 @@ passes, failures, skips, and platform exclusions.
 5. When a new rule is accepted, add the reusable subject/asset rule to the standard and detection/repair method here. Keep exact examples and chronology in the journal, not in normative matching logic.
    For every repair, consider whether it exposes a reusable detection or ownership gap. Improve the relevant method rather than adding a class/text-specific exception or copying an isolated example's values into a new rule. Existing accepted components illustrate the standard; their CSS owners and variables remain the contract, and tests should enforce relationships and behavior rather than example labels.
 6. Before marking complete, verify the requested scope is implemented, source readback matches the authorized target, all required automated and functional gates passed, and records are current. Report any visual inspection or live provider evidence that remains unavailable; do not turn it into a human approval gate when the maintainer explicitly directs the work to proceed.
+
+
+For imported full-card discovery links, inspect the main hit area and each
+independent child action at desktop and narrow widths. Preserve keyboard focus,
+carousel scrolling and cover fallback geometry through their shared owners. Add
+new consumers to the existing class-expression audit rather than assuming a
+shared outer card proves its descendants have migrated. Authentication provider
+help links must stay outside the sign-in action; inspect long names and both
+custom and built-in provider artwork.

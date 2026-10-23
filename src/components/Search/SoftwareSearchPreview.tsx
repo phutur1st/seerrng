@@ -1,7 +1,11 @@
 import CachedImage from '@app/components/Common/CachedImage';
 import useSettings from '@app/hooks/useSettings';
+import { Permission, useUser } from '@app/hooks/useUser';
 import defineMessages from '@app/utils/defineMessages';
-import { isSoftwareCategoryEnabled } from '@app/utils/serviceAvailability';
+import {
+  getUserServiceAvailability,
+  isSoftwareCategoryEnabled,
+} from '@app/utils/serviceAvailability';
 import axios from 'axios';
 import Link from 'next/link';
 import { useIntl } from 'react-intl';
@@ -29,8 +33,14 @@ const messages = defineMessages('components.Search.SoftwarePreview', {
 const SoftwareSearchPreview = ({ query }: { query: string }) => {
   const intl = useIntl();
   const { currentSettings } = useSettings();
+  const { user, hasPermission } = useUser();
+  const serviceAvailability = getUserServiceAvailability(
+    currentSettings,
+    user?.settings?.enabledMediaCategories,
+    hasPermission(Permission.ADMIN)
+  );
   const categories = (['retro', 'modern', 'game'] as const).filter((category) =>
-    isSoftwareCategoryEnabled(category, currentSettings)
+    isSoftwareCategoryEnabled(category, serviceAvailability)
   );
   const categoryKey = categories.join(',');
   const { data } = useSWR<PreviewItem[]>(

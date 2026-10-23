@@ -3,7 +3,9 @@ import { DEFAULT_AGE_GATE_SETTINGS } from '@server/constants/ageGate';
 import { OtherUserAvailabilityMode } from '@server/constants/availability';
 import {
   DEFAULT_ENABLED_MEDIA_CATEGORIES,
+  DEFAULT_USER_ENABLED_MEDIA_CATEGORIES,
   type EnabledMediaCategories,
+  type MediaCategoryKey,
 } from '@server/constants/mediaCategories';
 import {
   defaultProwlarrCategoryMappings,
@@ -97,6 +99,11 @@ export type OidcProvider = {
   requiredClaims?: string;
   scopes?: string;
   newUserLogin?: boolean;
+  allowedEmailDomains?: string[];
+  groupClaim?: string;
+  allowedGroups?: string[];
+  roleClaim?: string;
+  roleMappings?: { value: string; role: 'user' | 'admin' }[];
 };
 
 export type PublicOidcProvider = Pick<OidcProvider, 'slug' | 'name' | 'logo'>;
@@ -157,6 +164,10 @@ export const defaultReaderDeliverySettings = (): ReaderDeliverySettings => ({
 
 export interface ProwlarrSettings extends SoftwareProviderSettings {
   categoryMappings: ProwlarrCategoryMappings;
+  indexerIdsByCategory?: Partial<Record<MediaCategoryKey, number[]>>;
+  searchLimitPerUserPerMinute?: number;
+  searchLimitByIndexer?: Record<number, number>;
+  showIndexerDetails?: boolean;
 }
 
 export const DOWNLOAD_CLIENT_TYPES = [
@@ -553,6 +564,7 @@ export interface MainSettings {
     software: Quota;
   };
   enabledMediaCategories: EnabledMediaCategories;
+  defaultEnabledMediaCategories: EnabledMediaCategories;
   hideAvailable: boolean;
   hideBlocklisted: boolean;
   hideRequested: boolean;
@@ -648,6 +660,7 @@ interface FullPublicSettings extends PublicSettings {
   emulationCatalogEnabled: boolean;
   swipeEnabled: boolean;
   enabledMediaCategories: EnabledMediaCategories;
+  defaultEnabledMediaCategories: EnabledMediaCategories;
   ageGate: AgeGateSettings;
   discoverRegion: string;
   streamingRegion: string;
@@ -869,7 +882,7 @@ export type JobId =
   | 'process-blocklisted-tags';
 
 export interface DiscoveryIntegrationsSettings {
-  trakt: { clientId: string; clientSecret: string };
+  trakt: { clientId: string };
   anilist: { clientId: string; clientSecret: string };
   simkl: { clientId: string };
   mdblist: { apiKey: string };
@@ -877,7 +890,7 @@ export interface DiscoveryIntegrationsSettings {
 
 export const defaultDiscoveryIntegrations =
   (): DiscoveryIntegrationsSettings => ({
-    trakt: { clientId: '', clientSecret: '' },
+    trakt: { clientId: '' },
     anilist: { clientId: '', clientSecret: '' },
     simkl: { clientId: '' },
     mdblist: { apiKey: '' },
@@ -969,6 +982,9 @@ class Settings {
           software: {},
         },
         enabledMediaCategories: { ...DEFAULT_ENABLED_MEDIA_CATEGORIES },
+        defaultEnabledMediaCategories: {
+          ...DEFAULT_USER_ENABLED_MEDIA_CATEGORIES,
+        },
         hideAvailable: false,
         hideBlocklisted: false,
         hideRequested: false,
@@ -1072,6 +1088,10 @@ class Settings {
         baseUrl: '',
         apiKey: '',
         categoryMappings: defaultProwlarrCategoryMappings(),
+        indexerIdsByCategory: {},
+        searchLimitPerUserPerMinute: 12,
+        searchLimitByIndexer: {},
+        showIndexerDetails: false,
       },
       liveDownloads: defaultLiveDownloadSettings(),
       tunerr: defaultTunerrSettings(),
@@ -1798,6 +1818,10 @@ class Settings {
         ...DEFAULT_ENABLED_MEDIA_CATEGORIES,
         ...this.data.main.enabledMediaCategories,
       },
+      defaultEnabledMediaCategories: {
+        ...DEFAULT_USER_ENABLED_MEDIA_CATEGORIES,
+        ...this.data.main.defaultEnabledMediaCategories,
+      },
       ageGate: {
         ...DEFAULT_AGE_GATE_SETTINGS,
         ...this.data.main.ageGate,
@@ -2036,6 +2060,9 @@ class Settings {
           software: {},
         },
         enabledMediaCategories: { ...DEFAULT_ENABLED_MEDIA_CATEGORIES },
+        defaultEnabledMediaCategories: {
+          ...DEFAULT_USER_ENABLED_MEDIA_CATEGORIES,
+        },
         hideAvailable: false,
         hideBlocklisted: false,
         hideRequested: false,
@@ -2133,6 +2160,10 @@ class Settings {
         baseUrl: '',
         apiKey: '',
         categoryMappings: defaultProwlarrCategoryMappings(),
+        indexerIdsByCategory: {},
+        searchLimitPerUserPerMinute: 12,
+        searchLimitByIndexer: {},
+        showIndexerDetails: false,
       },
       liveDownloads: defaultLiveDownloadSettings(),
       tunerr: defaultTunerrSettings(),

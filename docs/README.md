@@ -20,7 +20,6 @@ connects to.
 - [Docker installation](/getting-started/docker/)
 - [Kubernetes installation](/getting-started/kubernetes/)
 - [Unraid installation](/getting-started/third-parties/unraid)
-- [Legacy YunoHost deployment](/getting-started/third-parties/yunohost)
 - [Cross-platform setup assistant](/using-seerr/setup-assistant)
 - [Troubleshooting](/troubleshooting/)
 
@@ -64,6 +63,8 @@ connects to.
 
 ## Configure and operate
 
+- [Configure OIDC sign-in, provider callbacks, account admission, linking, and recovery](/using-seerr/settings/users/oidc)
+- [Cross-project OIDC contract and rollout map](/maintainers/oidc-cross-project-template) · [provider IDs, official setup links, scopes, and caveats](/maintainers/oidc-provider-catalog)
 - [Choose metadata providers and configure music request limits](/using-seerr/settings/metadata/)
 - [Check MusicBrainz and Cover Art Archive connectivity](/using-seerr/settings/metadata/#music-metadata-providers)
 - [Configure media and automation services](/using-seerr/settings/services/)

@@ -1,6 +1,6 @@
 {
   "name": "seerrng",
-  "version": "3.71.4",
+  "version": "3.72.3",
   "private": true,
   "packageManager": "pnpm@10.24.0",
   "scripts": {
@@ -22,7 +22,6 @@
     "lint": "pnpm lint:eslint && pnpm lint:next",
     "lint:eslint": "eslint \"./server/**/*.{ts,tsx}\" \"./src/**/*.{ts,tsx}\" --cache",
     "lint:next": "oxlint --config .oxlintrc.next.json server src",
-    "security:council": "node scripts/check-workflow-boundaries.mjs && pnpm test:tooling && node bin/run-bash.mjs scripts/check-council-browser-boundaries.sh && node bin/run-bash.mjs scripts/check-council-server-boundaries.sh",
     "release-notes:preview": "node scripts/preview-release-notes.mjs",
     "backissue:service": "node scripts/backissue-service.mjs",
     "bookshelf:move": "node scripts/bookshelf-media-move.mjs",
@@ -86,7 +85,7 @@
     "country-flag-icons": "1.6.20",
     "cronstrue": "3.26.0",
     "dns-caching": "^0.2.9",
-    "dompurify": "3.4.16",
+    "dompurify": "3.4.17",
     "email-templates": "13.0.1",
     "express": "5.2.1",
     "express-openapi-validator": "5.6.2",
@@ -97,13 +96,13 @@
     "http-proxy-agent": "^9.1.0",
     "https-proxy-agent": "^9.1.0",
     "humanize-duration": "^3.35.0",
-    "ip-address": "10.7.1",
+    "ip-address": "10.7.4",
     "js-yaml": "5.4.3",
     "jsdom": "^30.0.1",
     "lodash": "4.18.1",
     "lru-cache": "11.2.1",
     "mime": "^4.1.0",
-    "next": "16.3.8",
+    "next": "16.4.1",
     "node-cache": "5.1.2",
     "node-schedule": "2.1.1",
     "nodemailer": "10.1.0",
@@ -183,8 +182,8 @@
     "@types/web-push": "3.6.4",
     "@types/wink-jaro-distance": "^2.0.2",
     "@types/xml2js": "0.4.14",
-    "@vitest/coverage-v8": "^4.1.11",
-    "@vitest/ui": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
+    "@vitest/ui": "^4.1.12",
     "autoprefixer": "^10.6.0",
     "baseline-browser-mapping": "^2.11.28",
     "commander": "^15.0.0",
@@ -218,10 +217,10 @@
     "typescript": "6.0.3",
     "typescript-eslint": "^8.71.2",
     "vite": "8.3.4",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "engines": {
-    "node": "^24.15.0",
+    "node": "^24.22.1",
     "pnpm": "^10.0.0"
   },
   "scarfSettings": {

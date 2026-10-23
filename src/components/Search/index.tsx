@@ -1,3 +1,4 @@
+import InlineBookSeriesResults from '@app/components/BookSeriesSearch/InlineResults';
 import BookFormatBadge from '@app/components/Common/BookFormatBadge';
 import Button from '@app/components/Common/Button';
 import CardTextVisibilityToggle from '@app/components/Common/CardTextVisibilityToggle';
@@ -17,8 +18,10 @@ import useDiscover from '@app/hooks/useDiscover';
 import useMediaFilterPin from '@app/hooks/useMediaFilterPin';
 import { setSearchActivity } from '@app/hooks/useSearchActivity';
 import useSettings from '@app/hooks/useSettings';
+import { Permission, useUser } from '@app/hooks/useUser';
 import defineMessages from '@app/utils/defineMessages';
 import {
+  getUserServiceAvailability,
   isAnySoftwareCategoryEnabled,
   isConfiguredMediaCategoryEnabled,
   isOptionalCatalogPathEnabled,
@@ -38,6 +41,7 @@ import type {
   SportarrResult,
   TvResult,
 } from '@server/models/Search';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef } from 'react';
 import { useIntl } from 'react-intl';
@@ -62,6 +66,7 @@ import {
 
 const messages = defineMessages('components.Search', {
   search: 'Search',
+  bookSeries: 'Book Series',
   searchresults: 'Search Results',
   all: 'All',
   movies: 'Movies',
@@ -90,6 +95,7 @@ const messages = defineMessages('components.Search', {
   descending: 'Descending',
   showingFormat: 'Showing',
   noResultsFound: 'No Results Found',
+  noTitleResults: 'No individual title results found.',
   searchUnavailable: 'Search is unavailable right now.',
   searchUnavailableHint: 'The catalog could not be reached. Try again.',
   retrySearch: 'Try again',
@@ -325,6 +331,22 @@ const Search = () => {
   const intl = useIntl();
   const router = useRouter();
   const { currentSettings } = useSettings();
+  const { user, hasPermission } = useUser();
+  const serviceAvailability = getUserServiceAvailability(
+    currentSettings,
+    user?.settings?.enabledMediaCategories,
+    hasPermission(Permission.ADMIN)
+  );
+  const showBookSeries =
+    currentSettings.booksEnabled &&
+    (isOptionalCatalogPathEnabled('/discover/books', serviceAvailability) ||
+      isOptionalCatalogPathEnabled(
+        '/discover/audiobooks',
+        serviceAvailability
+      )) &&
+    ['all', 'book', 'audiobook'].includes(
+      getSearchCategory(router.query.type, router.query.format).key
+    );
   const query =
     typeof router.query.query === 'string' ? router.query.query.trim() : '';
   const hasRoutedSearchParams = Object.keys(router.query).length > 0;
@@ -335,37 +357,43 @@ const Search = () => {
   const visibleSearchCategories = searchCategories.filter((searchCategory) => {
     switch (searchCategory.key) {
       case 'movie':
-        return isConfiguredMediaCategoryEnabled('movie', currentSettings);
+        return isConfiguredMediaCategoryEnabled('movie', serviceAvailability);
       case 'tv':
-        return isConfiguredMediaCategoryEnabled('tv', currentSettings);
+        return isConfiguredMediaCategoryEnabled('tv', serviceAvailability);
       case 'book':
-        return isOptionalCatalogPathEnabled('/discover/books', currentSettings);
+        return isOptionalCatalogPathEnabled(
+          '/discover/books',
+          serviceAvailability
+        );
       case 'audiobook':
         return isOptionalCatalogPathEnabled(
           '/discover/audiobooks',
-          currentSettings
+          serviceAvailability
         );
       case 'author':
-        return isOptionalCatalogPathEnabled('/author/', currentSettings);
+        return isOptionalCatalogPathEnabled('/author/', serviceAvailability);
       case 'music':
-        return isOptionalCatalogPathEnabled('/discover/music', currentSettings);
+        return isOptionalCatalogPathEnabled(
+          '/discover/music',
+          serviceAvailability
+        );
       case 'comic':
         return isOptionalCatalogPathEnabled(
           '/discover/comics',
-          currentSettings
+          serviceAvailability
         );
       case 'magazine':
         return isOptionalCatalogPathEnabled(
           '/discover/magazines',
-          currentSettings
+          serviceAvailability
         );
       case 'sports':
         return isOptionalCatalogPathEnabled(
           '/discover/sports',
-          currentSettings
+          serviceAvailability
         );
       case 'software':
-        return isAnySoftwareCategoryEnabled(currentSettings);
+        return isAnySoftwareCategoryEnabled(serviceAvailability);
       default:
         return true;
     }
@@ -732,6 +760,22 @@ const Search = () => {
           className="app-filter-row"
           aria-label={intl.formatMessage(messages.mediaFilters)}
         >
+          {router.isReady && currentSettings.booksEnabled && (
+            <Link
+              className={getFilterToggleButtonClass(false)}
+              href={{
+                pathname: '/book-series',
+                query: {
+                  query,
+                  ...(preferredBookFormat
+                    ? { format: preferredBookFormat }
+                    : {}),
+                },
+              }}
+            >
+              {intl.formatMessage(messages.bookSeries)}
+            </Link>
+          )}
           {visibleSearchCategories.map((searchCategory) => {
             const isSelected = category.key === searchCategory.key;
 
@@ -860,6 +904,9 @@ const Search = () => {
           </div>
         </PinnedFilterSection>
       )}
+      {router.isReady && showBookSeries && (
+        <InlineBookSeriesResults query={query} format={preferredBookFormat} />
+      )}
       {category.key === 'software' ? (
         <SoftwareCatalog externalQuery={query} embedded />
       ) : error && stableTitles.length === 0 ? (
@@ -873,7 +920,11 @@ const Search = () => {
           <ListView
             items={stableTitles}
             preferredBookFormat={preferredBookFormat}
-            emptyMessage={intl.formatMessage(messages.noResultsFound)}
+            emptyMessage={intl.formatMessage(
+              showBookSeries && query.length >= 2
+                ? messages.noTitleResults
+                : messages.noResultsFound
+            )}
             emptyClassName="mt-6"
             isEmpty={isShowingEmptyState || (isSearchReady && isEmpty)}
             isLoading={

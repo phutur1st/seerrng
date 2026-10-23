@@ -63,6 +63,19 @@ describe('Theme picker and seeded discovery refresh', () => {
       results: [],
     });
 
+    cy.request('/api/v1/auth/me').then(({ body: user }) => {
+      cy.request('POST', `/api/v1/user/${user.id}/settings/theme`, {
+        palette: 'seerr',
+      })
+        .its('body.themePalette')
+        .should('eq', 'seerr');
+      cy.request('POST', `/api/v1/user/${user.id}/settings/advanced-theme`, {
+        overrides: null,
+      })
+        .its('body.advancedThemeOverrides')
+        .should('eq', null);
+    });
+
     cy.visit('/discover/movies', {
       onBeforeLoad(win) {
         win.localStorage.removeItem('seerr-theme-mode');

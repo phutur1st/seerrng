@@ -13,10 +13,13 @@ import {
   getPositiveQueryParamNumber,
   useBatchUpdateQueryParams,
 } from '@app/hooks/useUpdateQueryParams';
-import { useUser } from '@app/hooks/useUser';
+import { Permission, useUser } from '@app/hooks/useUser';
 import ErrorPage from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
-import { isDiscoverWatchlistTypeEnabled } from '@app/utils/serviceAvailability';
+import {
+  getUserServiceAvailability,
+  isDiscoverWatchlistTypeEnabled,
+} from '@app/utils/serviceAvailability';
 import { MediaType } from '@server/constants/media';
 import {
   WATCHLIST_SORT_OPTIONS,
@@ -88,15 +91,32 @@ const DiscoverWatchlist = () => {
   const { user } = useUser({
     id: userId,
   });
-  const { user: currentUser } = useUser();
+  const { user: currentUser, hasPermission } = useUser();
+  const isProfileWatchlist = router.pathname.startsWith('/profile');
+  const isUserWatchlist =
+    isProfileWatchlist || router.pathname.startsWith('/users/');
+  const targetUserId = isProfileWatchlist ? currentUser?.id : userId;
+  const watchlistPath = targetUserId ? `user/${targetUserId}` : 'discover';
+  const watchlistEnabled = !isUserWatchlist || targetUserId !== undefined;
   const { currentSettings } = useSettings();
+  const enabledMediaCategories = currentUser?.settings?.enabledMediaCategories;
+  const isAdmin = hasPermission(Permission.ADMIN);
+  const serviceAvailability = useMemo(
+    () =>
+      getUserServiceAvailability(
+        currentSettings,
+        enabledMediaCategories,
+        isAdmin
+      ),
+    [currentSettings, enabledMediaCategories, isAdmin]
+  );
   const updateQueryParams = useBatchUpdateQueryParams(router.query);
   const availableMediaTypes = useMemo(
     () =>
       mediaTypes.filter((mediaType) =>
-        isDiscoverWatchlistTypeEnabled(mediaType, currentSettings)
+        isDiscoverWatchlistTypeEnabled(mediaType, serviceAvailability)
       ),
-    [currentSettings]
+    [serviceAvailability]
   );
   const routeFilters = useMemo<WatchlistFilters>(() => {
     const search =
@@ -143,16 +163,9 @@ const DiscoverWatchlist = () => {
     WatchlistItem,
     Pick<WatchlistResponse, 'filtersSupported'>,
     WatchlistFilters
-  >(
-    `/api/v1/${
-      router.pathname.startsWith('/profile')
-        ? `user/${currentUser?.id}`
-        : userId
-          ? `user/${userId}`
-          : 'discover'
-    }/watchlist`,
-    routeFilters
-  );
+  >(`/api/v1/${watchlistPath}/watchlist`, routeFilters, {
+    enabled: watchlistEnabled,
+  });
   const filtersSupported = firstResultData?.filtersSupported;
   const hasRouteFilters = Boolean(
     routeFilters.search || routeFilters.mediaType || routeFilters.sortBy

@@ -73,7 +73,6 @@ import { extractImageCacheUrls } from '@server/lib/imageCacheUrls';
 import { enqueueImageCacheWarm } from '@server/lib/imageCacheWarmer';
 import { normalizeMagazineTitle } from '@server/lib/magazineIdentity';
 import { findMagazineMediaByTitles } from '@server/lib/magazineMediaMatcher';
-import { isMediaCategoryEnabled } from '@server/lib/mediaCategories';
 import { hydrateMediaSummaryRelations } from '@server/lib/mediaSummaryHydration';
 import {
   getAvailableMusicQualities,
@@ -90,6 +89,7 @@ import {
   rankTmdbMovieResults,
   rankTmdbTvResults,
 } from '@server/lib/tmdbRank';
+import { isUserMediaCategoryEnabled } from '@server/lib/userMediaCategories';
 import {
   UserMutationActorUnauthorizedError,
   isUserSessionCredentialVersionCurrent,
@@ -241,20 +241,22 @@ discoverRoutes.use((req, res, next) => {
             ? 'comic'
             : route === '/magazines'
               ? 'magazine'
-              : route === '/genreslider/movie'
-                ? 'movie'
-                : route === '/genreslider/tv'
-                  ? 'tv'
-                  : undefined;
+              : route === '/sports'
+                ? 'sports'
+                : route === '/genreslider/movie'
+                  ? 'movie'
+                  : route === '/genreslider/tv'
+                    ? 'tv'
+                    : undefined;
 
-  if (category && !isMediaCategoryEnabled(category)) {
+  if (category && !isUserMediaCategoryEnabled(req.user, category)) {
     return res.status(404).json({ status: 404, message: 'Not found.' });
   }
 
   if (route === '/books') {
     const format = req.query.format;
-    const ebookEnabled = isMediaCategoryEnabled('ebook');
-    const audiobookEnabled = isMediaCategoryEnabled('audiobook');
+    const ebookEnabled = isUserMediaCategoryEnabled(req.user, 'ebook');
+    const audiobookEnabled = isUserMediaCategoryEnabled(req.user, 'audiobook');
     if (
       (format === 'audiobook' && !audiobookEnabled) ||
       (format === 'ebook' && !ebookEnabled) ||
@@ -270,8 +272,9 @@ discoverRoutes.use((req, res, next) => {
   if (route === '/trending') {
     const mediaType = req.query.mediaType;
     if (
-      (mediaType === 'movie' && !isMediaCategoryEnabled('movie')) ||
-      (mediaType === 'tv' && !isMediaCategoryEnabled('tv'))
+      (mediaType === 'movie' &&
+        !isUserMediaCategoryEnabled(req.user, 'movie')) ||
+      (mediaType === 'tv' && !isUserMediaCategoryEnabled(req.user, 'tv'))
     ) {
       return res.status(404).json({ status: 404, message: 'Not found.' });
     }
@@ -2877,10 +2880,10 @@ discoverRoutes.get('/trending', async (req, res, next) => {
     ) => unknown;
     const availableTrendingResults = data.results.filter((result) =>
       isMovie(result)
-        ? isMediaCategoryEnabled('movie')
+        ? isUserMediaCategoryEnabled(req.user, 'movie')
         : isPerson(result) || isCollection(result)
           ? true
-          : isMediaCategoryEnabled('tv')
+          : isUserMediaCategoryEnabled(req.user, 'tv')
     );
 
     const maturityPolicy = req.user
@@ -2987,8 +2990,8 @@ discoverRoutes.get<{ listId: string }>(
       });
       const results = list.results.filter((item) =>
         item.media_type === 'movie'
-          ? isMediaCategoryEnabled('movie')
-          : isMediaCategoryEnabled('tv')
+          ? isUserMediaCategoryEnabled(req.user, 'movie')
+          : isUserMediaCategoryEnabled(req.user, 'tv')
       );
       const maturityPolicy = req.user
         ? await getUserVideoMaturityPolicy(req.user.id)
@@ -4020,9 +4023,11 @@ discoverRoutes.get('/books', async (req, res) => {
   const shuffleSeed = parsedShuffleSeed.value;
   const hasSearchQuery = !!searchQuery;
   const ebookEnabled =
-    parsedFormat.value !== 'audiobook' && isMediaCategoryEnabled('ebook');
+    parsedFormat.value !== 'audiobook' &&
+    isUserMediaCategoryEnabled(req.user, 'ebook');
   const audiobookEnabled =
-    parsedFormat.value !== 'ebook' && isMediaCategoryEnabled('audiobook');
+    parsedFormat.value !== 'ebook' &&
+    isUserMediaCategoryEnabled(req.user, 'audiobook');
   const pageSizePerFormat = itemsPerPage;
   const sortByValue = requestedSortBy ?? (hasSearchQuery ? 'newest' : 'ranked');
   const sortAscending = sortByValue.endsWith('.asc');
@@ -4046,7 +4051,7 @@ discoverRoutes.get('/books', async (req, res) => {
   };
   const queryParts = [
     hasSearchQuery
-      ? toFieldedBooleanAndQuery(searchQuery, ['title', 'author'])
+      ? toFieldedBooleanAndQuery(searchQuery, ['title', 'author', 'subject'])
       : hasSubjectFilter
         ? `subject:${subjectQuery}`
         : '*:*',
@@ -4256,7 +4261,7 @@ discoverRoutes.get('/books', async (req, res) => {
       if (
         hasSearchQuery &&
         !matchesAllSearchTerms(
-          [doc.title, ...(doc.author_name ?? [])],
+          [doc.title, ...(doc.author_name ?? []), ...(doc.subject ?? [])],
           searchQuery
         )
       ) {
@@ -4452,7 +4457,7 @@ discoverRoutes.get('/comics', async (req, res) => {
       .status(400)
       .json({ status: 400, message: parsedSearchQuery.error });
   }
-  const query = parsedSearchQuery.value || '*';
+  const query = parsedSearchQuery.value?.trim() ?? '';
   const parsedPublisher = parseOptionalDiscoverString(
     req.query.publisher,
     'Publisher',
@@ -4522,9 +4527,10 @@ discoverRoutes.get('/comics', async (req, res) => {
     maxIssues.value !== undefined;
 
   try {
-    // User-selected filters choose the indexed catalog query; this does not
-    // gate authorization or change which catalog data the route can expose.
-    if (hasMetadataFilters) {
+    // User-selected filters (or a bare browse with no query) use the indexed
+    // catalog; this does not gate authorization or change which catalog data
+    // the route can expose.
+    if (hasMetadataFilters || !query) {
       const scan = await getComicCatalogIndexStatus();
       if (scan.completeGeneration === 0) {
         return res.status(200).json({
@@ -4540,7 +4546,7 @@ discoverRoutes.get('/comics', async (req, res) => {
         });
       }
       const indexed = await searchComicCatalogIndex(scan.completeGeneration, {
-        query,
+        query: query || '*',
         publisher,
         startYear: startYear.value,
         minIssues: minIssues.value,
@@ -4601,7 +4607,7 @@ discoverRoutes.get('/comics', async (req, res) => {
 });
 
 discoverRoutes.get('/sports', async (req, res) => {
-  if (!isMediaCategoryEnabled('sports')) {
+  if (!isUserMediaCategoryEnabled(req.user, 'sports')) {
     return res.status(404).json({ status: 404, message: 'Not found.' });
   }
 

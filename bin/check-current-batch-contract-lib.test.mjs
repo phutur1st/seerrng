@@ -134,6 +134,22 @@ test('upstream public commands preserve build-time translation and visual guards
     [],
     'the actual source passes all current contracts'
   );
+  const discoverParityFile = 'cypress/e2e/library-discover-parity.cy.ts';
+  assert.ok(
+    validateCurrentBatchContract(
+      repositoryFilesWith({
+        [discoverParityFile]: repositoryFilesWith()[discoverParityFile].replace(
+          'expect(bounds.height).to.eq(24)',
+          'expect(bounds.height).to.eq(16)'
+        ),
+      })
+    ).some((error) =>
+      error.includes(
+        'rendered Manage regression coverage must measure the canonical action geometry'
+      )
+    ),
+    'Manage action geometry must stay aligned with the shared 24px standard'
+  );
   const cases = [
     [
       'validate:development',

@@ -13,7 +13,10 @@ import useSettings from '@app/hooks/useSettings';
 import { Permission, useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
-import { isSoftwareCategoryEnabled } from '@app/utils/serviceAvailability';
+import {
+  getUserServiceAvailability,
+  isSoftwareCategoryEnabled,
+} from '@app/utils/serviceAvailability';
 import { Transition } from '@headlessui/react';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import type {
@@ -187,6 +190,11 @@ const SoftwareCatalog = ({
   const intl = useIntl();
   const { user, hasPermission } = useUser();
   const { currentSettings } = useSettings();
+  const serviceAvailability = getUserServiceAvailability(
+    currentSettings,
+    user?.settings?.enabledMediaCategories,
+    hasPermission(Permission.ADMIN)
+  );
   const canRequest = hasPermission(Permission.REQUEST);
   const canManageRequests = hasPermission(Permission.MANAGE_REQUESTS);
   const { data: quota } = useSWR<QuotaResponse>(
@@ -273,7 +281,7 @@ const SoftwareCatalog = ({
   }, [linkedGame?.game, linkedCatalogProvider, linkedGameId, router.isReady]);
 
   const visibleCategories = categories.filter((value) =>
-    isSoftwareCategoryEnabled(value, currentSettings)
+    isSoftwareCategoryEnabled(value, serviceAvailability)
   );
   const selectedCategory = visibleCategories.includes(category)
     ? category

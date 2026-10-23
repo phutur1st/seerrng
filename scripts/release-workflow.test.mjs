@@ -31,6 +31,10 @@ test('release assets build while image verification runs, then package channels 
     '{}'
   );
   assert.equal(
+    release.on.workflow_dispatch.inputs.skip_launchpad_dispatch.default,
+    false
+  );
+  assert.equal(
     packageDispatch.steps[0].uses,
     'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
   );
@@ -70,6 +74,16 @@ test('release assets build while image verification runs, then package channels 
     dispatchScript,
     /optional_workflows=\([\s\S]*release-snap\.yml/u
   );
+  assert.doesNotMatch(
+    dispatchScript.match(/required_workflows=\(([\s\S]*?)\)/u)?.[1] ?? '',
+    /release-ppa\.yml/u,
+    'Launchpad publication must not gate the public release'
+  );
+  assert.doesNotMatch(
+    dispatchScript,
+    /release-ppa\.yml/u,
+    'Launchpad must not start until after the announcement attempt'
+  );
   assert.match(dispatchScript, /watch-github-run\.mjs/u);
   assert.match(dispatchScript, /REUSE_PACKAGE_WORKFLOW_RUNS/u);
   assert.match(
@@ -89,7 +103,12 @@ test('release assets build while image verification runs, then package channels 
   );
   assert.match(
     dispatchScript,
-    /Skipping optional Chocolatey and Snap workflows during release recovery/u
+    /Skipping optional Snap workflow during release recovery/u
+  );
+  assert.match(
+    dispatchScript,
+    /\$REUSE_PACKAGE_WORKFLOW_RUNS" != '\{\}'/u,
+    'package workflow reuse must not dispatch duplicate optional Snap builds'
   );
   assert.match(
     dispatchScript,
@@ -118,6 +137,22 @@ test('release assets build while image verification runs, then package channels 
     'build-release-assets',
     'dispatch-package-channels',
   ]);
+  const launchpadDispatch = release.jobs['dispatch-launchpad-ppa'];
+  assert.deepEqual(launchpadDispatch.needs, [
+    'publish-release',
+    'announce-discord',
+  ]);
+  assert.match(launchpadDispatch.if, /!cancelled\(\)/u);
+  assert.match(
+    launchpadDispatch.if,
+    /needs\.publish-release\.result == 'success'/u
+  );
+  assert.match(launchpadDispatch.steps[0].run, /release-ppa\.yml/u);
+  assert.match(launchpadDispatch.steps[0].run, /SKIP_LAUNCHPAD_DISPATCH/u);
+  assert.match(
+    launchpadDispatch.steps[0].run,
+    /could not be dispatched for the already-published release/u
+  );
   assert.equal(
     release.jobs['announce-discord'].needs.includes('publish-release'),
     true
@@ -407,6 +442,7 @@ test('multi-architecture publishers perform the real build once and verify the i
   const ci = readWorkflow('ci.yml');
   const preview = readWorkflow('preview.yml');
   const release = readWorkflow('release.yml');
+  const aliasPromotion = readWorkflow('promote-container-aliases.yml');
 
   assert.equal(ci.jobs.build, undefined);
   assert.equal(
@@ -428,7 +464,8 @@ test('multi-architecture publishers perform the real build once and verify the i
     'helm',
   ]);
   assert.equal(ci.on.workflow_dispatch, null);
-  assert.equal(Object.hasOwn(ci.on, 'pull_request'), false);
+  assert.deepEqual(ci.on.pull_request.branches, ['main']);
+  assert.equal(Object.hasOwn(ci.on, 'pull_request_target'), false);
   assert.equal(ci.jobs['preflight-deploy'], undefined);
   assert.equal(ci.jobs['deploy-main'], undefined);
   assert.match(
@@ -486,10 +523,10 @@ test('multi-architecture publishers perform the real build once and verify the i
     /org\.opencontainers\.image\.revision=\$\{\{ steps\.release\.outputs\.SHA \}\}/u,
     'release image metadata must identify the tagged source commit'
   );
-  assert.match(
+  assert.equal(
     metadata.with.annotations,
-    /org\.opencontainers\.image\.revision=\$\{\{ steps\.release\.outputs\.SHA \}\}/u,
-    'release image annotations must identify the tagged source commit'
+    undefined,
+    'release images use config labels because Docker v2 manifests do not carry OCI annotations'
   );
   const buildStep = release.jobs.publish.steps.find(
     (step) => step.name === 'Build & Push (multi-arch)'
@@ -500,20 +537,68 @@ test('multi-architecture publishers perform the real build once and verify the i
     'release image contents and metadata must use the same tagged source commit'
   );
   assert.match(
-    buildStep.env.IMAGE_ANNOTATIONS,
-    /steps\.meta\.outputs\.annotations/u,
-    'release image builds must receive OCI annotations from metadata'
-  );
-  assert.match(
     buildStep.run,
-    /--annotation/u,
-    'release image builds must publish the tagged source commit as an OCI annotation'
+    /--output type=registry,oci-mediatypes=false[\s\S]*--provenance=false/u,
+    'stable release images must use Docker v2 manifest lists for older Unraid update checks'
+  );
+  assert.doesNotMatch(
+    buildStep.run,
+    /--push/u,
+    'the registry exporter handles pushing the compatible multi-arch manifest'
   );
   assert.match(
     release.jobs.publish.steps.find(
-      (step) => step.name === 'Verify published architectures'
+      (step) =>
+        step.name ===
+        'Verify published architectures and Unraid-compatible manifests'
     ).run,
-    /verify-container-manifest\.sh --require-provenance/u
+    /--require-docker-list/u
+  );
+  assert.match(
+    release.jobs.publish.steps.find(
+      (step) =>
+        step.name ===
+        'Verify published architectures and Unraid-compatible manifests'
+    ).run,
+    /--require-compatible-manifest/u,
+    'existing published images can be reused while preserving their existing manifest format'
+  );
+  assert.equal(release.jobs.sign.permissions.attestations, 'write');
+  assert.ok(
+    release.jobs.sign.steps.some(
+      (step) =>
+        step.uses === 'actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6'
+    ),
+    'release provenance must be signed separately from the Docker v2 manifest list'
+  );
+  for (const stepName of [
+    'Attest GHCR release image provenance',
+    'Attest Docker Hub release image provenance',
+  ]) {
+    const attestation = release.jobs.sign.steps.find(
+      (step) => step.name === stepName
+    );
+    assert.equal(attestation.with['push-to-registry'], true);
+    assert.equal(
+      attestation.with['create-storage-record'],
+      false,
+      'publishing provenance must not create a separate organization artifact record'
+    );
+  }
+  assert.equal(release.jobs.verify.permissions.attestations, 'read');
+  assert.match(
+    release.jobs.verify.steps.find(
+      (step) => step.name === 'Verify GitHub build provenance attestations'
+    ).run,
+    /gh attestation verify[\s\S]*--signer-workflow/u
+  );
+  assert.match(
+    aliasPromotion.jobs.promote.steps.find(
+      (step) =>
+        step.name === 'Verify release manifest compatibility and version'
+    ).run,
+    /--require-compatible-manifest/u,
+    'stable alias promotion must continue accepting prior OCI releases and new Docker v2 releases'
   );
   const digestResolver = release.jobs.publish.steps.find(
     (step) => step.name === 'Resolve manifest digest'
@@ -1023,12 +1108,7 @@ test('release notes flow into the draft release and Discord announcement', () =>
     draft.steps.find((step) => step.name === 'Draft Release').env.RELEASE_BODY,
     '${{ needs.changelog.outputs.release_body }}'
   );
-  assert.deepEqual(discord.needs, [
-    'changelog',
-    'publish',
-    'publish-release',
-    'dispatch-package-channels',
-  ]);
+  assert.deepEqual(discord.needs, ['changelog', 'publish', 'publish-release']);
   assert.equal(
     discord.env.RELEASE_BODY,
     '${{ needs.changelog.outputs.release_body }}'
@@ -1046,11 +1126,6 @@ test('release notes flow into the draft release and Discord announcement', () =>
     /3797|3800/u,
     'Discord announcements must not silently truncate later release-note sections'
   );
-});
-
-test('release automation does not publish YunoHost packages', () => {
-  const release = readWorkflow('release.yml');
-  assert.equal(release.jobs['sync-yunohost-package'], undefined);
 });
 
 test('Discord release-note chunks preserve all text and stay within the limit', () => {
@@ -1118,17 +1193,24 @@ test('release asset checksums match the builder sidecar names', () => {
   assert.match(assetsText, /checksum_base="\$\{checksum_base%\.aab\}-aab"/u);
 });
 
-test('main CI validates release notes against the pushed commit', () => {
+test('CI validates release notes with push and pull-request event context', () => {
   const ci = readWorkflow('ci.yml');
   const validation = ci.jobs['release-notes'].steps.find(
     (step) => step.name === 'Validate release-note fragment or explicit opt-out'
   );
 
   assert.ok(validation);
-  assert.equal(validation.env.BASE_SHA, '${{ github.event.before }}');
+  assert.equal(
+    validation.env.BASE_SHA,
+    '${{ github.event.pull_request.base.sha || github.event.before }}'
+  );
+  assert.equal(
+    validation.env.HEAD_SHA,
+    '${{ github.event.pull_request.head.sha || github.sha }}'
+  );
   assert.equal(
     validation.env.PR_BODY,
-    "${{ github.event.head_commit.message || '' }}"
+    "${{ github.event.pull_request.body || github.event.head_commit.message || '' }}"
   );
   assert.doesNotMatch(validation.run, /\$\{\{/u);
   assert.match(validation.run, /--summary-file "\$GITHUB_STEP_SUMMARY"/u);

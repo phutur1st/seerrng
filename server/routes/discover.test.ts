@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import { afterEach, before, describe, it, mock } from 'node:test';
 
 import ComicVineAPI from '@server/api/comicvine';
@@ -61,7 +62,7 @@ function createApp() {
   app.use(express.json());
   app.use(
     session({
-      secret: 'test-secret',
+      secret: randomBytes(32).toString('hex'),
       cookie: { secure: 'auto' },
       resave: false,
       saveUninitialized: false,
@@ -4756,7 +4757,7 @@ describe('GET /discover/books', () => {
       }) => {
         assert.strictEqual(
           query,
-          '(title:"alpha" OR author:"alpha") AND (title:"beta" OR author:"beta") AND subject:science_fiction AND language:eng AND first_publish_year:2024'
+          '(title:"alpha" OR author:"alpha" OR subject:"alpha") AND (title:"beta" OR author:"beta" OR subject:"beta") AND subject:science_fiction AND language:eng AND first_publish_year:2024'
         );
         assert.strictEqual(page, 1);
         assert.strictEqual(limit, 50);
@@ -4921,7 +4922,7 @@ describe('GET /discover/books', () => {
       async ({ query, limit }: { query: string; limit?: number }) => {
         assert.strictEqual(
           query,
-          '(title:"microsoft" OR author:"microsoft") AND (title:"windows" OR author:"windows") AND (title:"11" OR author:"11")'
+          '(title:"microsoft" OR author:"microsoft" OR subject:"microsoft") AND (title:"windows" OR author:"windows" OR subject:"windows") AND (title:"11" OR author:"11" OR subject:"11")'
         );
         assert.strictEqual(limit, 50);
 
@@ -4962,7 +4963,7 @@ describe('GET /discover/books', () => {
     assert.strictEqual(searchBooksMock.mock.callCount(), 1);
     assert.deepStrictEqual(
       res.body.results.map((result: { title: string }) => result.title),
-      ['The Microsoft Windows 11 Reference']
+      ['Windows 11 Guide', 'The Microsoft Windows 11 Reference']
     );
   });
 
@@ -5556,6 +5557,62 @@ describe('GET /discover/comics', () => {
     assert.strictEqual(firstPage.body.results.length, 19);
     assert.strictEqual(firstPage.body.comicVineConfigured, true);
     assert.strictEqual(firstPage.body.results[0].title, 'Batman 01');
+  });
+
+  it('uses the completed index to browse a blank query by issue count', async () => {
+    getSettings().main.comicVineApiKey = 'test-key';
+    await getRepository(ComicCatalogScan).save({
+      id: 'global',
+      scanGeneration: 9000,
+      completeGeneration: 9000,
+      nextPage: 2,
+      totalResults: 4,
+      indexedResults: 4,
+      lastVolumeId: 9004,
+      lastAttemptAt: Math.floor(Date.now() / 1000),
+      lastCompletedAt: Math.floor(Date.now() / 1000),
+    });
+    const volumes = [
+      { id: 9001, name: 'No count', issueCount: null },
+      { id: 9002, name: 'Long run', issueCount: 100 },
+      { id: 9003, name: 'Short run', issueCount: 4 },
+      { id: 9004, name: 'Middle run', issueCount: 12 },
+    ];
+    await getRepository(ComicCatalogVolume).save(
+      volumes.map((volume) => ({
+        generation: 9000,
+        id: volume.id,
+        title: volume.name,
+        searchText: volume.name.toLowerCase(),
+        issueCount: volume.issueCount,
+        payload: JSON.stringify({
+          id: volume.id,
+          name: volume.name,
+          resource_type: 'volume' as const,
+          count_of_issues: volume.issueCount,
+        }),
+      }))
+    );
+    const upstreamSearch = mock.method(
+      ComicVineAPI.prototype,
+      'searchVolumes',
+      async () => {
+        throw new Error('Blank-query browse should use the completed index');
+      }
+    );
+
+    const response = await (
+      await login()
+    )
+      .get('/discover/comics')
+      .query({ query: '   ' });
+
+    assert.strictEqual(response.status, 200, JSON.stringify(response.body));
+    assert.deepStrictEqual(
+      response.body.results.map((volume: { title: string }) => volume.title),
+      ['Long run', 'Middle run', 'Short run', 'No count']
+    );
+    assert.strictEqual(upstreamSearch.mock.callCount(), 0);
   });
 
   it('reports first-scan progress without presenting partial filtered results', async () => {

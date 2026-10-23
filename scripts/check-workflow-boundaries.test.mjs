@@ -289,6 +289,14 @@ test('CodeQL models the awaited image cache validation barrier', () => {
   const modelPackReference = codeqlWorkflow.jobs.analyze.steps.find(
     (step) => step.name === 'Initialize CodeQL'
   ).with.packs;
+  const codeqlSteps = codeqlWorkflow.jobs.analyze.steps;
+  const nodeSetupIndex = codeqlSteps.findIndex(
+    (step) => step.name === 'Set up Node.js for CodeQL'
+  );
+  const codeqlInitIndex = codeqlSteps.findIndex(
+    (step) => step.name === 'Initialize CodeQL'
+  );
+  const nodeSetup = codeqlSteps[nodeSetupIndex];
   const imageCacheBarriers = securityModels.extensions
     .filter(({ addsTo }) => addsTo.extensible === 'barrierModel')
     .flatMap(({ data }) => data)
@@ -299,6 +307,14 @@ test('CodeQL models the awaited image cache validation barrier', () => {
       `snapetech/seerrng-codeql-models@${modelPack.version}`
     )
   );
+  assert.equal(nodeSetup.if, "matrix.language == 'javascript'");
+  assert.equal(
+    nodeSetup.uses,
+    'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
+  );
+  assert.equal(nodeSetup.with['node-version-file'], 'package.json');
+  assert.equal(nodeSetup.with['package-manager-cache'], false);
+  assert.ok(nodeSetupIndex < codeqlInitIndex);
   assert.deepEqual(
     imageCacheBarriers.sort(([left], [right]) => left.localeCompare(right)),
     [
@@ -316,15 +332,111 @@ test('CodeQL models the awaited image cache validation barrier', () => {
   );
 });
 
-test('unit-test shards always use GitHub-hosted runners', () => {
+test('unit-test shards use the shared pool only for trusted main runs', () => {
   const ciWorkflow = yaml.load(
     fs.readFileSync(
       path.join(rootDirectory, '.github', 'workflows', 'ci.yml'),
       'utf8'
     )
   );
-  assert.equal(ciWorkflow.jobs['unit-test']?.['runs-on'], 'ubuntu-latest');
+  const runner = ciWorkflow.jobs['unit-test']?.['runs-on'];
+  assert.match(runner, /ng-shared-main-jit/u);
+  assert.match(runner, /github.event_name == 'push'/u);
+  assert.match(runner, /github.event_name == 'workflow_dispatch'/u);
+  assert.match(runner, /github.ref == 'refs\/heads\/main'/u);
+  assert.match(runner, /\|\| 'ubuntu-latest'/u);
   assert.equal(ciWorkflow.jobs['unit-test']?.strategy?.['max-parallel'], 4);
   assert.equal(ciWorkflow.jobs['preflight-deploy'], undefined);
   assert.equal(ciWorkflow.jobs['deploy-main'], undefined);
+});
+
+test('main validation and image scanning use the shared pool on trusted runs', () => {
+  const workflowsDirectory = path.join(rootDirectory, '.github', 'workflows');
+  const ciWorkflow = yaml.load(
+    fs.readFileSync(path.join(workflowsDirectory, 'ci.yml'), 'utf8')
+  );
+  for (const jobName of ['release-notes', 'scan-main-image']) {
+    const runner = ciWorkflow.jobs[jobName]?.['runs-on'];
+    assert.match(runner, /ng-shared-main-jit/u, jobName);
+    assert.match(runner, /github.event_name == 'push'/u, jobName);
+    assert.match(runner, /github.event_name == 'workflow_dispatch'/u, jobName);
+    assert.match(runner, /github.ref == 'refs\/heads\/main'/u, jobName);
+    assert.match(runner, /\|\| 'ubuntu-latest'/u, jobName);
+  }
+  for (const [workflowName, jobName] of [
+    ['codeql.yml', 'analyze'],
+    ['semgrep-community.yml', 'semgrep'],
+  ]) {
+    const scanWorkflow = yaml.load(
+      fs.readFileSync(path.join(workflowsDirectory, workflowName), 'utf8')
+    );
+    const runner = scanWorkflow.jobs[jobName]?.['runs-on'];
+    assert.match(runner, /ng-shared-main-jit/u, workflowName);
+    assert.match(runner, /github.event_name == 'push'/u, workflowName);
+    assert.match(
+      runner,
+      /github.event_name == 'workflow_dispatch'/u,
+      workflowName
+    );
+    assert.match(runner, /github.event_name == 'schedule'/u, workflowName);
+    assert.match(runner, /github.ref == 'refs\/heads\/main'/u, workflowName);
+    assert.match(runner, /\|\| 'ubuntu-latest'/u, workflowName);
+  }
+  const semgrep = fs.readFileSync(
+    path.join(workflowsDirectory, 'semgrep-community.yml'),
+    'utf8'
+  );
+  assert.match(semgrep, /docker info/u);
+  assert.match(semgrep, /docker run/u);
+});
+
+test('shared runner jobs use SeerrNG and exact-run labels', () => {
+  const workflowsDirectory = path.join(rootDirectory, '.github', 'workflows');
+  let sharedRunnerCount = 0;
+  for (const filename of fs
+    .readdirSync(workflowsDirectory)
+    .filter((name) => /\.ya?ml$/u.test(name))) {
+    const workflow = yaml.load(
+      fs.readFileSync(path.join(workflowsDirectory, filename), 'utf8')
+    );
+    for (const [jobName, job] of Object.entries(workflow.jobs ?? {})) {
+      const runner = job?.['runs-on'];
+      if (
+        typeof runner !== 'string' ||
+        !runner.includes('ng-shared-main-jit')
+      ) {
+        continue;
+      }
+      sharedRunnerCount += 1;
+      assert.match(
+        runner,
+        /^\$\{\{ github\.repository == 'snapetech-org\/seerrng' &&/u,
+        `${filename}/${jobName} keeps fork checks on hosted runners`
+      );
+      assert.match(runner, /ng-shared-main-seerrng/u, `${filename}/${jobName}`);
+      assert.match(runner, /ng-main-run-\{0\}/u, `${filename}/${jobName}`);
+      assert.match(runner, /github\.run_id/u, `${filename}/${jobName}`);
+      assert.match(
+        runner,
+        /github\.ref == 'refs\/heads\/main'/u,
+        `${filename}/${jobName}`
+      );
+      assert.match(
+        runner,
+        /github\.event_name == 'push'/u,
+        `${filename}/${jobName}`
+      );
+    }
+  }
+  assert.ok(sharedRunnerCount > 0);
+});
+
+test('credentialed chart publication stays on a hosted runner', () => {
+  const helmWorkflow = yaml.load(
+    fs.readFileSync(
+      path.join(rootDirectory, '.github', 'workflows', 'helm.yml'),
+      'utf8'
+    )
+  );
+  assert.equal(helmWorkflow.jobs.publish?.['runs-on'], 'ubuntu-latest');
 });

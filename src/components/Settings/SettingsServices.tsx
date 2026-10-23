@@ -1,6 +1,14 @@
+import AudiobookshelfLogo from '@app/assets/services/audiobookshelf.svg';
+import backissueLogo from '@app/assets/services/backissue.png';
+import issuarrLogo from '@app/assets/services/issuarr.png';
+import JellystatLogo from '@app/assets/services/jellystat.svg';
+import kapowarrLogo from '@app/assets/services/kapowarr.png';
 import LidarrLogo from '@app/assets/services/lidarr.svg';
+import NavidromeLogo from '@app/assets/services/navidrome.svg';
 import RadarrLogo from '@app/assets/services/radarr.svg';
 import SonarrLogo from '@app/assets/services/sonarr.svg';
+import sportarrLogo from '@app/assets/services/sportarr.png';
+import WhisparrLogo from '@app/assets/services/whisparr.svg';
 import Alert from '@app/components/Common/Alert';
 import Badge from '@app/components/Common/Badge';
 import Button from '@app/components/Common/Button';
@@ -26,6 +34,7 @@ import {
 } from '@app/components/Setup/setupServiceCategories';
 import useSettings from '@app/hooks/useSettings';
 import globalMessages from '@app/i18n/globalMessages';
+import { getSafeApiErrorDetails } from '@app/utils/apiError';
 import defineMessages from '@app/utils/defineMessages';
 import { getSafeHref } from '@app/utils/safeUrl';
 import { Transition } from '@headlessui/react';
@@ -38,7 +47,6 @@ import {
   PlusIcon,
   Square3Stack3DIcon,
   TrashIcon,
-  TrophyIcon,
 } from '@heroicons/react/24/solid';
 import type { EnabledMediaCategories } from '@server/constants/mediaCategories';
 import type OverrideRule from '@server/entity/OverrideRule';
@@ -62,6 +70,7 @@ import type {
 import { readarrServiceSupportsFormat } from '@server/utils/readarrService';
 import axios from 'axios';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import type { ReactNode } from 'react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
@@ -120,6 +129,10 @@ const messages = defineMessages('components.Settings', {
   setupServiceCategoryBooks: 'Books, Comics & Magazines',
   serviceCategoryMusic: 'Music',
   serviceCategoryTools: 'System',
+  guidedSetupTitle: 'New to SeerrNG?',
+  guidedSetupDescription:
+    'Use the short setup guide to review request defaults and connect the services you use.',
+  guidedSetupAction: 'Open Guided Setup',
   serviceCategories: 'Service categories',
   serviceGroupRequestDestinations: 'Request Destinations',
   serviceGroupViewing: 'Viewing and Live TV',
@@ -200,6 +213,10 @@ const messages = defineMessages('components.Settings', {
   whisparrLoadError: 'Whisparr server settings could not be loaded.',
   whisparrLoadErrorHelp:
     'Retry to check saved connections before adding another server.',
+  whisparrPermissionError:
+    'You need administrator access to view or change Whisparr connections.',
+  whisparrLoadErrorStatus:
+    'SeerrNG returned HTTP {status} while loading Whisparr settings. Retry, then check the server logs if the error continues.',
   retryWhisparr: 'Retry',
   addSportarr: 'Connect Sportarr Server',
   sportarrDescription:
@@ -319,6 +336,11 @@ interface ServerInstanceProps {
   isLidarr?: boolean;
   isReadarr?: boolean;
   isAudiobookshelf?: boolean;
+  isNavidrome?: boolean;
+  isJellystat?: boolean;
+  isKapowarr?: boolean;
+  isBackissue?: boolean;
+  isMylar?: boolean;
   isComics?: boolean;
   isMagazines?: boolean;
   isAdult?: boolean;
@@ -369,6 +391,11 @@ const ServerInstance = ({
   isReadarr = false,
   isBindery = false,
   isAudiobookshelf = false,
+  isNavidrome = false,
+  isJellystat = false,
+  isKapowarr = false,
+  isBackissue = false,
+  isMylar = false,
   isComics = false,
   isMagazines = false,
   isAdult = false,
@@ -395,23 +422,49 @@ const ServerInstance = ({
           className="settings-service-logo-link"
         >
           {isSonarr ? (
-            <SonarrLogo className="h-10 w-10 flex-shrink-0" />
+            <SonarrLogo className="settings-service-provider-logo" />
           ) : isSportarr ? (
-            <TrophyIcon className="settings-service-sportarr-icon" />
+            <img
+              src={sportarrLogo.src}
+              className="settings-service-provider-logo"
+              alt=""
+            />
           ) : isLidarr ? (
-            <LidarrLogo className="h-10 w-10 flex-shrink-0" />
+            <LidarrLogo className="settings-service-provider-logo" />
           ) : isReadarr ? (
             <BookOpenIcon className="h-10 w-10 flex-shrink-0 text-gray-300" />
           ) : isAudiobookshelf ? (
-            <MusicalNoteIcon className="h-10 w-10 flex-shrink-0 text-gray-300" />
+            <AudiobookshelfLogo className="settings-service-provider-logo" />
           ) : isAdult ? (
-            <FilmIcon className="h-10 w-10 flex-shrink-0 text-fuchsia-300" />
+            <WhisparrLogo className="settings-service-provider-logo" />
+          ) : isNavidrome ? (
+            <NavidromeLogo className="settings-service-provider-logo" />
+          ) : isJellystat ? (
+            <JellystatLogo className="settings-service-provider-logo" />
+          ) : isKapowarr ? (
+            <img
+              src={kapowarrLogo.src}
+              className="settings-service-provider-logo"
+              alt=""
+            />
+          ) : isBackissue ? (
+            <img
+              src={backissueLogo.src}
+              className="settings-service-provider-logo"
+              alt=""
+            />
+          ) : isMylar ? (
+            <img
+              src={issuarrLogo.src}
+              className="settings-service-provider-logo"
+              alt=""
+            />
           ) : isComics ? (
             <Square3Stack3DIcon className="h-10 w-10 flex-shrink-0 text-gray-300" />
           ) : isMagazines ? (
             <NewspaperIcon className="h-10 w-10 flex-shrink-0 text-gray-300" />
           ) : (
-            <RadarrLogo className="h-10 w-10 flex-shrink-0" />
+            <RadarrLogo className="settings-service-provider-logo" />
           )}
         </a>
         <div className="settings-service-card-body">
@@ -516,10 +569,16 @@ const ServerInstance = ({
 
 const SettingsServices = ({
   showProwlarr = false,
+  hideGuidedSetupPrompt = false,
   setupEnabledMediaCategories,
+  setupActiveCategory,
+  onSetupCategoryChange,
 }: {
   showProwlarr?: boolean;
+  hideGuidedSetupPrompt?: boolean;
   setupEnabledMediaCategories?: EnabledMediaCategories;
+  setupActiveCategory?: SetupServiceCategory;
+  onSetupCategoryChange?: (category: SetupServiceCategory) => void;
 }) => {
   const intl = useIntl();
   const router = useRouter();
@@ -557,6 +616,7 @@ const SettingsServices = ({
     : undefined;
   const defaultServiceCategory = setupServiceCategories?.[0] ?? 'tv-movies';
   const requestedServiceCategory =
+    setupActiveCategory ??
     searchTargetCategory ??
     (isServiceCategory(router.query.serviceCategory)
       ? router.query.serviceCategory
@@ -570,6 +630,11 @@ const SettingsServices = ({
     currentSettings.romarrEnabled;
 
   const selectServiceCategory = (category: ServiceCategory) => {
+    if (setupEnabledMediaCategories && onSetupCategoryChange) {
+      onSetupCategoryChange(category);
+      return;
+    }
+
     const query = { ...router.query };
     delete query.settingsSearch;
     delete query.settingsSearchTarget;
@@ -599,6 +664,7 @@ const SettingsServices = ({
     isValidating: whisparrIsValidating,
     mutate: revalidateWhisparr,
   } = useSWR<WhisparrSettings[]>('/api/v1/settings/whisparr');
+  const whisparrErrorDetails = getSafeApiErrorDetails(whisparrError);
   const {
     data: sportarrData,
     error: sportarrError,
@@ -956,6 +1022,21 @@ const SettingsServices = ({
           intl.formatMessage(globalMessages.settings),
         ]}
       />
+      {!setupEnabledMediaCategories && !hideGuidedSetupPrompt && (
+        <section className="app-card-sub refreshed-inset-surface card-layout">
+          <h2 className="page-heading">
+            {intl.formatMessage(messages.guidedSetupTitle)}
+          </h2>
+          <p className="card-body-text">
+            {intl.formatMessage(messages.guidedSetupDescription)}
+          </p>
+          <Link href="/setup?guide=1" legacyBehavior passHref>
+            <Button as="a" buttonType="default" buttonSize="standard">
+              {intl.formatMessage(messages.guidedSetupAction)}
+            </Button>
+          </Link>
+        </section>
+      )}
       <div className="settings-service-category-picker">
         {visibleServiceCategories.length > 0 ? (
           <p className="description mb-3">
@@ -1047,7 +1128,7 @@ const SettingsServices = ({
                       href="/settings/main?settingsSearchTarget=enable4k#enable4k"
                       buttonType="default"
                       buttonSize="standard"
-                      className="mt-3"
+                      className="card-spacing-before"
                     >
                       {intl.formatMessage(messages.fourKSettingsLink)}
                     </Button>
@@ -1324,9 +1405,7 @@ const SettingsServices = ({
                             {
                               serverType: 'Radarr',
                               strong: (msg: React.ReactNode) => (
-                                <strong className="font-semibold text-white">
-                                  {msg}
-                                </strong>
+                                <strong className="card-title">{msg}</strong>
                               ),
                             }
                           )}
@@ -1436,9 +1515,7 @@ const SettingsServices = ({
                             {
                               serverType: 'Sonarr',
                               strong: (msg: React.ReactNode) => (
-                                <strong className="font-semibold text-white">
-                                  {msg}
-                                </strong>
+                                <strong className="card-title">{msg}</strong>
                               ),
                             }
                           )}
@@ -1536,9 +1613,25 @@ const SettingsServices = ({
                         type="error"
                         title={intl.formatMessage(messages.whisparrLoadError)}
                       >
-                        <p className="mb-3">
+                        <p className="card-spacing-after">
                           {intl.formatMessage(messages.whisparrLoadErrorHelp)}
                         </p>
+                        {whisparrErrorDetails.status === 403 && (
+                          <p className="card-spacing-after">
+                            {intl.formatMessage(
+                              messages.whisparrPermissionError
+                            )}
+                          </p>
+                        )}
+                        {whisparrErrorDetails.status !== undefined &&
+                          whisparrErrorDetails.status !== 403 && (
+                            <p className="card-spacing-after">
+                              {intl.formatMessage(
+                                messages.whisparrLoadErrorStatus,
+                                { status: whisparrErrorDetails.status }
+                              )}
+                            </p>
+                          )}
                         <Button
                           buttonType="default"
                           buttonSize="sm"
@@ -1746,6 +1839,7 @@ const SettingsServices = ({
                               : 80
                         }
                         isSSL={url.protocol === 'https:'}
+                        isJellystat
                         onEdit={() => setEditJellystatModal(true)}
                         onDelete={() =>
                           setDeleteServerModal({
@@ -2111,6 +2205,7 @@ const SettingsServices = ({
                           profileName={mylar.rootFolder ?? ''}
                           isSSL={mylar.useSsl}
                           isComics={true}
+                          isMylar
                           isDefault={mylar.isDefault}
                           externalUrl={mylar.externalUrl}
                           onEdit={() =>
@@ -2176,6 +2271,7 @@ const SettingsServices = ({
                           profileName={kapowarr.rootFolder ?? ''}
                           isSSL={kapowarr.useSsl}
                           isComics={true}
+                          isKapowarr
                           isDefault={kapowarr.isDefault}
                           externalUrl={kapowarr.externalUrl}
                           onEdit={() =>
@@ -2244,6 +2340,7 @@ const SettingsServices = ({
                         port={backissue.port}
                         isSSL={backissue.useSsl}
                         isComics={true}
+                        isBackissue
                         isDefault={backissue.isDefault}
                         externalUrl={backissue.externalUrl}
                         onEdit={() =>
@@ -2538,6 +2635,7 @@ const SettingsServices = ({
                             : 80
                       }
                       isSSL={url.protocol === 'https:'}
+                      isNavidrome
                       onEdit={() => setEditNavidromeModal(true)}
                       onDelete={() =>
                         setDeleteServerModal({

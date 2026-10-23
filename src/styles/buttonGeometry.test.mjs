@@ -2288,6 +2288,18 @@ test('detail and new request-access/settings consumers use global asset roles wi
     'UserProfile/UserSettings/UserEpisodeQueueSettings.tsx',
     'UserProfile/UserSettings/UserTvSeasonWatchGateAccess.tsx',
     'Settings/BinderyModal/index.tsx',
+    'BackendBookSeriesDetails/index.tsx',
+    'BookSeriesSearch/index.tsx',
+    'BookSeriesSearch/Results.tsx',
+    'BookSeriesSearch/Preview.tsx',
+    'BookSeriesSearch/InlineResults.tsx',
+    'BookSeriesSearch/CoverCarousel.tsx',
+    'BookSeriesDetails/BookSeriesLinks.tsx',
+    'BookSeriesWatch/index.tsx',
+    'Common/MediaCategoryPreferences.tsx',
+    'Setup/SetupConnectionsGuide.tsx',
+    'Setup/SetupDefaults.tsx',
+    'Login/OidcLoginButton.tsx',
   ]) {
     const report = auditTailwindClassExpressions({
       path,

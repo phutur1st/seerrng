@@ -27,6 +27,11 @@ on:
         required: false
         type: string
         default: '{}'
+      skip_launchpad_dispatch:
+        description: Skip starting another PPA run when one is already handling this tag
+        required: false
+        type: boolean
+        default: false
       reuse_published_image:
         description: Reuse the image only after its revision label matches this tag
         required: false
@@ -397,9 +402,6 @@ jobs:
           labels: |
             org.opencontainers.image.created=${{ steps.ts.outputs.TIMESTAMP }}
             org.opencontainers.image.revision=${{ steps.release.outputs.SHA }}
-          annotations: |
-            org.opencontainers.image.created=${{ steps.ts.outputs.TIMESTAMP }}
-            org.opencontainers.image.revision=${{ steps.release.outputs.SHA }}
 
       - name: Build & Push (multi-arch)
         if: inputs.reuse_published_image != true
@@ -407,7 +409,6 @@ jobs:
         env:
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
           IMAGE_LABELS: ${{ steps.meta.outputs.labels }}
-          IMAGE_ANNOTATIONS: ${{ steps.meta.outputs.annotations }}
         run: |
           set -euo pipefail
           release_sha="${{ steps.release.outputs.SHA }}"
@@ -429,14 +430,14 @@ jobs:
           build_args=(
             --file "./${release_dockerfile}"
             --platform linux/amd64,linux/arm64
-            --push
+            --output type=registry,oci-mediatypes=false
             --build-arg "COMMIT_TAG=${release_sha}"
             --build-arg "BUILD_VERSION=${{ env.VERSION }}"
             --build-arg "SOURCE_DATE_EPOCH=${{ steps.ts.outputs.TIMESTAMP }}"
             --cache-from type=gha,scope=linux/amd64
             --cache-from type=gha,scope=linux/arm64
             --cache-to type=gha,mode=max
-            --provenance mode=max
+            --provenance=false
           )
 
           while IFS= read -r tag; do
@@ -446,10 +447,6 @@ jobs:
           while IFS= read -r label; do
             [ -n "$label" ] && build_args+=(--label "$label")
           done <<< "$IMAGE_LABELS"
-
-          while IFS= read -r annotation; do
-            [ -n "$annotation" ] && build_args+=(--annotation "$annotation")
-          done <<< "$IMAGE_ANNOTATIONS"
 
           for attempt in 1 2 3 4 5; do
             echo "Building and pushing release image (attempt ${attempt}/5)"
@@ -503,14 +500,19 @@ jobs:
             sleep $((attempt * 15))
           done
 
-      - name: Verify published architectures
+      - name: Verify published architectures and Unraid-compatible manifests
         shell: bash
         env:
           VERSION: ${{ env.VERSION }}
+          REUSE_PUBLISHED_IMAGE: ${{ inputs.reuse_published_image }}
         run: |
           set -euo pipefail
-          scripts/verify-container-manifest.sh --require-provenance "${DOCKER_HUB}:${VERSION}" linux/amd64 linux/arm64
-          scripts/verify-container-manifest.sh --require-provenance "${GHCR_IMAGE}:${VERSION}" linux/amd64 linux/arm64
+          manifest_requirement='--require-docker-list'
+          if [[ "$REUSE_PUBLISHED_IMAGE" == 'true' ]]; then
+            manifest_requirement='--require-compatible-manifest'
+          fi
+          scripts/verify-container-manifest.sh "$manifest_requirement" "${DOCKER_HUB}:${VERSION}" linux/amd64 linux/arm64
+          scripts/verify-container-manifest.sh "$manifest_requirement" "${GHCR_IMAGE}:${VERSION}" linux/amd64 linux/arm64
 
   scan-release-image:
     name: Scan release image (${{ matrix.platform }})
@@ -586,6 +588,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      attestations: write
       packages: write
     env:
       VERSION: ${{ inputs.tag || github.ref_name }}
@@ -704,6 +707,22 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Attest GHCR release image provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.GHCR_IMAGE }}
+          subject-digest: ${{ needs.publish.outputs.image_digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest Docker Hub release image provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: docker.io/${{ env.DOCKER_HUB }}
+          subject-digest: ${{ needs.publish.outputs.image_digest }}
+          push-to-registry: true
+          create-storage-record: false
+
   verify:
     name: Verify signatures and attestations
     needs: [publish, sign]
@@ -712,6 +731,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      attestations: read
     env:
       VERSION: ${{ inputs.tag || github.ref_name }}
     steps:
@@ -743,6 +763,20 @@ jobs:
           cosign verify "${{ env.DOCKER_HUB }}@${{ needs.publish.outputs.image_digest }}" \
             --certificate-identity "https://github.com/${{ github.workflow_ref }}" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+      - name: Verify GitHub build provenance attestations
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
+        run: |
+          set -euo pipefail
+          signer_workflow="${GITHUB_WORKFLOW_REF%%@*}"
+          gh attestation verify "oci://${GHCR_IMAGE}@${IMAGE_DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$signer_workflow"
+          gh attestation verify "oci://docker.io/${DOCKER_HUB}@${IMAGE_DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$signer_workflow"
 
       - name: Verify per-platform SBOM attestations
         run: |
@@ -918,10 +952,10 @@ jobs:
             release-linux-packages.yml \
             release-flatpak.yml \
             release-aur.yml \
-            release-ppa.yml \
             release-copr.yml
           )
           # release-chocolatey.yml is dispatched after the public-release gate.
+          # Launchpad is dispatched after publication and the Discord announcement below.
           optional_workflows=(
             release-snap.yml
           )
@@ -973,18 +1007,18 @@ jobs:
             pending_names+=("$workflow")
           done
 
-          if [[ -z "$REUSE_FROM_RUN_ID" ]]; then
-            for workflow in "${optional_workflows[@]}"; do
-              dispatch_started["$workflow"]="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-              if ! gh workflow run "$workflow" --repo "$REPO" --ref main -f "tag=$TAG"; then
-                echo "::warning::Optional package workflow $workflow could not be dispatched; continuing."
-                continue
-              fi
-              echo "Dispatched optional $workflow for $TAG."
-            done
-          else
-            echo 'Skipping optional Chocolatey and Snap workflows during release recovery; Chocolatey dispatch follows publication.'
-          fi
+          for workflow in "${optional_workflows[@]}"; do
+            if [[ "$workflow" == 'release-snap.yml' && ( -n "$REUSE_FROM_RUN_ID" || "$REUSE_PACKAGE_WORKFLOW_RUNS" != '{}' ) ]]; then
+              echo 'Skipping optional Snap workflow during release recovery.'
+              continue
+            fi
+            dispatch_started["$workflow"]="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if ! gh workflow run "$workflow" --repo "$REPO" --ref main -f "tag=$TAG"; then
+              echo "::warning::Optional package workflow $workflow could not be dispatched; continuing."
+              continue
+            fi
+            echo "Dispatched optional $workflow for $TAG."
+          done
 
           for workflow in "${pending_names[@]}"; do
             run_id=""
@@ -1102,7 +1136,7 @@ jobs:
   announce-discord:
     name: Announce release to Discord
     needs:
-      [changelog, publish, publish-release, dispatch-package-channels]
+      [changelog, publish, publish-release]
     timeout-minutes: 10
     runs-on: ubuntu-latest
     permissions:
@@ -1182,6 +1216,34 @@ jobs:
               sleep 1
             fi
           done
+
+  dispatch-launchpad-ppa:
+    name: Dispatch Launchpad PPA after announcement
+    if: ${{ !cancelled() && !contains(inputs.tag || github.ref_name, '-') && needs.publish-release.result == 'success' }}
+    needs: [publish-release, announce-discord]
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch Launchpad PPA
+        env:
+          GH_TOKEN: ${{ secrets.GH_WORKFLOW_TOKEN || secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          SKIP_LAUNCHPAD_DISPATCH: ${{ inputs.skip_launchpad_dispatch || false }}
+        run: |
+          set -euo pipefail
+          if [[ "$SKIP_LAUNCHPAD_DISPATCH" == 'true' ]]; then
+            echo "Skipping Launchpad PPA dispatch for $TAG; an existing run is already handling it."
+            exit 0
+          fi
+          if ! gh workflow run release-ppa.yml --repo "$REPO" --ref main -f "tag=$TAG"; then
+            echo "::warning::Launchpad PPA could not be dispatched for the already-published release $TAG."
+            exit 0
+          fi
+          echo "Dispatched Launchpad PPA for $TAG after the announcement attempt."
 
 
   announce-security-correction:

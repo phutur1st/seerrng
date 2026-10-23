@@ -1,6 +1,7 @@
 import { strictEqual } from 'node:assert';
 import { describe, it } from 'node:test';
 import {
+  getUserServiceAvailability,
   isDiscoverMediaTypeEnabled,
   isDiscoverWatchlistTypeEnabled,
   isOptionalCatalogPathEnabled,
@@ -33,6 +34,70 @@ describe('isOptionalCatalogPathEnabled', () => {
     );
     strictEqual(
       isOptionalCatalogPathEnabled('/discover/movies', availability),
+      true
+    );
+  });
+
+  it('hides game and patch catalogs until their services are configured', () => {
+    const unavailable = {
+      musicEnabled: false,
+      booksEnabled: false,
+      comicsEnabled: false,
+      softwareEnabled: false,
+      romarrEnabled: false,
+    };
+
+    strictEqual(
+      isOptionalCatalogPathEnabled('/discover/games', unavailable),
+      false
+    );
+    strictEqual(
+      isOptionalCatalogPathEnabled('/discover/patches', unavailable),
+      false
+    );
+
+    const configured = {
+      ...unavailable,
+      softwareEnabled: true,
+      romarrEnabled: true,
+    };
+    strictEqual(
+      isOptionalCatalogPathEnabled('/discover/games', configured),
+      true
+    );
+    strictEqual(
+      isOptionalCatalogPathEnabled('/discover/patches', configured),
+      true
+    );
+
+    const categoriesDisabled = {
+      ...configured,
+      enabledMediaCategories: {
+        game: false,
+        retro: false,
+        modern: false,
+      },
+    };
+    strictEqual(
+      isOptionalCatalogPathEnabled('/discover/games', categoriesDisabled),
+      false
+    );
+    strictEqual(
+      isOptionalCatalogPathEnabled('/discover/patches', categoriesDisabled),
+      false
+    );
+  });
+
+  it('keeps the personal game library visible when request integrations are disabled', () => {
+    strictEqual(
+      isOptionalCatalogPathEnabled('/games', {
+        musicEnabled: false,
+        booksEnabled: false,
+        comicsEnabled: false,
+        softwareEnabled: false,
+        romarrEnabled: false,
+        enabledMediaCategories: { game: false },
+      }),
       true
     );
   });
@@ -227,6 +292,42 @@ describe('isOptionalCatalogPathEnabled', () => {
     );
   });
 
+  it('applies user defaults to standalone emulation without enabling PC requests', () => {
+    const availability = {
+      musicEnabled: false,
+      booksEnabled: false,
+      comicsEnabled: false,
+      softwareEnabled: false,
+      romarrEnabled: true,
+      emulationCatalogEnabled: true,
+      defaultEnabledMediaCategories: { retro: false, modern: true },
+    };
+    const inherited = getUserServiceAvailability(availability);
+    strictEqual(isSoftwareCategoryEnabled('retro', inherited), false);
+    strictEqual(isSoftwareCategoryEnabled('modern', inherited), true);
+    strictEqual(isSoftwareCategoryEnabled('game', inherited), false);
+    const customized = getUserServiceAvailability(availability, {
+      retro: true,
+      modern: false,
+    });
+    strictEqual(isSoftwareCategoryEnabled('retro', customized), true);
+    strictEqual(isSoftwareCategoryEnabled('modern', customized), false);
+    strictEqual(isSoftwareCategoryEnabled('game', customized), false);
+    strictEqual(
+      isSoftwareCategoryEnabled(
+        'retro',
+        getUserServiceAvailability(
+          {
+            ...availability,
+            enabledMediaCategories: { retro: false },
+          },
+          { retro: true }
+        )
+      ),
+      false
+    );
+  });
+
   it('does not let an unavailable emulation catalog hide configured PC games', () => {
     const availability = {
       musicEnabled: false,
@@ -291,6 +392,42 @@ describe('isOptionalCatalogPathEnabled', () => {
     strictEqual(isDiscoverMediaTypeEnabled('music', availability), true);
     strictEqual(isDiscoverMediaTypeEnabled('book', availability), false);
     strictEqual(isDiscoverMediaTypeEnabled('audiobook', availability), true);
+  });
+});
+
+describe('getUserServiceAvailability', () => {
+  it('applies user choices over defaults while preserving global switches', () => {
+    const availability = {
+      musicEnabled: true,
+      booksEnabled: true,
+      comicsEnabled: true,
+      enabledMediaCategories: { movie: true, tv: false, music: true },
+      defaultEnabledMediaCategories: {
+        movie: false,
+        tv: true,
+        music: true,
+      },
+    };
+    const inherited = getUserServiceAvailability(availability);
+    strictEqual(inherited.enabledMediaCategories?.movie, false);
+    strictEqual(inherited.enabledMediaCategories?.tv, false);
+    strictEqual(inherited.enabledMediaCategories?.music, true);
+
+    const customized = getUserServiceAvailability(availability, {
+      movie: true,
+      music: false,
+    });
+    strictEqual(customized.enabledMediaCategories?.movie, true);
+    strictEqual(customized.enabledMediaCategories?.music, false);
+    strictEqual(customized.enabledMediaCategories?.tv, false);
+
+    const administrator = getUserServiceAvailability(
+      availability,
+      { movie: false },
+      true
+    );
+    strictEqual(administrator.enabledMediaCategories?.movie, true);
+    strictEqual(administrator.enabledMediaCategories?.tv, false);
   });
 });
 

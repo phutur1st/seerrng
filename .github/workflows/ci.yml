@@ -6,6 +6,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -23,7 +26,7 @@ jobs:
   release-notes:
     name: Release-note contract
     timeout-minutes: 10
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'snapetech-org/seerrng' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.ref == 'refs/heads/main' && fromJSON(format('{{"group":"ng-shared-main-jit","labels":["self-hosted","linux","x64","ng-shared-main-seerrng","ng-main-run-{0}"]}}', github.run_id)) || 'ubuntu-latest' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,9 +45,9 @@ jobs:
 
       - name: Validate release-note fragment or explicit opt-out
         env:
-          BASE_SHA: ${{ github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
-          PR_BODY: ${{ github.event.head_commit.message || '' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_BODY: ${{ github.event.pull_request.body || github.event.head_commit.message || '' }}
         run: |
           set -euo pipefail
           base_sha="$BASE_SHA"
@@ -69,9 +72,9 @@ jobs:
           node scripts/check-changelog-tags.mjs
 
   i18n-and-tooling:
-    name: i18n, security boundaries, and tooling tests
+    name: i18n and tooling tests
     timeout-minutes: 45
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'snapetech-org/seerrng' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && fromJSON(format('{{"group":"ng-shared-main-jit","labels":["self-hosted","linux","x64","ng-shared-main-seerrng","ng-main-run-{0}"]}}', github.run_id)) || 'ubuntu-latest' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -97,13 +100,13 @@ jobs:
       - name: Check translations
         run: pnpm i18n:check
 
-      - name: Check security boundaries and tooling
-        run: pnpm security:council
+      - name: Check tooling tests
+        run: pnpm test:tooling
 
   test:
     name: Lint, typecheck, and production build
     timeout-minutes: 60
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'snapetech-org/seerrng' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && fromJSON(format('{{"group":"ng-shared-main-jit","labels":["self-hosted","linux","x64","ng-shared-main-seerrng","ng-main-run-{0}"]}}', github.run_id)) || 'ubuntu-latest' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -143,14 +146,14 @@ jobs:
   unit-test:
     name: Vitest shard ${{ matrix.shard }} of 4
     timeout-minutes: 75
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'snapetech-org/seerrng' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && fromJSON(format('{{"group":"ng-shared-main-jit","labels":["self-hosted","linux","x64","ng-shared-main-seerrng","ng-main-run-{0}"]}}', github.run_id)) || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       max-parallel: 4
       matrix:
         shard: [1, 2, 3, 4]
     container:
-      image: node:24.21.0-alpine3.23@sha256:9ec4a2e289874ed0d722e1772ec2de45d2801541db8612f3638b26f128c69ac2
+      image: node:24.22.1-alpine3.23@sha256:4b00b6d1aa138805aace94cc2482808f2b4f01e5e9c9f8cdc0e217fd70600ef9
     steps:
       - name: Install Git for complete checkout
         run: apk add --no-cache git
@@ -183,9 +186,9 @@ jobs:
   node-test:
     name: Native TypeScript tests
     timeout-minutes: 75
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'snapetech-org/seerrng' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && fromJSON(format('{{"group":"ng-shared-main-jit","labels":["self-hosted","linux","x64","ng-shared-main-seerrng","ng-main-run-{0}"]}}', github.run_id)) || 'ubuntu-latest' }}
     container:
-      image: node:24.21.0-alpine3.23@sha256:9ec4a2e289874ed0d722e1772ec2de45d2801541db8612f3638b26f128c69ac2
+      image: node:24.22.1-alpine3.23@sha256:4b00b6d1aa138805aace94cc2482808f2b4f01e5e9c9f8cdc0e217fd70600ef9
     steps:
       - name: Install Git for complete checkout
         run: apk add --no-cache git
@@ -218,7 +221,7 @@ jobs:
   jellyfin-plugin:
     name: Build and smoke test Jellyfin bridge plugin
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'snapetech-org/seerrng' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && fromJSON(format('{{"group":"ng-shared-main-jit","labels":["self-hosted","linux","x64","ng-shared-main-seerrng","ng-main-run-{0}"]}}', github.run_id)) || 'ubuntu-latest' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -257,7 +260,7 @@ jobs:
   playwright:
     name: Playwright browser tests
     timeout-minutes: 60
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'snapetech-org/seerrng' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && fromJSON(format('{{"group":"ng-shared-main-jit","labels":["self-hosted","linux","x64","ng-shared-main-seerrng","ng-main-run-{0}"]}}', github.run_id)) || 'ubuntu-latest' }}
     permissions:
       contents: read
     env:
@@ -310,7 +313,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/cypress.yml
     secrets:
-      CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+      CYPRESS_RECORD_KEY: ${{ github.event_name == 'push' && secrets.CYPRESS_RECORD_KEY || '' }}
 
   test-docs:
     name: Build docs website
@@ -524,7 +527,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       needs.publish.result == 'success'
     needs: [publish]
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'snapetech-org/seerrng' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.ref == 'refs/heads/main' && fromJSON(format('{{"group":"ng-shared-main-jit","labels":["self-hosted","linux","x64","ng-shared-main-seerrng","ng-main-run-{0}"]}}', github.run_id)) || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:

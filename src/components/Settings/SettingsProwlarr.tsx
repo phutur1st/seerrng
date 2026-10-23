@@ -50,6 +50,23 @@ const messages = defineMessages('components.SettingsProwlarr', {
   addDetectedMatches: 'Add detected matches ({count})',
   selectedCategories: '{count} categories selected',
   categoryMappingEmpty: 'Select at least one category.',
+  indexerAssignmentTitle: 'Indexer assignments by medium',
+  indexerAssignmentDescription:
+    'Choose which enabled Prowlarr indexers are searched for each media category. An empty selection disables search for that category.',
+  selectedIndexers: '{count} indexers selected',
+  noIndexerInventory:
+    'Test the Prowlarr connection to load its indexers and assign them by category.',
+  indexerSearchLimits: 'Search limits',
+  indexerSearchLimitsDescription:
+    'Limit each user’s searches per minute overall and for each selected indexer.',
+  searchesPerUser: 'Maximum searches per user per minute',
+  searchesPerIndexer: 'Maximum searches per user per minute on {indexer}',
+  indexerAssignmentSelectLabel: '{category} indexers',
+  indexerNotSearchable: '(not searchable)',
+  showIndexerDetails: 'Allow indexer names and details in search results',
+  indexerNameHidden: 'Indexer names and detail links are hidden from users.',
+  indexerDetailsVisible: 'Users can open indexer details from search results.',
+  searchLimitInvalid: 'Enter a whole number from 1 to 60.',
   movie: 'Movies',
   tv: 'TV',
   music: 'Music',
@@ -90,6 +107,12 @@ interface ProwlarrCoverageResponse {
   enabledSearchableIndexers?: number;
   categories?: Record<MediaCategoryKey, number>;
   categoryCatalog?: { id: number; name: string; indexerCount: number }[];
+  indexers?: {
+    id: number;
+    name: string;
+    enabled: boolean;
+    supportsSearch: boolean;
+  }[];
   error?: string;
   diagnostics?: {
     id?: number;
@@ -172,6 +195,10 @@ const toForm = (settings: ProwlarrSettingsResponse): ProwlarrForm => ({
   apiKeyConfigured: settings.apiKeyConfigured,
   clearApiKey: false,
   categoryMappings: settings.categoryMappings,
+  indexerIdsByCategory: settings.indexerIdsByCategory ?? {},
+  searchLimitPerUserPerMinute: settings.searchLimitPerUserPerMinute ?? 12,
+  searchLimitByIndexer: settings.searchLimitByIndexer ?? {},
+  showIndexerDetails: settings.showIndexerDetails ?? false,
 });
 
 const getPayload = (form: ProwlarrForm) => ({
@@ -180,6 +207,10 @@ const getPayload = (form: ProwlarrForm) => ({
   useSsl: form.useSsl,
   baseUrl: form.baseUrl,
   categoryMappings: form.categoryMappings,
+  indexerIdsByCategory: form.indexerIdsByCategory,
+  searchLimitPerUserPerMinute: Number(form.searchLimitPerUserPerMinute ?? 12),
+  searchLimitByIndexer: form.searchLimitByIndexer ?? {},
+  showIndexerDetails: form.showIndexerDetails ?? false,
   clearApiKey: form.clearApiKey,
   ...(form.apiKey ? { apiKey: form.apiKey } : {}),
 });
@@ -217,6 +248,28 @@ const SettingsProwlarr = () => {
       };
     });
   }, [data, setupConnection]);
+
+  useEffect(() => {
+    const indexers = inventory?.indexers ?? savedCoverage?.indexers;
+    if (!indexers) return;
+    const defaults = indexers
+      .filter((indexer) => indexer.enabled && indexer.supportsSearch)
+      .map((indexer) => indexer.id);
+    setForm((current) => {
+      if (!current) return current;
+      const indexerIdsByCategory = {
+        ...current.indexerIdsByCategory,
+      };
+      let changed = false;
+      for (const category of categoryKeys) {
+        if (!Array.isArray(indexerIdsByCategory[category])) {
+          indexerIdsByCategory[category] = defaults;
+          changed = true;
+        }
+      }
+      return changed ? { ...current, indexerIdsByCategory } : current;
+    });
+  }, [inventory?.indexers, savedCoverage?.indexers]);
 
   const usingSavedConnection = Boolean(
     data &&
@@ -288,6 +341,26 @@ const SettingsProwlarr = () => {
     });
   };
 
+  const updateIndexerIds = (category: MediaCategoryKey, value: string[]) => {
+    if (!form) return;
+    updateForm({
+      indexerIdsByCategory: {
+        ...form.indexerIdsByCategory,
+        [category]: value.map(Number).filter(Number.isSafeInteger),
+      },
+    });
+  };
+
+  const updateIndexerLimit = (indexerId: number, value: number) => {
+    if (!form) return;
+    updateForm({
+      searchLimitByIndexer: {
+        ...form.searchLimitByIndexer,
+        [indexerId]: value,
+      },
+    });
+  };
+
   const testConnection = async () => {
     if (!form) return;
     setTesting(true);
@@ -355,9 +428,16 @@ const SettingsProwlarr = () => {
   if (!form) return null;
 
   const coverage = inventory ?? savedCoverage;
+  const availableIndexers =
+    inventory?.indexers ?? savedCoverage?.indexers ?? [];
   const canSaveCategories = categoryKeys.every(
     (category) => (form.categoryMappings[category] ?? []).length > 0
   );
+  const isValidSearchLimit = (value: number | undefined) =>
+    Number.isInteger(value) && value! >= 1 && value! <= 60;
+  const canSaveSearchLimits =
+    isValidSearchLimit(form.searchLimitPerUserPerMinute) &&
+    Object.values(form.searchLimitByIndexer ?? {}).every(isValidSearchLimit);
 
   return (
     <section
@@ -378,7 +458,7 @@ const SettingsProwlarr = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="text-sm text-gray-200">
+        <div className="card-table-value">
           <label htmlFor="prowlarr-hostname">
             {intl.formatMessage(messages.address)}
           </label>
@@ -396,10 +476,11 @@ const SettingsProwlarr = () => {
             />
           </div>
         </div>
-        <label className="text-sm text-gray-200">
+        <label className="card-table-value">
           {intl.formatMessage(messages.port)}
           <input
-            className="input input-lite mt-1 w-full"
+            className="request-form-control"
+            data-control-size="compact"
             type="number"
             min={1}
             max={65535}
@@ -412,7 +493,8 @@ const SettingsProwlarr = () => {
         <label className="text-sm text-gray-200 sm:col-span-2">
           {intl.formatMessage(messages.basePath)}
           <input
-            className="input input-lite mt-1 w-full"
+            className="request-form-control"
+            data-control-size="compact"
             autoComplete="off"
             value={form.baseUrl}
             onChange={(event) => updateForm({ baseUrl: event.target.value })}
@@ -421,7 +503,8 @@ const SettingsProwlarr = () => {
         <label className="text-sm text-gray-200 sm:col-span-2">
           {intl.formatMessage(messages.apiKey)}
           <input
-            className="input input-lite mt-1 w-full"
+            className="request-form-control"
+            data-control-size="compact"
             type="password"
             autoComplete="new-password"
             value={form.apiKey}
@@ -461,17 +544,17 @@ const SettingsProwlarr = () => {
         </button>
       )}
 
-      <div className="mt-5 rounded-lg border border-gray-700 bg-gray-900/50 p-4">
-        <h4 className="font-semibold text-white">
+      <div className="app-card-inset refreshed-inset-surface card-stack">
+        <h4 className="card-title">
           {intl.formatMessage(messages.categoryMappingTitle)}
         </h4>
-        <p className="mt-1 text-sm text-gray-300">
+        <p className="card-body-text">
           {intl.formatMessage(messages.categoryMappingDescription)}
         </p>
-        <p className="mt-1 text-xs text-gray-400">
+        <p className="card-body-text">
           {intl.formatMessage(messages.detectedMatchesHelp)}
         </p>
-        <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
+        <div className="filter-field-grid">
           {categoryKeys.map((category) => {
             const selectedIds = form.categoryMappings[category] ?? [];
             const detectedMatches = detectProwlarrCategoryMatches(
@@ -481,11 +564,11 @@ const SettingsProwlarr = () => {
             return (
               <details
                 key={category}
-                className="rounded border border-gray-700 px-3 py-2"
+                className="app-card-inset refreshed-inset-surface card-stack"
               >
-                <summary className="cursor-pointer text-sm font-medium text-gray-100">
+                <summary className="card-title">
                   {intl.formatMessage(messages[categoryMessages[category]])}
-                  <span className="ml-2 text-xs text-gray-400">
+                  <span className="card-table-value">
                     {intl.formatMessage(messages.selectedCategories, {
                       count: selectedIds.length,
                     })}
@@ -497,7 +580,8 @@ const SettingsProwlarr = () => {
                   )}
                   multiple
                   size={Math.min(6, Math.max(3, categoryOptions.length))}
-                  className="input input-lite mt-2 w-full"
+                  className="request-form-control"
+                  data-control-size="compact"
                   value={selectedIds.map(String)}
                   onChange={(event) =>
                     updateCategories(
@@ -545,11 +629,178 @@ const SettingsProwlarr = () => {
         </div>
       </div>
 
+      <div className="app-card-inset refreshed-inset-surface card-stack">
+        <h4 className="card-title">
+          {intl.formatMessage(messages.indexerAssignmentTitle)}
+        </h4>
+        <p className="card-body-text">
+          {intl.formatMessage(messages.indexerAssignmentDescription)}
+        </p>
+        {availableIndexers.length === 0 ? (
+          <p className="card-body-text">
+            {intl.formatMessage(messages.noIndexerInventory)}
+          </p>
+        ) : (
+          <div className="filter-field-grid">
+            {categoryKeys.map((category) => {
+              const selectedIds =
+                form.indexerIdsByCategory?.[category] ??
+                availableIndexers
+                  .filter(
+                    (indexer) => indexer.enabled && indexer.supportsSearch
+                  )
+                  .map((indexer) => indexer.id);
+              return (
+                <details
+                  key={category}
+                  className="app-card-inset refreshed-inset-surface card-stack"
+                >
+                  <summary className="card-title">
+                    {intl.formatMessage(messages[categoryMessages[category]])}
+                    <span className="card-table-value">
+                      {intl.formatMessage(messages.selectedIndexers, {
+                        count: selectedIds.length,
+                      })}
+                    </span>
+                  </summary>
+                  <select
+                    aria-label={intl.formatMessage(
+                      messages.indexerAssignmentSelectLabel,
+                      {
+                        category: intl.formatMessage(
+                          messages[categoryMessages[category]]
+                        ),
+                      }
+                    )}
+                    multiple
+                    size={Math.min(6, Math.max(3, availableIndexers.length))}
+                    className="request-form-control"
+                    data-control-size="compact"
+                    value={selectedIds.map(String)}
+                    onChange={(event) =>
+                      updateIndexerIds(
+                        category,
+                        Array.from(
+                          event.target.selectedOptions,
+                          (option) => option.value
+                        )
+                      )
+                    }
+                  >
+                    {availableIndexers.map((indexer) => (
+                      <option key={indexer.id} value={indexer.id}>
+                        {indexer.name}
+                        {!indexer.enabled || !indexer.supportsSearch
+                          ? ` ${intl.formatMessage(messages.indexerNotSearchable)}`
+                          : ''}
+                      </option>
+                    ))}
+                  </select>
+                </details>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="app-card-inset refreshed-inset-surface card-stack">
+        <h4 className="card-title">
+          {intl.formatMessage(messages.indexerSearchLimits)}
+        </h4>
+        <p className="card-body-text">
+          {intl.formatMessage(messages.indexerSearchLimitsDescription)}
+        </p>
+        <label className="card-stack">
+          {intl.formatMessage(messages.searchesPerUser)}
+          <input
+            className="request-form-control"
+            data-control-size="compact"
+            type="number"
+            min={1}
+            max={60}
+            step={1}
+            value={form.searchLimitPerUserPerMinute ?? 12}
+            aria-invalid={!canSaveSearchLimits}
+            onChange={(event) =>
+              updateForm({
+                searchLimitPerUserPerMinute: Number(event.target.value),
+              })
+            }
+          />
+        </label>
+        {availableIndexers.length > 0 && (
+          <div className="filter-field-grid">
+            {availableIndexers.map((indexer) => (
+              <label key={indexer.id} className="card-table-value">
+                {indexer.name}
+                <span className="card-table-value">
+                  {intl.formatMessage(messages.searchesPerIndexer, {
+                    indexer: indexer.name,
+                  })}
+                </span>
+                <input
+                  className="request-form-control"
+                  data-control-size="compact"
+                  type="number"
+                  min={1}
+                  max={60}
+                  step={1}
+                  value={
+                    form.searchLimitByIndexer?.[indexer.id] ??
+                    form.searchLimitPerUserPerMinute ??
+                    12
+                  }
+                  aria-label={intl.formatMessage(messages.searchesPerIndexer, {
+                    indexer: indexer.name,
+                  })}
+                  aria-invalid={
+                    !isValidSearchLimit(
+                      form.searchLimitByIndexer?.[indexer.id] ??
+                        form.searchLimitPerUserPerMinute
+                    )
+                  }
+                  onChange={(event) =>
+                    updateIndexerLimit(indexer.id, Number(event.target.value))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        )}
+        {!canSaveSearchLimits && (
+          <p className="page-error-message" role="alert">
+            {intl.formatMessage(messages.searchLimitInvalid)}
+          </p>
+        )}
+      </div>
+
+      <div className="app-card-inset refreshed-inset-surface card-stack">
+        <div className="settings-form-label-line">
+          <span>{intl.formatMessage(messages.showIndexerDetails)}</span>
+          <SelectionCircle
+            id="prowlarr-show-indexer-details"
+            name="showIndexerDetails"
+            label={intl.formatMessage(messages.showIndexerDetails)}
+            selected={form.showIndexerDetails ?? false}
+            onClick={() =>
+              updateForm({ showIndexerDetails: !form.showIndexerDetails })
+            }
+          />
+        </div>
+        <p className="card-body-text">
+          {intl.formatMessage(
+            form.showIndexerDetails
+              ? messages.indexerDetailsVisible
+              : messages.indexerNameHidden
+          )}
+        </p>
+      </div>
+
       <p className="mt-4 text-sm text-gray-300">
         {intl.formatMessage(messages.testHint)}
       </p>
       {connectionMessage && (
-        <p className="mt-3 text-sm text-green-300" role="status">
+        <p className="card-body-text" role="status">
           {connectionMessage}
         </p>
       )}
@@ -559,7 +810,7 @@ const SettingsProwlarr = () => {
         </p>
       )}
       {errorMessage && (
-        <p className="mt-3 text-sm text-red-300" role="alert">
+        <p className="page-error-message" role="alert">
           {errorMessage}
         </p>
       )}
@@ -571,10 +822,10 @@ const SettingsProwlarr = () => {
       )}
       {coverage?.configured && coverage.success && (
         <div className="mt-5">
-          <h4 className="font-semibold text-white">
+          <h4 className="card-title">
             {intl.formatMessage(messages.coverageTitle)}
           </h4>
-          <p className="mt-1 text-sm text-gray-300">
+          <p className="card-body-text">
             {intl.formatMessage(messages.coverageDescription)}
           </p>
           <p className="mt-2 text-sm text-gray-200">
@@ -600,14 +851,14 @@ const SettingsProwlarr = () => {
           </ul>
           {inventory?.diagnostics && (
             <div className="mt-5">
-              <h5 className="font-semibold text-white">
+              <h5 className="card-title">
                 {intl.formatMessage(messages.diagnosticTitle)}
               </h5>
-              <p className="mt-1 text-sm text-gray-300">
+              <p className="card-body-text">
                 {intl.formatMessage(messages.diagnosticDescription)}
               </p>
               {inventory.diagnostics.length === 0 ? (
-                <p className="mt-3 text-sm text-gray-400">
+                <p className="card-body-text">
                   {intl.formatMessage(messages.noSearchableIndexers)}
                 </p>
               ) : (
@@ -625,7 +876,7 @@ const SettingsProwlarr = () => {
                         key={item.id ?? item.name}
                         className="flex flex-col gap-1 px-3 py-2 sm:flex-row sm:items-start sm:justify-between"
                       >
-                        <div className="min-w-0">
+                        <div className="card-layout">
                           <p className="truncate text-sm font-medium text-gray-100">
                             {item.name}
                           </p>
@@ -706,7 +957,7 @@ const SettingsProwlarr = () => {
           type="button"
           className="rounded border border-gray-500 px-4 py-2 font-semibold text-gray-100 hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
           style={{ minHeight: 48 }}
-          disabled={saving || !canSaveCategories}
+          disabled={saving || !canSaveCategories || !canSaveSearchLimits}
           onClick={() => void saveSettings()}
         >
           {intl.formatMessage(saving ? messages.saving : messages.save)}

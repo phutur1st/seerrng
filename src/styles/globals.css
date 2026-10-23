@@ -5211,11 +5211,11 @@
   }
 
   .form-row {
-    @apply mt-6 max-w-6xl sm:mt-5 sm:grid sm:grid-cols-3 sm:items-start sm:gap-4;
+    @apply mt-6 max-w-6xl sm:mt-5 md:grid md:grid-cols-3 md:items-start md:gap-4;
   }
 
   .form-input-area {
-    @apply text-sm text-white sm:col-span-2;
+    @apply text-sm text-white md:col-span-2;
   }
 
   .form-input-field {
@@ -6932,6 +6932,16 @@
     column-gap: var(--button-content-gap);
   }
 
+  .detail-disclosure-control[data-control-variant='book-request-advanced-options'] {
+    flex: none;
+    min-width: 12rem;
+  }
+
+  .detail-disclosure-control[data-control-variant='book-request-advanced-options']
+    .detail-disclosure-button {
+    white-space: nowrap;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .detail-disclosure-control,
     .detail-disclosure-pin,
@@ -7670,7 +7680,10 @@
     line-height: 20px;
   }
 
-  .auth-login-page .app-button svg {
+  .auth-login-page .app-button svg,
+  .auth-login-page
+    [data-list-layout='auth-provider']
+    [data-provider-part='logo'] {
     height: 20px;
     width: 20px;
     max-height: none;
@@ -8224,7 +8237,7 @@
 
   .settings-page-content input:not([type='checkbox']):not([type='radio']),
   .settings-page-content select,
-  select.request-form-control[data-control-size='compact'] {
+  .request-form-control[data-control-size='compact'] {
     @apply px-2 py-0 text-xs leading-4;
     box-sizing: border-box;
     height: var(--compact-control-height);
@@ -8532,13 +8545,14 @@
   }
 
   .settings-service-add-icon,
-  .settings-service-sportarr-icon {
+  .settings-service-provider-logo {
     width: 2.5rem;
     height: 2.5rem;
     flex: none;
+    object-fit: contain;
   }
 
-  .settings-service-sportarr-icon {
+  .settings-service-provider-logo {
     color: rgb(var(--color-gray-300));
   }
 
@@ -8935,12 +8949,18 @@
   }
 
   .react-select-container .react-select__menu {
-    color: rgb(var(--theme-control-text));
-    background-color: rgb(var(--theme-control-surface) / 0.98);
+    color: rgb(var(--theme-control-text)) !important;
+    background-color: rgb(var(--theme-control-surface) / 0.98) !important;
   }
 
   .react-select-container-dark .react-select__menu {
-    background-color: rgb(var(--theme-control-surface) / 0.98);
+    background-color: rgb(var(--theme-control-surface) / 0.98) !important;
+  }
+
+  .react-select-container .react-select__option {
+    @apply relative pl-7;
+    color: rgb(var(--theme-control-text)) !important;
+    background-color: transparent !important;
   }
 
   .react-select-container .react-select__option--is-focused {
@@ -8953,10 +8973,6 @@
     @apply bg-indigo-600 text-white;
     background-color: rgb(var(--color-indigo-600)) !important;
     color: white !important;
-  }
-
-  .react-select-container .react-select__option {
-    @apply relative pl-7;
   }
 
   .react-select-container .react-select__option--is-selected::before {
@@ -10537,4 +10553,93 @@
 
 .settings-page-content .settings-metadata-actions {
   margin-top: calc(var(--card-spacing) + 0.625rem);
+}
+
+/* New discovery and setup consumers extend the existing card/cover/auth roles.
+   Layout variants select arrangement; shared tokens keep geometry and paint. */
+@layer components {
+  .media-choice-card[data-choice-layout='stacked'],
+  .media-choice-card[data-choice-layout='linked'] {
+    position: relative;
+    flex-direction: column;
+    align-items: stretch;
+    text-align: start;
+  }
+
+  .media-choice-card[data-choice-layout='linked'] > [data-card-link='primary'] {
+    position: static;
+  }
+
+  .media-choice-card[data-choice-layout='linked']
+    > [data-card-link='primary']::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+
+  .media-choice-card [data-card-link='secondary'] {
+    position: relative;
+    z-index: 1;
+  }
+
+  .cover-thumb:is(img) {
+    height: auto;
+    object-fit: cover;
+  }
+
+  .cover-thumb[data-cover-state='missing'] {
+    display: grid;
+    place-items: center;
+  }
+
+  .card-list[data-list-layout='covers'] {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-block-end: var(--card-spacing);
+  }
+
+  .card-list[data-list-layout='covers'] > [data-list-part='cover'] {
+    width: var(--cover-thumb-width);
+    flex: none;
+    scroll-snap-align: start;
+  }
+
+  .card-list[data-list-layout='covers'] [data-cover-part='title'] {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card-list[data-list-layout='auth-provider'] {
+    flex: 1;
+    width: auto;
+    align-content: start;
+  }
+
+  .card-list[data-list-layout='auth-provider'] > .app-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .card-list[data-list-layout='auth-provider'] [data-provider-part='name'] {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card-list[data-list-layout='auth-provider'] [data-provider-part='logo'] {
+    width: var(--action-control-content-height);
+    height: var(--action-control-content-height);
+    flex: none;
+    object-fit: contain;
+  }
+
+  .card-list[data-list-layout='auth-provider'] [data-provider-part='help'] {
+    text-align: center;
+    font-size: var(--card-table-font-size);
+  }
 }

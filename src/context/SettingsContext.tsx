@@ -1,5 +1,8 @@
 import { OtherUserAvailabilityMode } from '@server/constants/availability';
-import { DEFAULT_ENABLED_MEDIA_CATEGORIES } from '@server/constants/mediaCategories';
+import {
+  DEFAULT_ENABLED_MEDIA_CATEGORIES,
+  DEFAULT_USER_ENABLED_MEDIA_CATEGORIES,
+} from '@server/constants/mediaCategories';
 import { MediaServerType } from '@server/constants/server';
 import type { PublicSettingsResponse } from '@server/interfaces/api/settingsInterfaces';
 import axios from 'axios';
@@ -37,6 +40,7 @@ const defaultSettings: PublicSettingsResponse = {
   emulationCatalogEnabled: false,
   swipeEnabled: true,
   enabledMediaCategories: DEFAULT_ENABLED_MEDIA_CATEGORIES,
+  defaultEnabledMediaCategories: DEFAULT_USER_ENABLED_MEDIA_CATEGORIES,
   ageGate: {
     defaultRestricted: false,
     maxMovieCertification: 'PG-13',

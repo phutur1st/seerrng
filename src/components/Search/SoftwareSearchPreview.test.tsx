@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
     emulationCatalogEnabled: true,
     enabledMediaCategories: { retro: true, modern: false, game: true },
   },
+  preferences: {} as Record<string, boolean>,
   games: [] as object[],
   fetcher: undefined as undefined | (() => Promise<unknown>),
   key: undefined as unknown,
@@ -19,6 +20,13 @@ const state = vi.hoisted(() => ({
 
 vi.mock('@app/hooks/useSettings', () => ({
   default: () => ({ currentSettings: state.settings }),
+}));
+vi.mock('@app/hooks/useUser', () => ({
+  Permission: { ADMIN: 2 },
+  useUser: () => ({
+    user: { settings: { enabledMediaCategories: state.preferences } },
+    hasPermission: () => false,
+  }),
 }));
 vi.mock('swr', () => ({
   default: (key: unknown, fetcher: () => Promise<unknown>) => {
@@ -45,6 +53,7 @@ vi.mock('next/link', () => ({
 beforeEach(() => {
   vi.restoreAllMocks();
   state.settings.emulationCatalogEnabled = true;
+  state.preferences = {};
   state.games = [];
   state.key = undefined;
   state.fetcher = undefined;
@@ -114,6 +123,12 @@ it('links DAT previews to their own provider and catalog identity', () => {
 
 it('does not request catalog results when no enabled provider is configured', () => {
   state.settings.emulationCatalogEnabled = false;
+  render();
+  expect(state.key).toBeNull();
+});
+
+it('does not search the standalone catalog when the current user hides emulation', () => {
+  state.preferences = { retro: false };
   render();
   expect(state.key).toBeNull();
 });

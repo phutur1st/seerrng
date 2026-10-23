@@ -7,6 +7,10 @@ import useSettings from '@app/hooks/useSettings';
 import { Permission, useUser } from '@app/hooks/useUser';
 import defineMessages from '@app/utils/defineMessages';
 import { getSafeHref } from '@app/utils/safeUrl';
+import {
+  getUserServiceAvailability,
+  isConfiguredMediaCategoryEnabled,
+} from '@app/utils/serviceAvailability';
 import type { MediaCategoryKey } from '@server/constants/mediaCategories';
 import type {
   ProwlarrSearchResult,
@@ -61,16 +65,22 @@ const messages = defineMessages('components.IndexerSearch', {
   categories: 'Indexer categories',
   published: 'Published',
   openResult: 'Open indexer details',
+  sendToDownloader: 'Send to downloader',
+  sendingToDownloader: 'Sending…',
+  sentToDownloader: 'Sent to Prowlarr’s configured download client.',
+  downloaderFailed:
+    'Prowlarr could not send this release. Run a new search and try again.',
   loadMore: 'Load more results',
   loadingMore: 'Loading…',
   manualMode:
-    'This is a direct Prowlarr search for inspection. SeerrNG does not grab these results here; approved requests and acquisition tracking remain with the configured media manager or software provider.',
+    'Search results are separate from SeerrNG requests. You can send a result to a download client configured in Prowlarr.',
   requestStillUsesManager:
-    'This search does not change your request or send a download to a client.',
+    'Sending a result does not change a SeerrNG request. Prowlarr handles the handoff to its configured download client.',
 });
 
 interface IndexerSearchConfiguration {
   configured: boolean;
+  showIndexerDetails: boolean;
   categories: { category: MediaCategoryKey; categoryIds: number[] }[];
 }
 
@@ -113,9 +123,13 @@ const Metric = ({ label, value }: { label: string; value: string }) => (
 const ResultCard = ({
   result,
   intl,
+  grabState,
+  onGrab,
 }: {
   result: ProwlarrSearchResult;
   intl: ReturnType<typeof useIntl>;
+  grabState?: 'sending' | 'sent' | 'failed';
+  onGrab: () => void;
 }) => {
   const infoHref = result.infoUrl ? getSafeHref(result.infoUrl) : undefined;
   const published = result.publishDate
@@ -129,18 +143,30 @@ const ResultCard = ({
           <h3 className="font-semibold break-words text-white">
             {result.title}
           </h3>
-          <p className="mt-1 text-sm text-indigo-200">{result.indexer}</p>
+          {result.indexer && <p className="card-body-text">{result.indexer}</p>}
         </div>
-        {infoHref && (
-          <a
-            className="rounded border border-gray-600 px-3 py-2 text-sm font-medium text-gray-100 hover:bg-gray-700"
-            href={infoHref}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {intl.formatMessage(messages.openResult)}
-          </a>
-        )}
+        <div className="media-fact-row">
+          {infoHref && (
+            <a
+              className="app-button app-button-default button-standard"
+              href={infoHref}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {intl.formatMessage(messages.openResult)}
+            </a>
+          )}
+          {result.grabId && !grabState && (
+            <Button buttonType="primary" onClick={onGrab}>
+              {intl.formatMessage(messages.sendToDownloader)}
+            </Button>
+          )}
+          {grabState === 'sending' && (
+            <Button buttonType="primary" disabled>
+              {intl.formatMessage(messages.sendingToDownloader)}
+            </Button>
+          )}
+        </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <Metric
@@ -176,6 +202,16 @@ const ResultCard = ({
           {result.categories.map((category) => category.name).join(', ')}
         </p>
       )}
+      {grabState === 'sent' && (
+        <p className="card-body-text" role="status">
+          {intl.formatMessage(messages.sentToDownloader)}
+        </p>
+      )}
+      {grabState === 'failed' && (
+        <p className="page-error-message" data-severity="warning" role="status">
+          {intl.formatMessage(messages.downloaderFailed)}
+        </p>
+      )}
     </article>
   );
 };
@@ -184,13 +220,20 @@ const IndexerSearch = () => {
   const intl = useIntl();
   const router = useRouter();
   const { currentSettings } = useSettings();
-  const { hasPermission } = useUser();
-  const adultCategoryEnabled =
-    currentSettings.adultEnabled &&
-    currentSettings.enabledMediaCategories?.adult !== false;
-  const visibleCategories = categories.filter(
-    (item) => item.key !== 'adult' || adultCategoryEnabled
+  const { hasPermission, user } = useUser();
+  const serviceAvailability = getUserServiceAvailability(
+    currentSettings,
+    user?.settings?.enabledMediaCategories,
+    hasPermission(Permission.ADMIN)
   );
+  const visibleCategories = categories.filter(
+    (item) =>
+      isConfiguredMediaCategoryEnabled(item.key, serviceAvailability) &&
+      (item.key !== 'adult' || serviceAvailability.adultEnabled)
+  );
+  const adultCategoryEnabled =
+    serviceAvailability.adultEnabled &&
+    isConfiguredMediaCategoryEnabled('adult', serviceAvailability);
   const {
     data: configuration,
     error: configurationError,
@@ -209,6 +252,22 @@ const IndexerSearch = () => {
   const [offset, setOffset] = useState(0);
   const [searching, setSearching] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [grabStates, setGrabStates] = useState<
+    Record<string, 'sending' | 'sent' | 'failed'>
+  >({});
+
+  const sendToDownloader = async (result: ProwlarrSearchResult) => {
+    if (!result.grabId) return;
+    setGrabStates((current) => ({ ...current, [result.grabId!]: 'sending' }));
+    try {
+      await axios.post('/api/v1/indexer-search/grab', {
+        grabId: result.grabId,
+      });
+      setGrabStates((current) => ({ ...current, [result.grabId!]: 'sent' }));
+    } catch {
+      setGrabStates((current) => ({ ...current, [result.grabId!]: 'failed' }));
+    }
+  };
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -267,6 +326,7 @@ const IndexerSearch = () => {
     event.preventDefault();
     setSubmittedQuery('');
     setResults([]);
+    setGrabStates({});
     setOffset(0);
     setHasMore(false);
     void runSearch();
@@ -321,10 +381,10 @@ const IndexerSearch = () => {
               className="mt-5 grid grid-cols-1 items-end gap-4 sm:grid-cols-[minmax(12rem,0.45fr)_minmax(18rem,1fr)_auto]"
               onSubmit={submitSearch}
             >
-              <label className="text-sm text-gray-200">
+              <label className="card-table-value">
                 {intl.formatMessage(messages.category)}
                 <select
-                  className="input input-lite mt-1 w-full"
+                  className="request-form-control"
                   value={category}
                   disabled={searching}
                   onChange={(event) => {
@@ -343,10 +403,10 @@ const IndexerSearch = () => {
                   ))}
                 </select>
               </label>
-              <label className="text-sm text-gray-200">
+              <label className="card-table-value">
                 {intl.formatMessage(messages.query)}
                 <input
-                  className="input input-lite mt-1 w-full"
+                  className="request-form-control"
                   minLength={2}
                   maxLength={256}
                   required
@@ -368,7 +428,7 @@ const IndexerSearch = () => {
             </form>
 
             {errorMessage && (
-              <div className="mt-4" role="alert">
+              <div className="card-spacing-before" role="alert">
                 <Alert type="error">{errorMessage}</Alert>
               </div>
             )}
@@ -381,7 +441,7 @@ const IndexerSearch = () => {
                   <p className="font-semibold text-gray-100">
                     {intl.formatMessage(messages.noResults)}
                   </p>
-                  <p className="mt-1 text-sm text-gray-400">
+                  <p className="card-body-text">
                     {intl.formatMessage(messages.noResultsHelp)}
                   </p>
                 </div>
@@ -396,8 +456,15 @@ const IndexerSearch = () => {
                 </p>
                 <ul className="space-y-3">
                   {results.map((result, index) => (
-                    <li key={`${result.indexerId ?? result.indexer}-${index}`}>
-                      <ResultCard result={result} intl={intl} />
+                    <li key={`${result.grabId ?? result.title}-${index}`}>
+                      <ResultCard
+                        result={result}
+                        intl={intl}
+                        grabState={
+                          result.grabId ? grabStates[result.grabId] : undefined
+                        }
+                        onGrab={() => void sendToDownloader(result)}
+                      />
                     </li>
                   ))}
                 </ul>

@@ -176,3 +176,13 @@ These are implementation contracts, not a statement that a staged control has be
 6. Portable standards omit project-specific preview addresses, archive IDs and review-page narratives. Keep those facts in the journal or task records. Number unresolved choices that need a maintainer decision so they can be referenced unambiguously.
 7. `pnpm test` and `pnpm test:ci` run Vitest. The complete test pass also includes `pnpm test:node`, `pnpm test:tooling`, and the browser suites. Retain actual execution logs, counts, and skips separately. Platform-excluded tooling is unrun, not passing; use Linux for complete POSIX tooling parity.
 8. Small audit batches do not erase earlier acceptance. Preserve Request-page changes and shared typography, aggregate loading/status, button/poster geometry and layout owners across the contribution. Record unrelated failures; when the user authorizes a complete gate or broader remediation, repair the failures that block that scope. Required checks are never waived into a passing result.
+
+
+Discovery and setup card consumers reuse the existing choice-card and cover-thumb
+families. Stacked choices preserve their whole-card action; linked cards preserve
+independent secondary links and carousel controls above the main link hit area.
+Cover carousels use the shared thumbnail width and ratio, retain keyboard access,
+and respect reduced motion. Authentication provider rows preserve provider artwork
+ratios, readable names and independent help links through the existing auth/card
+owners. Compact disclosure variants may select label width and wrapping, while
+height and type remain owned by the shared disclosure control.

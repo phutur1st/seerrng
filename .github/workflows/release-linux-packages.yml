@@ -213,7 +213,7 @@ jobs:
           appimagetool_url='https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage'
           curl -fsSL --retry 5 "$appimagetool_url" -o appimagetool
           echo 'ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool' | sha256sum -c -
-          node_version='24.21.0'
+          node_version='24.22.1'
           node_archive="node-v${node_version}-linux-x64.tar.xz"
           node_base_url="https://nodejs.org/dist/v${node_version}"
           curl -fsSL --retry 5 "${node_base_url}/${node_archive}" -o "$node_archive"
@@ -255,6 +255,9 @@ jobs:
               ;;
             16.3.8)
               swc_wasm_integrity='sha512-1/oqX5C7jvkpSWUZzH+bDRStKrv9sIk8uc0a9HA7y1vdbBRrWjiO0hqU9kS4V3x9ATibh3JzTRS53kzhjFc1/A=='
+              ;;
+            16.4.1)
+              swc_wasm_integrity='sha512-w8H0C4y/raL0dcvM1hwAZaqZ+FK7ZjHWG/FDUbrm/6J5iwU18Hm9JwBE4I3JRbqhmz0kW9Sr5YHAAiZSXm6aUw=='
               ;;
             *)
               echo "No pinned Next.js WASM compiler checksum for version ${swc_wasm_version}." >&2

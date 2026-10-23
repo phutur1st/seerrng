@@ -26,7 +26,6 @@ import {
 import { getExternalRuntimeConfig } from '@server/lib/externalRuntimeConfig';
 import { normalizeMagazineTitle } from '@server/lib/magazineIdentity';
 import { findMagazineMediaByTitles } from '@server/lib/magazineMediaMatcher';
-import { isMediaCategoryEnabled } from '@server/lib/mediaCategories';
 import {
   getAvailableMusicQualities,
   getMusicQualityStatuses,
@@ -37,6 +36,7 @@ import {
 } from '@server/lib/search';
 import { runWithServarrServiceSnapshot } from '@server/lib/serviceAdmission';
 import { getSettings } from '@server/lib/settings';
+import { isUserMediaCategoryEnabled } from '@server/lib/userMediaCategories';
 import {
   filterVideoResultsByMaturityPolicy,
   getUserVideoMaturityPolicy,
@@ -126,6 +126,7 @@ export const SEARCH_RATE_LIMIT = {
 export const MAX_SEARCH_RESULTS_PER_PROVIDER = 20;
 export const MAX_COMBINED_SEARCH_RESULTS = 100;
 export const SEARCH_PROVIDER_TIMEOUT_MS = 5_000;
+export const BOOK_SEARCH_PROVIDER_TIMEOUT_MS = 15_000;
 export const SEARCH_CREDIT_LOOKUP_CONCURRENCY = parsePositiveInt(
   process.env.SEARCH_CREDIT_CONCURRENCY,
   10,
@@ -445,9 +446,11 @@ searchRoutes.get('/', async (req, res, next) => {
   const audiobookServiceEnabled = settings.readarr.some((server) =>
     readarrServiceSupportsFormat(server, 'audiobook')
   );
-  const ebookEnabled = isMediaCategoryEnabled('ebook') && ebookServiceEnabled;
+  const ebookEnabled =
+    isUserMediaCategoryEnabled(req.user, 'ebook') && ebookServiceEnabled;
   const audiobookEnabled =
-    isMediaCategoryEnabled('audiobook') && audiobookServiceEnabled;
+    isUserMediaCategoryEnabled(req.user, 'audiobook') &&
+    audiobookServiceEnabled;
   const bookFormatEnabled = (format: BookFormat) =>
     format === 'ebook' ? ebookEnabled : audiobookEnabled;
   const booksEnabled = bookFormat
@@ -461,13 +464,15 @@ searchRoutes.get('/', async (req, res, next) => {
         ? 'audiobook'
         : undefined);
   const musicEnabled =
-    settings.lidarr.length > 0 && isMediaCategoryEnabled('music');
+    settings.lidarr.length > 0 && isUserMediaCategoryEnabled(req.user, 'music');
   const { comicVineApiKey, metronToken } = getSettings().main;
-  const comicsEnabled = !!comicVineApiKey && isMediaCategoryEnabled('comic');
+  const comicsEnabled =
+    !!comicVineApiKey && isUserMediaCategoryEnabled(req.user, 'comic');
   const magazinesEnabled =
-    settings.lazylibrarian.length > 0 && isMediaCategoryEnabled('magazine');
-  const moviesEnabled = isMediaCategoryEnabled('movie');
-  const seriesEnabled = isMediaCategoryEnabled('tv');
+    settings.lazylibrarian.length > 0 &&
+    isUserMediaCategoryEnabled(req.user, 'magazine');
+  const moviesEnabled = isUserMediaCategoryEnabled(req.user, 'movie');
+  const seriesEnabled = isUserMediaCategoryEnabled(req.user, 'tv');
 
   if (
     (typeFilter === 'movie' && !moviesEnabled) ||
@@ -540,9 +545,8 @@ searchRoutes.get('/', async (req, res, next) => {
       const musicOffset = (page - 1) * 20;
 
       const shouldSearchVideo =
-        !typeFilter ||
-        typeFilter === 'movie' ||
-        typeFilter === 'tv' ||
+        ((!typeFilter || typeFilter === 'movie' || typeFilter === 'tv') &&
+          (moviesEnabled || seriesEnabled)) ||
         typeFilter === 'person';
       const shouldSearchMusic =
         !typeFilter ||
@@ -604,7 +608,11 @@ searchRoutes.get('/', async (req, res, next) => {
           : Promise.resolve({ results: [], totalResults: 0 }),
         shouldSearchBooks && ebookEnabled && bookFormat !== 'audiobook'
           ? openLibrary.searchBooks({
-              query: toFieldedBooleanAndQuery(queryString, ['title', 'author']),
+              query: toFieldedBooleanAndQuery(queryString, [
+                'title',
+                'author',
+                'subject',
+              ]),
               page,
               limit: 20,
             })
@@ -614,7 +622,7 @@ searchRoutes.get('/', async (req, res, next) => {
               getSettings().readarr,
               queryString,
               bookFormatForProviderSearch,
-              { failOnAllUnavailable: bookFormat === 'audiobook' }
+              { failOnAllUnavailable: typeFilter === 'book' }
             )
           : Promise.resolve([]),
         // Choosing a validated search type selects a provider; it does not
@@ -694,7 +702,9 @@ searchRoutes.get('/', async (req, res, next) => {
               })
             )
           ),
-          SEARCH_PROVIDER_TIMEOUT_MS
+          typeFilter === 'book'
+            ? BOOK_SEARCH_PROVIDER_TIMEOUT_MS
+            : SEARCH_PROVIDER_TIMEOUT_MS
         );
       const providerResults = new Map(
         providerResponses.results
@@ -760,17 +770,24 @@ searchRoutes.get('/', async (req, res, next) => {
         musicEnabled &&
         (!albumProviderResponse || albumProviderResponse.status === 'rejected')
       ) {
-        return next({
-          status: 503,
+        return res.status(503).json({
           message:
             'MusicBrainz, the service used for music searches, timed out or is unavailable. Please try again.',
         });
       }
       const openLibraryBookSearchFailed =
         !bookProviderResponse || bookProviderResponse.status === 'rejected';
+      const hasBookshelfBookCatalog = settings.readarr.some(
+        (server) =>
+          server.backend !== 'bindery' &&
+          Number.isSafeInteger(server.id) &&
+          server.id >= 0 &&
+          (!bookFormat || readarrServiceSupportsFormat(server, bookFormat))
+      );
       const bookshelfBookSearchFailed =
         !bookshelfProviderResponse ||
-        bookshelfProviderResponse.status === 'rejected';
+        bookshelfProviderResponse.status === 'rejected' ||
+        !hasBookshelfBookCatalog;
       const bookSearchFailed =
         bookFormat === 'audiobook'
           ? bookshelfBookSearchFailed
@@ -786,7 +803,7 @@ searchRoutes.get('/', async (req, res, next) => {
           message:
             bookFormat === 'audiobook'
               ? 'The configured audiobook catalog is unavailable. Please try again.'
-              : 'The book catalogs are unavailable. Please try again.',
+              : 'Open Library and configured book catalogs are unavailable. Please try again.',
         });
       }
       if (
@@ -941,7 +958,7 @@ searchRoutes.get('/', async (req, res, next) => {
       const dedupedBookDocs = dedupeBookSearchDocs(bookResults.docs).filter(
         (doc) =>
           matchesAllSearchTerms(
-            [doc.title, ...(doc.author_name ?? [])],
+            [doc.title, ...(doc.author_name ?? []), ...(doc.subject ?? [])],
             queryString
           )
       );

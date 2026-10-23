@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import dns from 'node:dns/promises';
 import {
   after,
@@ -198,7 +199,7 @@ function createApp() {
   app.use(cookieParser('SECRET'));
   app.use(
     session({
-      secret: 'test-secret',
+      secret: randomBytes(32).toString('base64'),
       cookie: { secure: 'auto' },
       resave: false,
       saveUninitialized: false,
@@ -2785,6 +2786,9 @@ describe('OpenID Connect', () => {
       'lookup',
       async (hostname: string, options: unknown) => {
         assert.deepStrictEqual(options, { all: true });
+        if (hostname === 'appleid.apple.com') {
+          return [{ address: '17.253.144.10', family: 4 }];
+        }
         if (hostname !== 'example.com') {
           throw new Error(`Unconfigured fixture DNS hostname: ${hostname}`);
         }
@@ -2822,6 +2826,7 @@ describe('OpenID Connect', () => {
   const EXISTING_USER_CLAIMS = {
     sub: 'friend-oidc-sub',
     email: 'friend@seerr.dev',
+    email_verified: true,
   };
 
   function buildMockWellKnown(options?: { supportsPKCE?: boolean }) {
@@ -3012,6 +3017,101 @@ describe('OpenID Connect', () => {
         correlationCookie,
         /(?:^|;) Path=\/api\/v1\/auth\/oidc(?:;|$)/
       );
+      assert.match(correlationCookie, /SameSite=Lax/i);
+      assert.match(correlationCookie, /Secure/i);
+    });
+
+    it('builds the Apple form-post authorization request and cross-site state cookie', async function () {
+      const appleMetadata = {
+        issuer: 'https://appleid.apple.com',
+        authorization_endpoint: 'https://appleid.apple.com/auth/authorize',
+        token_endpoint: 'https://appleid.apple.com/auth/token',
+        jwks_uri: 'https://appleid.apple.com/auth/keys',
+        response_types_supported: ['code'],
+        response_modes_supported: ['query', 'fragment', 'form_post'],
+        subject_types_supported: ['pairwise'],
+        id_token_signing_alg_values_supported: ['RS256'],
+        scopes_supported: ['openid', 'email', 'name'],
+        token_endpoint_auth_methods_supported: ['client_secret_post'],
+        claims_supported: [
+          'aud',
+          'email',
+          'email_verified',
+          'exp',
+          'iat',
+          'iss',
+          'nonce',
+          'sub',
+        ],
+      };
+      fetchMock.route(
+        'https://appleid.apple.com/.well-known/openid-configuration',
+        appleMetadata
+      );
+      const settings = getSettings();
+      settings.oidc.providers[0] = {
+        ...settings.oidc.providers[0],
+        slug: 'apple-sign-in',
+        name: 'Apple',
+        issuerUrl: 'https://appleid.apple.com',
+        clientId: 'com.example.seerr',
+        clientSecret: 'test-signed-client-secret-jwt',
+      };
+
+      const response = await request(app)
+        .get('/auth/oidc/login/apple-sign-in')
+        .set('Accept', 'application/json');
+
+      assert.strictEqual(response.status, 200);
+      const authorizeUrl = new URL(response.body.redirectUrl);
+      assert.strictEqual(
+        authorizeUrl.searchParams.get('scope'),
+        'openid email'
+      );
+      assert.strictEqual(
+        authorizeUrl.searchParams.get('response_mode'),
+        'form_post'
+      );
+      assert.strictEqual(
+        authorizeUrl.searchParams.get('redirect_uri'),
+        'https://jellyseerr.example.com/api/v1/auth/oidc/callback/apple-sign-in'
+      );
+      assert.ok(authorizeUrl.searchParams.get('state'));
+      assert.ok(authorizeUrl.searchParams.get('nonce'));
+      assert.strictEqual(
+        authorizeUrl.searchParams.has('code_challenge'),
+        false
+      );
+
+      const correlationCookie = response
+        .get('Set-Cookie')
+        ?.find((cookie) => cookie.startsWith('oidc-correlation-'));
+      assert.ok(correlationCookie);
+      assert.match(correlationCookie, /SameSite=None/i);
+      assert.match(correlationCookie, /Secure/i);
+    });
+
+    it('rejects non-form and duplicate Apple callback parameters', async function () {
+      const settings = getSettings();
+      settings.oidc.providers[0] = {
+        ...settings.oidc.providers[0],
+        slug: 'apple-sign-in',
+        name: 'Apple',
+        issuerUrl: 'https://appleid.apple.com',
+        clientId: 'com.example.seerr',
+        clientSecret: 'test-signed-client-secret-jwt',
+      };
+
+      const jsonResponse = await request(app)
+        .post('/auth/oidc/callback/apple-sign-in')
+        .send({ state: 'state', code: 'code' });
+      assert.strictEqual(jsonResponse.status, 400);
+
+      const duplicateResponse = await request(app)
+        .post('/auth/oidc/callback/apple-sign-in')
+        .type('form')
+        .send({ state: ['first', 'second'], code: 'code' });
+      assert.strictEqual(duplicateResponse.status, 400);
     });
 
     it('restricts redirect URIs to known callback pages', async function () {
@@ -3067,6 +3167,100 @@ describe('OpenID Connect', () => {
       assert.strictEqual(response.body.error, ApiErrorCode.Unauthorized);
     });
 
+    it('does not match a linked subject after the provider issuer changes', async function () {
+      const user = await getRepository(User).findOneOrFail({
+        where: { email: 'friend@seerr.dev' },
+      });
+      await getRepository(LinkedAccount).save(
+        new LinkedAccount({
+          user,
+          provider: 'test',
+          issuer: 'https://previous-issuer.example',
+          sub: EXISTING_USER_CLAIMS.sub,
+          username: 'friend',
+        })
+      );
+      await setupFetchMock({
+        idTokenClaims: EXISTING_USER_CLAIMS,
+        userinfoResponse: EXISTING_USER_CLAIMS,
+      });
+
+      const response = await performOidcCallback();
+
+      assert.strictEqual(response.status, 403);
+      assert.strictEqual(
+        await getRepository(User).existsBy({ email: DEFAULT_CLAIMS.email }),
+        false
+      );
+    });
+
+    it('rejects an unverified email even when the OIDC identity is already linked', async function () {
+      const user = await getRepository(User).findOneOrFail({
+        where: { email: 'friend@seerr.dev' },
+      });
+      await getRepository(LinkedAccount).save(
+        new LinkedAccount({
+          user,
+          provider: 'test',
+          issuer: 'https://example.com',
+          sub: 'unverified-linked-subject',
+          username: 'friend',
+        })
+      );
+      await setupFetchMock({
+        idTokenClaims: {
+          sub: 'unverified-linked-subject',
+          email: 'friend@seerr.dev',
+          email_verified: false,
+        },
+        userinfoResponse: {
+          sub: 'unverified-linked-subject',
+          email: 'friend@seerr.dev',
+          email_verified: false,
+        },
+      });
+
+      const response = await performOidcCallback();
+
+      assert.strictEqual(response.status, 403);
+    });
+
+    it('binds a legacy link to the issuer only after authenticated relinking', async function () {
+      const user = await getRepository(User).findOneOrFail({
+        where: { email: 'friend@seerr.dev' },
+      });
+      const legacyLink = new LinkedAccount({
+        user,
+        provider: 'test',
+        issuer: null,
+        sub: 'legacy-relink-subject',
+        username: 'friend',
+      });
+      const savedLegacyLink =
+        await getRepository(LinkedAccount).save(legacyLink);
+      await setupFetchMock({
+        idTokenClaims: {
+          sub: 'legacy-relink-subject',
+          email: 'friend@seerr.dev',
+          email_verified: true,
+        },
+        userinfoResponse: {
+          sub: 'legacy-relink-subject',
+          email: 'friend@seerr.dev',
+          email_verified: true,
+        },
+      });
+      const agent = await authenticatedAgent('friend@seerr.dev', 'test1234');
+
+      const response = await performOidcCallback(agent);
+
+      assert.strictEqual(response.status, 204);
+      const updated = await getRepository(LinkedAccount).findOneByOrFail({
+        id: savedLegacyLink.id,
+      });
+      assert.strictEqual(updated.issuer, 'https://example.com');
+    });
+
     it('callback endpoint successfully authorizes existing user', async function () {
       // Link the seeded friend user to the OIDC provider
       const userRepo = getRepository(User);
@@ -3079,6 +3273,7 @@ describe('OpenID Connect', () => {
       const linkedAccount = new LinkedAccount({
         user,
         provider: 'test',
+        issuer: 'https://example.com',
         sub: EXISTING_USER_CLAIMS.sub,
         username: 'friend',
       });
@@ -3143,6 +3338,7 @@ describe('OpenID Connect', () => {
       const linkedAccount = new LinkedAccount({
         user,
         provider: 'test',
+        issuer: 'https://example.com',
         sub: EXISTING_USER_CLAIMS.sub,
         username: 'friend',
       });
@@ -3192,6 +3388,88 @@ describe('OpenID Connect', () => {
         where: { provider: 'test', sub: DEFAULT_CLAIMS.sub },
       });
       assert.notStrictEqual(createdLink, null);
+    });
+
+    it('uses provider allowlists and mapped roles for new accounts', async function () {
+      const settings = getSettings();
+      const provider = settings.oidc.providers[0];
+      provider.allowedEmailDomains = ['example.com'];
+      provider.allowedGroups = ['seerr-users'];
+      provider.roleClaim = 'application_role';
+      provider.roleMappings = [
+        { value: 'seerr-admin', role: 'admin' },
+        { value: 'seerr-user', role: 'user' },
+      ];
+      const claims = {
+        ...DEFAULT_CLAIMS,
+        groups: ['other-group', 'seerr-users'],
+        application_role: 'seerr-admin',
+      };
+      await setupFetchMock({
+        idTokenClaims: claims,
+        userinfoResponse: claims,
+      });
+
+      const response = await performOidcCallback();
+      assert.strictEqual(response.status, 204);
+
+      const createdUser = await getRepository(User).findOneOrFail({
+        where: { email: DEFAULT_CLAIMS.email },
+      });
+      assert.strictEqual(createdUser.permissions, Permission.ADMIN);
+    });
+
+    it('rejects a new account outside the configured group allowlist', async function () {
+      const provider = getSettings().oidc.providers[0];
+      provider.allowedEmailDomains = ['example.com'];
+      provider.allowedGroups = ['seerr-users'];
+      await setupFetchMock({
+        idTokenClaims: { ...DEFAULT_CLAIMS, groups: ['other-group'] },
+        userinfoResponse: { ...DEFAULT_CLAIMS, groups: ['other-group'] },
+      });
+
+      const response = await performOidcCallback();
+      assert.strictEqual(response.status, 403);
+      assert.strictEqual(
+        await getRepository(User).existsBy({ email: DEFAULT_CLAIMS.email }),
+        false
+      );
+    });
+
+    it('applies configured role claims when an existing linked user signs in', async function () {
+      const settings = getSettings();
+      const provider = settings.oidc.providers[0];
+      provider.roleClaim = 'groups';
+      provider.roleMappings = [{ value: 'seerr-admins', role: 'admin' }];
+
+      const user = await getRepository(User).findOneOrFail({
+        where: { email: 'friend@seerr.dev' },
+      });
+      await getRepository(LinkedAccount).save(
+        new LinkedAccount({
+          user,
+          provider: 'test',
+          issuer: 'https://example.com',
+          sub: EXISTING_USER_CLAIMS.sub,
+          username: 'friend',
+        })
+      );
+
+      const claims = {
+        ...EXISTING_USER_CLAIMS,
+        groups: ['seerr-users', 'seerr-admins'],
+      };
+      await setupFetchMock({
+        idTokenClaims: claims,
+        userinfoResponse: claims,
+      });
+
+      const response = await performOidcCallback();
+      assert.strictEqual(response.status, 204);
+      const updatedUser = await getRepository(User).findOneOrFail({
+        where: { id: user.id },
+      });
+      assert.strictEqual(updatedUser.permissions, Permission.ADMIN);
     });
 
     it('rejects new user when newUserLogin is disabled', async function () {

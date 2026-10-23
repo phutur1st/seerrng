@@ -56,6 +56,7 @@ export interface PublicSettingsResponse {
   emulationCatalogEnabled?: boolean;
   swipeEnabled?: boolean;
   enabledMediaCategories?: EnabledMediaCategories;
+  defaultEnabledMediaCategories?: EnabledMediaCategories;
   ageGate?: AgeGateSettings;
   discoverRegion: string;
   streamingRegion: string;

@@ -1,3 +1,4 @@
+import InlineBookSeriesResults from '@app/components/BookSeriesSearch/InlineResults';
 import Button from '@app/components/Common/Button';
 import CardTextVisibilityToggle from '@app/components/Common/CardTextVisibilityToggle';
 import Header from '@app/components/Common/Header';
@@ -21,17 +22,24 @@ import useDiscoverScrollRestoration from '@app/hooks/useDiscoverScrollRestoratio
 import { useSearchActivityReporter } from '@app/hooks/useSearchActivity';
 import useSettings from '@app/hooks/useSettings';
 import { useBatchUpdateQueryParams } from '@app/hooks/useUpdateQueryParams';
+import { Permission, useUser } from '@app/hooks/useUser';
 import defineMessages from '@app/utils/defineMessages';
 import { parseQueryFromPath } from '@app/utils/routeQuery';
-import { isOptionalCatalogPathEnabled } from '@app/utils/serviceAvailability';
+import {
+  getUserServiceAvailability,
+  isOptionalCatalogPathEnabled,
+} from '@app/utils/serviceAvailability';
 import { BarsArrowDownIcon, BarsArrowUpIcon } from '@heroicons/react/24/solid';
 import type { BookResult } from '@server/models/Book';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Discover.DiscoverBooks', {
   books: 'Books',
+  searchSeries: 'Search Book Series',
+  noBooks: 'No individual books found.',
   audiobooks: 'Audiobooks',
   mediaFilters: 'Media Filters',
   filters: 'Filters',
@@ -67,6 +75,12 @@ const DiscoverBooks = ({
   const intl = useIntl();
   const router = useRouter();
   const { currentSettings } = useSettings();
+  const { user, hasPermission } = useUser();
+  const serviceAvailability = getUserServiceAvailability(
+    currentSettings,
+    user?.settings?.enabledMediaCategories,
+    hasPermission(Permission.ADMIN)
+  );
   const [currentPath, setCurrentPath] = useState<string>();
   useEffect(() => {
     const syncCurrentPath = () => {
@@ -105,11 +119,11 @@ const DiscoverBooks = ({
       : undefined;
   const ebookEnabled = isOptionalCatalogPathEnabled(
     '/discover/books',
-    currentSettings
+    serviceAvailability
   );
   const audiobookEnabled = isOptionalCatalogPathEnabled(
     '/discover/audiobooks',
-    currentSettings
+    serviceAvailability
   );
   const availableFormats: BookDiscoveryFormat[] = [
     ...(ebookEnabled && audiobookEnabled ? ['all' as const] : []),
@@ -166,6 +180,7 @@ const DiscoverBooks = ({
   ]);
   const [search, debouncedSearch, setSearch] = useDebouncedState(query);
   const routedSearchRef = useRef(query.trim());
+  const editedSearchRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     const routedSearch = query.trim();
     if (routedSearch !== routedSearchRef.current) {
@@ -231,6 +246,9 @@ const DiscoverBooks = ({
   const setParam = (values: Record<string, string | undefined>) =>
     update({ ...values, page: undefined });
   useEffect(() => {
+    // Restoring a URL updates the input too, but must never clear the URL.
+    if (!isRouteReady || editedSearchRef.current !== debouncedSearch) return;
+    editedSearchRef.current = undefined;
     const nextSearch = debouncedSearch.trim();
 
     if (nextSearch !== routedSearchRef.current) {
@@ -452,6 +470,26 @@ const DiscoverBooks = ({
           </div>
         </PinnedFilterSection>
       </div>
+      {isRouteReady && query.trim().length >= 2 && (
+        <Link
+          href={{
+            pathname: '/book-series',
+            query: {
+              query: query.trim(),
+              ...(activeFormat === 'all' ? {} : { format: activeFormat }),
+            },
+          }}
+          className="mt-4 inline-flex text-sm text-indigo-300 hover:underline"
+        >
+          {intl.formatMessage(messages.searchSeries)}
+        </Link>
+      )}
+      {isRouteReady && (
+        <InlineBookSeriesResults
+          query={query}
+          format={activeFormat === 'all' ? undefined : activeFormat}
+        />
+      )}
       {discover.error && (
         <div
           className="mt-6 flex flex-col items-start gap-4 rounded-xl border border-red-500/50 bg-red-500/10 p-6 text-red-100 sm:flex-row sm:items-center sm:justify-between"
@@ -480,6 +518,7 @@ const DiscoverBooks = ({
       {(!discover.error || discover.titles.length > 0) && (
         <ListView
           items={discover.titles}
+          emptyMessage={intl.formatMessage(messages.noBooks)}
           preferredBookFormat={
             activeFormat === 'audiobook' ? 'audiobook' : 'ebook'
           }
