@@ -428,17 +428,29 @@ const Swipe = () => {
     !!status?.mediaTypes && !status.mediaTypes.includes(mediaType);
 
   useEffect(() => {
-    if (!status?.mediaTypes.length || status.mediaTypes.includes(mediaType)) {
+    if (
+      !router.isReady ||
+      !status?.mediaTypes.length ||
+      status.mediaTypes.includes(mediaType)
+    ) {
       return;
     }
     const requestedMediaType = router.query.mediaType;
-    const nextMediaType =
+    if (
       isSwipeMediaType(requestedMediaType) &&
       status.mediaTypes.includes(requestedMediaType)
-        ? requestedMediaType
-        : status.mediaTypes[0];
-    selectMediaType(nextMediaType);
-  }, [mediaType, router.query.mediaType, selectMediaType, status?.mediaTypes]);
+    ) {
+      // The router-sync effect selects this deck without replacing its return URL.
+      return;
+    }
+    selectMediaType(status.mediaTypes[0]);
+  }, [
+    mediaType,
+    router.isReady,
+    router.query.mediaType,
+    selectMediaType,
+    status?.mediaTypes,
+  ]);
 
   const isDatSoftwareCategory =
     status?.softwareCatalogProvider === 'romarr-dat' &&

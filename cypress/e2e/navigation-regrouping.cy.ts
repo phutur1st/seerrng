@@ -91,45 +91,52 @@ describe('primary navigation', () => {
     cy.get('[data-testid="discovery-mode-tab-swipe"]').should('be.visible');
   });
 
-  it('keeps the current media discovery subpage and filters when switching back', () => {
-    cy.mockConfiguredMediaAvailability({ booksEnabled: true });
-    cy.intercept('GET', '/api/v1/discover/**', {
-      page: 1,
-      totalPages: 1,
-      totalResults: 0,
-      results: [],
-    });
-    cy.intercept('GET', '/api/v1/swipe/status', {
-      enabled: true,
-      aiRanking: false,
-      mediaTypes: ['tv'],
-      softwareCatalogProvider: 'questarr',
-      bookFormats: ['ebook', 'audiobook'],
-    });
-    cy.intercept('GET', '/api/v1/swipe/profile', {
-      tasteNotes: '',
-      seriesRequest: 'first-season',
-      bookFormat: 'ebook',
-      seedScope: 'full',
-      favoriteSeeds: [],
-    });
-    cy.intercept('GET', '/api/v1/swipe/deck*', {
-      mediaType: 'tv',
-      ranked: false,
-      remaining: 0,
-      cards: [],
-    });
+  for (const width of [1400, 390]) {
+    it(`keeps the current media discovery subpage and filters when switching back at ${width}px`, () => {
+      cy.viewport(width, 900);
+      cy.mockConfiguredMediaAvailability({ booksEnabled: true });
+      cy.intercept('GET', '/api/v1/discover/**', {
+        page: 1,
+        totalPages: 1,
+        totalResults: 0,
+        results: [],
+      });
+      cy.intercept('GET', '/api/v1/swipe/status', {
+        enabled: true,
+        aiRanking: false,
+        mediaTypes: ['tv'],
+        softwareCatalogProvider: 'questarr',
+        bookFormats: ['ebook', 'audiobook'],
+      });
+      cy.intercept('GET', '/api/v1/swipe/profile', {
+        tasteNotes: '',
+        seriesRequest: 'first-season',
+        bookFormat: 'ebook',
+        seedScope: 'full',
+        favoriteSeeds: [],
+      });
+      cy.intercept('GET', '/api/v1/swipe/deck*', {
+        mediaType: 'tv',
+        ranked: false,
+        remaining: 0,
+        cards: [],
+      });
 
-    cy.visit('/discover/tv/genre/18?sortBy=popularity.desc&page=2');
-    cy.get('[data-testid="discovery-mode-tab-swipe"]').click();
-    cy.location('pathname').should('eq', '/swipe');
-    cy.location('search').should('include', 'returnTo');
+      cy.visit('/discover/tv/genre/18?sortBy=popularity.desc&page=2');
+      cy.get('[data-testid="discovery-mode-tab-swipe"]').click();
+      cy.location('pathname').should('eq', '/swipe');
+      cy.location('search').should((search) => {
+        expect(new URLSearchParams(search).get('returnTo')).to.eq(
+          '/discover/tv/genre/18?sortBy=popularity.desc&page=2'
+        );
+      });
 
-    cy.get('[data-testid="discovery-mode-tab-discover"]').click();
-    cy.location('pathname').should('eq', '/discover/tv/genre/18');
-    cy.location('search').should('include', 'sortBy=popularity.desc');
-    cy.location('search').should('include', 'page=2');
-  });
+      cy.get('[data-testid="discovery-mode-tab-discover"]').click();
+      cy.location('pathname').should('eq', '/discover/tv/genre/18');
+      cy.location('search').should('include', 'sortBy=popularity.desc');
+      cy.location('search').should('include', 'page=2');
+    });
+  }
 
   it('opens the matching Swipe type from series, book, and audiobook discovery', () => {
     cy.mockConfiguredMediaAvailability({ booksEnabled: true });

@@ -89,3 +89,68 @@ Normal final commit hooks executed attribution, lint-staged formatting/lint,
 Semgrep on the staged source and container-alias validation. Commit-msg rejected
 an overlong message body; wrap the message and rerun the normal hooks. This is a
 message-format failure, not a successful commit or a hook waiver.
+
+## Fork publication, Actions recovery and Swipe return repair
+
+The maintainer authorized publication. Candidate `655e7deb14a3f3348c81e27edbc1ea9b2c5af9ab`
+was atomically pushed to the owned fork's main and integration branch. GitHub had
+disabled Actions at the fork level despite its permissions API returning enabled.
+The approved Safari session cleared that notice. Nine relevant workflows remain
+active: native CI, CodeQL, Cypress, documentation links/build, Helm validation,
+Semgrep, Trivy filesystem and Hom3lab image. The other 27 inherited workflows are
+disabled on this fork, including upstream publishing, mobile builds and issue
+housekeeping. Inherited source files and publication guards remain intact.
+
+Recovery commit `62315cff8141dea2407d6cc35c9416bbcb09ac05` changed no source tree
+and supplied a fresh push event. Hosted native CI run `39944880482` passed 15
+validation jobs, including 4,489 Vitest tests (five PostgreSQL skips), 3,801 native
+Node tests (five PostgreSQL skips), 77 Playwright cases, CodeQL, documentation,
+Helm and Jellyfin integration. Cypress ran Electron 146 on Linux, not Chrome:
+196 passed, one failed, 32 pending, zero skipped. The prior macOS carousel case
+passed hosted; switching a filtered Series discovery page to Swipe and back
+instead lost its genre and filter URL. Hom3lab image run `39950949096` correctly
+skipped publication after failed CI. Separate Semgrep and Trivy filesystem runs
+passed. Passing security jobs are not a claim of zero findings.
+
+The maintainer directed repair and another fork CI run. Recovery ref
+`recovery/swipe-return-pre-20261023` preserves `62315cff8141dea2407d6cc35c9416bbcb09ac05`.
+A rendered component regression reproduced the cause: before router hydration,
+or while the router-sync effect was selecting Series from initial Movies state,
+the availability effect called the explicit media-selection action and rewrote
+the valid return URL to the canonical Series page. Before repair, two behavioral
+cases failed and the unavailable-deck fallback passed. The initial test fixture
+also required the browser `self` global; that harness failure was corrected
+before collecting the behavioral reproduction.
+
+The availability effect now waits for router readiness and leaves a valid
+requested type to the existing router-sync effect. Truly unavailable types still
+select an available deck, and explicit user media switching retains its matching
+discovery destination. No presentation/CSS owner, permissions, return-path
+validation, request payload or provider behavior changed. The bounded UI scope
+is Swipe initialization and its shared Discover/Swipe navigation; surrounding
+legacy shell, search/empty-state presentation and unrelated consumers are not
+claimed audited or migrated.
+
+Local repair receipts: 69 focused Vitest cases pass, including four new rendered
+navigation cases; the existing Cypress navigation spec passes all five cases,
+now covering exact genre/query preservation at 1400px and 390px. Formatting,
+lint, type checks and production build use Node 24.22.1/pnpm 10.24.0 and the
+existing frozen installation. Full Playwright passes 77/77 on the rebuilt source.
+An initial format run overlapped Playwright trace generation and reported
+ignored temporary trace resources. After browser completion, move generated
+results into private evidence; the unchanged full formatter then passes. Bundle
+verification passes. No browser
+build was replaced during active verification.
+
+Separate iteration preview inspection covers the shared mode tabs on Swipe and
+the returned empty Series page at 1400px and 390px. Screenshots show visible,
+usable tabs and the matching selected mode; automated capture reports the exact
+preserved URL, no document overflow and zero page errors. This uses isolated
+fixtures, not live accounts/providers or a release deployment. The preview does
+not establish a whole-page visual audit or native provider round trip.
+
+AI assistance covers diagnosis, regression tests, the effect repair, source
+review, rendered inspection, workflow settings and these records. The new
+structured release fragment describes the user-visible return-path fix. Final
+hosted verification and image publication remain pending for the correction;
+no live deployment, OIDC relinking or settings/provider mutation occurred.
